@@ -28,8 +28,8 @@ export default function CartScreen() {
           <ShoppingBag size={64} color={Colors.gray300} />
           <Text style={styles.emptyTitle}>Your cart is empty</Text>
           <Text style={styles.emptyText}>Looks like you haven't added any items yet</Text>
-          <TouchableOpacity style={styles.shopBtn} onPress={() => router.push('/(tabs)/products')}>
-            <Text style={styles.shopBtnText}>Start Shopping</Text>
+          <TouchableOpacity style={styles.shopBtn} onPress={() => router.push('/(tabs)')}>
+            <Text style={styles.shopBtnText}>Go to Home</Text>
           </TouchableOpacity>
         </View>
       </View>

@@ -64,14 +64,6 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="products"
-        options={{
-          href: null,
-          title: 'Browse',
-          tabBarIcon: ({ color, size }) => <ShoppingBag size={size} color={color} />,
-        }}
-      />
-      <Tabs.Screen
         name="wishlist"
         options={{
           href: null,

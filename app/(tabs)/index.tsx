@@ -4,6 +4,7 @@ import {
   Image, ImageBackground, Platform, useWindowDimensions,
 } from 'react-native';
 import { router } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Menu, ShoppingCart } from 'lucide-react-native';
 import { fetchFrameShapes } from '@/lib/api';
 import { FrameShape } from '@/lib/types';
@@ -66,8 +67,8 @@ export default function HomeScreen() {
       shapeImageHeight: isTabletLandscape ? 72 : isTablet ? 84 : 74,
       shapeTitleSize: isTabletLandscape ? 20 : isTablet ? 22 : 17,
       serviceCardHeight,
-      serviceBodySize: isTabletLandscape ? 13 : 14,
-      serviceBodyLineHeight: isTabletLandscape ? 18 : 19,
+      serviceBodySize: isTabletLandscape ? 17 : 19,
+      serviceBodyLineHeight: isTabletLandscape ? 20 : 23,
     };
   }, [height, isTablet, isTabletLandscape, width]);
 
@@ -77,7 +78,7 @@ export default function HomeScreen() {
 
   const handleShapeSelect = (slug: string) => {
     setSelectedShape(slug);
-    router.push({ pathname: '/(tabs)/products', params: { category: slug } });
+    router.push({ pathname: '/checkout', params: { shape: slug } });
   };
 
   return (
@@ -92,35 +93,43 @@ export default function HomeScreen() {
           },
         ]}
       >
-        <View style={styles.headerRow}>
-          <TouchableOpacity style={styles.headerIconButton} activeOpacity={0.8}>
-            <Menu size={20} color={Colors.white} />
-          </TouchableOpacity>
+        <LinearGradient
+          colors={['#1A6FD4', '#1A6FD4']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.headerPanel}
+        >
+          <HeaderPrintPattern />
+          <View style={styles.headerRow}>
+            <TouchableOpacity style={styles.headerIconButton} activeOpacity={0.8}>
+              <Menu size={20} color={Colors.white} />
+            </TouchableOpacity>
 
-          <View style={styles.brandRow}>
-            <Image
-              source={logoImage}
-              style={[
-                styles.logoImage,
-                { width: metrics.logoWidth, height: metrics.logoHeight },
-              ]}
-              resizeMode="contain"
-            />
+            <View style={styles.brandRow}>
+              <Image
+                source={logoImage}
+                style={[
+                  styles.logoImage,
+                  { width: metrics.logoWidth, height: metrics.logoHeight },
+                ]}
+                resizeMode="contain"
+              />
+            </View>
+
+            <TouchableOpacity
+              style={styles.cartButton}
+              onPress={() => router.push('/cart')}
+              activeOpacity={0.85}
+            >
+              <ShoppingCart size={18} color={Colors.primary} />
+              {cartCount > 0 ? (
+                <View style={styles.cartBadge}>
+                  <Text style={styles.cartBadgeText}>{cartCount > 9 ? '9+' : cartCount}</Text>
+                </View>
+              ) : null}
+            </TouchableOpacity>
           </View>
-
-          <TouchableOpacity
-            style={styles.cartButton}
-            onPress={() => router.push('/cart')}
-            activeOpacity={0.85}
-          >
-            <ShoppingCart size={18} color={Colors.primary} />
-            {cartCount > 0 ? (
-              <View style={styles.cartBadge}>
-                <Text style={styles.cartBadgeText}>{cartCount > 9 ? '9+' : cartCount}</Text>
-              </View>
-            ) : null}
-          </TouchableOpacity>
-        </View>
+        </LinearGradient>
       </View>
 
       <ScrollView
@@ -325,6 +334,38 @@ function SectionTitle({
   );
 }
 
+function HeaderPrintPattern() {
+  return (
+    <View pointerEvents="none" style={styles.headerPrint}>
+      <EyeglassPatternShape style={{ top: -8, left: 108, transform: [{ rotate: '-16deg' }] }} />
+      <EyeglassPatternShape style={{ top: -14, left: 238, transform: [{ rotate: '12deg' }] }} />
+      <EyeglassPatternShape style={{ top: 26, left: 342, transform: [{ rotate: '-12deg' }] }} />
+      <EyeglassPatternShape style={{ top: -6, left: 468, transform: [{ rotate: '18deg' }] }} />
+      <EyeglassPatternShape style={{ top: -12, right: 256, transform: [{ rotate: '-14deg' }] }} />
+      <EyeglassPatternShape style={{ top: 18, right: 138, transform: [{ rotate: '12deg' }] }} />
+      <EyeglassPatternShape style={{ top: -10, right: 18, transform: [{ rotate: '-18deg' }] }} />
+      <EyeglassPatternShape style={{ top: 54, right: 332, transform: [{ rotate: '16deg' }], opacity: 0.18 }} />
+      <EyeglassPatternShape style={{ top: 58, right: 38, transform: [{ rotate: '-14deg' }], opacity: 0.18 }} />
+    </View>
+  );
+}
+
+function EyeglassPatternShape({
+  style,
+}: {
+  style?: any;
+}) {
+  return (
+    <View style={[styles.patternEyeglass, style]}>
+      <View style={styles.patternBridge} />
+      <View style={[styles.patternLens, styles.patternLensLeft]} />
+      <View style={[styles.patternLens, styles.patternLensRight]} />
+      <View style={[styles.patternTemple, styles.patternTempleLeft]} />
+      <View style={[styles.patternTemple, styles.patternTempleRight]} />
+    </View>
+  );
+}
+
 function FrameShapeArtwork({ slug, active }: { slug: string; active: boolean }) {
   const stroke = active ? '#2B2B2B' : '#7C7C7C';
 
@@ -371,18 +412,96 @@ function FrameShapeArtwork({ slug, active }: { slug: string; active: boolean }) 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#D9D9D9',
+    backgroundColor: '#1A6FD4',
   },
   header: {
-    backgroundColor: Colors.primary,
+    backgroundColor: '#1A6FD4',
     paddingTop: Platform.OS === 'ios' ? 52 : 36,
     paddingHorizontal: Spacing.md,
-    paddingBottom: Spacing.md,
+    paddingBottom: 0,
+  },
+  headerPanel: {
+    backgroundColor: '#1A6FD4',
+    borderTopLeftRadius: 26,
+    borderTopRightRadius: 26,
+    overflow: 'hidden',
+    paddingHorizontal: 0,
+    paddingVertical: 0,
+  },
+  headerPrint: {
+    ...StyleSheet.absoluteFillObject,
   },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    // justifyContent: 'space-between',
+    paddingHorizontal: 2,
+    minHeight: 46,
+  },
+  patternEyeglass: {
+    position: 'absolute',
+    width: 76,
+    height: 34,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    opacity: 0.24,
+  },
+  patternLens: {
+    position: 'absolute',
+    width: 28,
+    height: 22,
+    borderWidth: 1,
+    borderColor: 'rgba(4,47,110,0.5)',
+    borderRadius: 12,
+    backgroundColor: 'transparent',
+  },
+  patternLensLeft: {
+    left: 9,
+  },
+  patternLensRight: {
+    right: 9,
+  },
+  patternBridge: {
+    position: 'absolute',
+    width: 12,
+    height: 1,
+    backgroundColor: 'rgba(4,47,110,0.5)',
+    borderRadius: 999,
+  },
+  patternTemple: {
+    position: 'absolute',
+    width: 10,
+    height: 1,
+    backgroundColor: 'rgba(4,47,110,0.42)',
+    borderRadius: 999,
+    top: 12,
+  },
+  patternTempleLeft: {
+    left: 1,
+    transform: [{ rotate: '-20deg' }],
+  },
+  patternTempleRight: {
+    right: 1,
+    transform: [{ rotate: '20deg' }],
+  },
+  headerFrameGlyph: {
+    position: 'absolute',
+    width: 42,
+    height: 22,
+    borderWidth: 1,
+    borderColor: 'rgba(7,67,145,0.36)',
+    borderRadius: 11,
+    opacity: 0.98,
+  },
+  headerFrameGlyphSmall: {
+    position: 'absolute',
+    width: 24,
+    height: 13,
+    borderWidth: 1,
+    borderColor: 'rgba(7,67,145,0.32)',
+    borderRadius: 7,
+    opacity: 0.9,
   },
   headerIconButton: {
     width: 34,

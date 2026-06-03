@@ -53,8 +53,8 @@ export default function WishlistScreen() {
             <Heart size={64} color={Colors.gray200} />
             <Text style={styles.emptyTitle}>Your wishlist is empty</Text>
             <Text style={styles.emptySub}>Save items you love to find them easily later</Text>
-            <TouchableOpacity style={styles.browseBtn} onPress={() => router.push('/(tabs)/products')}>
-              <Text style={styles.browseBtnText}>Browse Products</Text>
+            <TouchableOpacity style={styles.browseBtn} onPress={() => router.push('/(tabs)')}>
+              <Text style={styles.browseBtnText}>Go to Home</Text>
             </TouchableOpacity>
           </View>
         }

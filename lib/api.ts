@@ -34,6 +34,27 @@ interface FrameShapeApiResponse {
   imageAlt?: string;
 }
 
+interface PowerTypeApiItem {
+  _id?: string;
+  id?: string;
+  name: string;
+  tag?: string | null;
+  description?: string;
+  image?: string;
+  icon?: string;
+  priority?: number;
+  status?: string;
+}
+
+export interface PowerTypeOption {
+  id: string;
+  name: string;
+  tag: string;
+  description: string;
+  image: string;
+  priority: number;
+}
+
 function getApiBaseUrl() {
   const configuredBaseUrl = process.env.EXPO_PUBLIC_API_BASE_URL?.trim();
   if (configuredBaseUrl) {
@@ -156,5 +177,74 @@ export async function fetchFrameShapeCategories(): Promise<Category[]> {
     }));
   } catch (_error) {
     return getCategories();
+  }
+}
+
+const POWER_TYPE_FALLBACK: PowerTypeOption[] = [
+  {
+    id: 'power-with-power',
+    name: 'With Power',
+    tag: 'Most common',
+    description: 'Positive, Negative or Cylindrical',
+    image: 'power-type-with-power',
+    priority: 1,
+  },
+  {
+    id: 'power-zero-power',
+    name: 'Zero Power',
+    tag: 'BLU Screen lenses',
+    description: 'Blue light block for screen protection',
+    image: 'power-type-zero-power',
+    priority: 2,
+  },
+  {
+    id: 'power-reading-power',
+    name: 'Reading Power',
+    tag: '',
+    description: 'With power for near vision only',
+    image: 'power-type-reading-power',
+    priority: 3,
+  },
+  {
+    id: 'power-progressive-bifocals',
+    name: 'Progressive/Bifocals',
+    tag: '',
+    description: 'Two powers in one eye',
+    image: 'power-type-progressive-bifocals',
+    priority: 4,
+  },
+  {
+    id: 'power-frame-only',
+    name: 'Frame Only',
+    tag: '',
+    description: 'With no lenses',
+    image: 'power-type-frame-only',
+    priority: 5,
+  },
+];
+
+export async function fetchPowerTypes(): Promise<PowerTypeOption[]> {
+  try {
+    const response = await fetch(`${getApiBaseUrl()}/api/power-types`);
+    if (!response.ok) {
+      throw new Error(`Power types API returned ${response.status}`);
+    }
+
+    const payload = (await response.json()) as { data?: PowerTypeApiItem[] };
+    const items = payload.data ?? [];
+
+    return items
+      .filter((item) => item.name)
+      .sort((a, b) => (a.priority ?? 999) - (b.priority ?? 999))
+      .map((item, index) => ({
+        id: item.id ?? item._id ?? `power-type-${index}`,
+        name: item.name,
+        tag: item.tag ?? '',
+        description: item.description ?? '',
+        image: item.image || item.icon || '',
+        priority: item.priority ?? index + 1,
+      }));
+  } catch (_error) {
+    return POWER_TYPE_FALLBACK;
   }
 }

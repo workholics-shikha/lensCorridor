@@ -58,9 +58,9 @@ export default function OrdersScreen() {
           <View style={styles.empty}>
             <Package size={60} color={Colors.gray300} />
             <Text style={styles.emptyTitle}>No orders yet</Text>
-            <Text style={styles.emptySub}>Start shopping to see your orders here</Text>
-            <TouchableOpacity style={styles.shopBtn} onPress={() => router.push('/(tabs)/products')}>
-              <Text style={styles.shopBtnText}>Browse Products</Text>
+            <Text style={styles.emptySub}>Start an order from the home screen to see it here</Text>
+            <TouchableOpacity style={styles.shopBtn} onPress={() => router.push('/(tabs)')}>
+              <Text style={styles.shopBtnText}>Go to Home</Text>
             </TouchableOpacity>
           </View>
         }

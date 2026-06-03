@@ -1,145 +1,304 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  TextInput, Platform, Dimensions, Image,
+  Alert,
+  Image,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  useWindowDimensions,
+  View,
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import {
-  ArrowLeft, Camera, Image as ImageIcon, IndianRupee, ScanSearch, X,
+  ArrowLeft,
+  Camera,
+  Image as ImageIcon,
+  IndianRupee,
+  Search,
+  X,
 } from 'lucide-react-native';
 import { fetchFrameShapes } from '@/lib/api';
-import { FrameShape } from '@/lib/types';
-import { Colors, Spacing, Radius, FontSize, Shadow } from '@/lib/theme';
+import { findLatestCustomerByPhone } from '@/lib/localStore';
+import { Shadow } from '@/lib/theme';
+import { useOrderFlow } from '@/context/OrderFlowContext';
 
-const { width } = Dimensions.get('window');
-const isTablet = width >= 768;
+type FramePreviewItem = {
+  id: string;
+  image?: string;
+  shape?: string;
+};
+
+const SELECT_FRAME_ICON = require('@/assets/images/healthicons_eyeglasses-24px.png');
 
 export default function CheckoutScreen() {
-  const [customerSearch, setCustomerSearch] = useState('');
-  const [frameShapes, setFrameShapes] = useState<FrameShape[]>([]);
-  const [selectedFrame, setSelectedFrame] = useState('');
-  const [price, setPrice] = useState('');
+  const { width } = useWindowDimensions();
+  const { shape } = useLocalSearchParams<{ shape?: string }>();
+  const inputRef = useRef<any>(null);
+  const isTablet = width >= 768;
+  const containerWidth = isTablet ? 1040 : width;
+  const { draft, updateDraft } = useOrderFlow();
+
+  const [customerSearch, setCustomerSearch] = useState(draft.phone);
+  const [matchedCustomer, setMatchedCustomer] = useState<ReturnType<typeof findLatestCustomerByPhone>>(null);
+  const [price, setPrice] = useState(draft.price);
   const [error, setError] = useState('');
+  const [framePreviews, setFramePreviews] = useState<FramePreviewItem[]>(draft.frameImages);
 
   useEffect(() => {
-    fetchFrameShapes().then((items) => {
-      setFrameShapes(items);
-      setSelectedFrame((current) => current || items[0]?.shape || '');
-    });
-  }, []);
+    let active = true;
 
-  const handleNext = () => {
-    if (!selectedFrame || !price.trim()) {
-      setError('Please select a frame and enter the price before continuing.');
+    fetchFrameShapes().then((items) => {
+      if (!active) {
+        return;
+      }
+
+      const ordered = [...items].sort((a, b) => {
+        if (a.shape === shape) {
+          return -1;
+        }
+        if (b.shape === shape) {
+          return 1;
+        }
+        return 0;
+      });
+
+      setFramePreviews(
+        ordered.slice(0, 3).map((item, index) => ({
+          id: `${item.id}-${index}`,
+          image: item.image || undefined,
+          shape: item.shape,
+        }))
+      );
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [shape]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const normalizedPhone = customerSearch.replace(/\D/g, '').slice(-10);
+      if (normalizedPhone.length < 10) {
+        setMatchedCustomer(null);
+        return;
+      }
+
+      setMatchedCustomer(findLatestCustomerByPhone(normalizedPhone));
+    }, 250);
+
+    return () => clearTimeout(timer);
+  }, [customerSearch]);
+
+  const handleUploadPress = (source: 'camera' | 'gallery') => {
+    if (Platform.OS !== 'web') {
+      Alert.alert(
+        'Upload unavailable',
+        `${source === 'camera' ? 'Camera' : 'Gallery'} selection needs an image-picker native module in this app build.`
+      );
       return;
     }
 
+    if (!globalThis.document) {
+      return;
+    }
+
+    const input = globalThis.document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+
+    if (source === 'camera') {
+      input.setAttribute('capture', 'environment');
+    }
+
+    input.onchange = () => {
+      const file = input.files?.[0];
+      if (!file) {
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (typeof reader.result !== 'string') {
+          return;
+        }
+
+        setFramePreviews((current) => {
+          const image = typeof reader.result === 'string' ? reader.result : undefined;
+          if (!image) {
+            return current;
+          }
+
+          return [
+            ...current,
+            {
+              id: `${source}-${Date.now()}-${current.length}`,
+              image,
+            },
+          ];
+        });
+        setError('');
+      };
+
+      reader.readAsDataURL(file);
+    };
+
+    inputRef.current = input;
+    input.click();
+  };
+
+  const removeFrame = (id: string) => {
+    setFramePreviews((current) => current.filter((item) => item.id !== id));
+  };
+
+  const handleNext = () => {
+    if (customerSearch.replace(/\D/g, '').slice(-10).length < 10) {
+      setError('Please enter a valid mobile number.');
+      return;
+    }
+
+    if (!price.trim()) {
+      setError('Please enter price.');
+      return;
+    }
+
+    if (framePreviews.length === 0) {
+      setError('Please add at least one frame.');
+      return;
+    }
+
+    updateDraft({
+      phone: customerSearch,
+      customerName: matchedCustomer?.name ?? draft.customerName,
+      price,
+      selectedShape: shape ?? draft.selectedShape,
+      frameImages: framePreviews,
+    });
     setError('');
-    router.push('/cart');
+    router.push('/select-lens');
   };
 
   return (
-    <View style={styles.container}>
+    <View style={styles.screen}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <ArrowLeft size={20} color={Colors.text} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Order Placement</Text>
-        <View style={styles.headerSpacer} />
+        <View style={[styles.headerInner, { maxWidth: containerWidth }]}>
+          <TouchableOpacity style={styles.backButton} onPress={() => router.back()} activeOpacity={0.85}>
+            <ArrowLeft size={21} color="#1C1D21" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Order Placement</Text>
+        </View>
       </View>
 
       <ScrollView
-        contentContainerStyle={styles.body}
         showsVerticalScrollIndicator={false}
+        contentContainerStyle={[styles.scrollContent, isTablet && styles.scrollContentTablet]}
       >
-        <View style={[styles.maxWidth, isTablet && styles.maxWidthTablet]}>
-          <View style={styles.card}>
-            <View style={styles.blockHeader}>
-              <ScanSearch size={16} color={Colors.primary} />
-              <Text style={styles.blockTitle}>Search customer mobile number</Text>
-            </View>
-            <View style={styles.searchShell}>
+        <View style={[styles.content, { maxWidth: containerWidth }]}>
+          <View style={styles.fieldCard}>
+            <SectionLabel
+              title="Search customer mobile number"
+              icon={<SearchCustomerGlyph />}
+            />
+            <View style={styles.inputShell}>
               <TextInput
-                style={styles.searchInput}
                 value={customerSearch}
-                onChangeText={setCustomerSearch}
+                onChangeText={(value) => {
+                  setCustomerSearch(value);
+                  setError('');
+                }}
+                style={styles.textInput}
                 placeholder="Search customer mobile number"
-                placeholderTextColor="#A5A8B2"
+                placeholderTextColor="#A5A7AE"
                 keyboardType="phone-pad"
               />
-              <ScanSearch size={16} color="#B4B7C2" />
+              <Search size={18} color="#C0C2CA" strokeWidth={2} />
             </View>
           </View>
 
-          <View style={styles.card}>
-            <View style={styles.blockHeader}>
-              <Text style={styles.blockTitle}>Select Frame</Text>
-            </View>
+          <View style={[styles.frameRow, isTablet ? styles.frameRowTablet : styles.frameRowMobile]}>
+            <View style={[styles.frameUploadCard, isTablet && styles.frameUploadCardTablet]}>
+              <View style={styles.fieldCard}>
+                <SectionLabel
+                  title="Select Frame"
+                  icon={
+                    <Image
+                      source={SELECT_FRAME_ICON}
+                      style={styles.selectFrameIcon}
+                      resizeMode="contain"
+                    />
+                  }
+                />
 
-            <View style={styles.frameGrid}>
-              <TouchableOpacity
-                style={[styles.uploadTile, styles.frameTile]}
-                activeOpacity={0.9}
-              >
                 <View style={styles.uploadOptions}>
-                  <TouchableOpacity style={styles.uploadButton} activeOpacity={0.85}>
-                    <Camera size={18} color={Colors.accent} />
-                    <Text style={styles.uploadButtonText}>Add Photo</Text>
-                  </TouchableOpacity>
-                  <Text style={styles.orText}>Or</Text>
-                  <TouchableOpacity style={[styles.uploadButton, styles.uploadButtonBlue]} activeOpacity={0.85}>
-                    <ImageIcon size={18} color={Colors.primary} />
-                    <Text style={[styles.uploadButtonText, styles.uploadButtonTextBlue]}>Gallery</Text>
-                  </TouchableOpacity>
+                  <UploadButton
+                    label="Add Photo"
+                    tint="warm"
+                    icon={<Camera size={22} color="#FFAB12" strokeWidth={2.2} />}
+                    onPress={() => handleUploadPress('camera')}
+                  />
+                  <Text style={styles.orLabel}>Or</Text>
+                  <UploadButton
+                    label="Gallery"
+                    tint="cool"
+                    icon={<ImageIcon size={22} color="#1B73DE" strokeWidth={2.2} />}
+                    onPress={() => handleUploadPress('gallery')}
+                  />
                 </View>
-                <Text style={styles.uploadHint}>Upload to camera & gallery</Text>
-              </TouchableOpacity>
 
-              {frameShapes.map((frame) => {
-                const active = selectedFrame === frame.shape;
+                <Text style={styles.uploadCaption}>Upload to camera & gallery</Text>
+              </View>
+            </View>
 
-                return (
+            <View style={[styles.previewStrip, isTablet && styles.previewStripTablet]}>
+              {framePreviews.map((item, index) => (
+                <View
+                  key={item.id}
+                  style={[
+                    styles.previewCard,
+                    index === 0 ? styles.previewCardLarge : styles.previewCardSmall,
+                  ]}
+                >
                   <TouchableOpacity
-                    key={frame.id}
-                    style={[styles.frameTile, active && styles.frameTileActive]}
-                    onPress={() => {
-                      setSelectedFrame(frame.shape);
-                      setError('');
-                    }}
-                    activeOpacity={0.88}
+                    style={styles.removeButton}
+                    onPress={() => removeFrame(item.id)}
+                    activeOpacity={0.85}
                   >
-                    <View style={styles.tileClose}>
-                      <X size={12} color="#FF9B3D" />
-                    </View>
-                    {frame.image ? (
-                      <Image
-                        source={{ uri: frame.image }}
-                        style={styles.frameImage}
-                        resizeMode="contain"
-                      />
-                    ) : (
-                      <FramePreview shape={frame.shape} active={active} />
-                    )}
-                    <Text style={styles.frameLabel} numberOfLines={1}>{frame.title}</Text>
+                    <X size={14} color="#FF9B35" strokeWidth={2.2} />
                   </TouchableOpacity>
-                );
-              })}
+
+                  {item.image ? (
+                    <Image
+                      source={{ uri: item.image }}
+                      resizeMode="contain"
+                      style={index === 0 ? styles.previewLargeImage : styles.previewSmallImage}
+                    />
+                  ) : (
+                    <FrameArtwork shape={item.shape || 'rectangle'} large={index === 0} />
+                  )}
+                </View>
+              ))}
             </View>
           </View>
 
-          <View style={styles.card}>
-            <View style={styles.blockHeader}>
-              <IndianRupee size={16} color={Colors.primary} />
-              <Text style={styles.blockTitle}>Enter Price</Text>
-            </View>
-            <View style={styles.priceShell}>
+          <View style={styles.fieldCard}>
+            <SectionLabel
+              title="Enter Price"
+              icon={<IndianRupee size={18} color="#1B73DE" strokeWidth={2.4} />}
+            />
+            <View style={styles.inputShell}>
               <TextInput
-                style={styles.priceInput}
                 value={price}
-                onChangeText={setPrice}
+                onChangeText={(value) => {
+                  setPrice(value.replace(/[^0-9.]/g, ''));
+                  setError('');
+                }}
+                style={styles.textInput}
                 placeholder="Enter price"
-                placeholderTextColor="#A5A8B2"
-                keyboardType="numeric"
+                placeholderTextColor="#A5A7AE"
+                keyboardType="decimal-pad"
               />
             </View>
           </View>
@@ -159,313 +318,397 @@ export default function CheckoutScreen() {
   );
 }
 
-function FramePreview({ shape, active }: { shape: string; active: boolean }) {
-  const stroke = active ? '#1F1F23' : '#34363F';
+function SectionLabel({
+  title,
+  icon,
+}: {
+  title: string;
+  icon: ReactNode;
+}) {
+  return (
+    <View style={styles.sectionLabelRow}>
+      {icon}
+      <Text style={styles.sectionLabelText}>{title}</Text>
+    </View>
+  );
+}
+
+function UploadButton({
+  icon,
+  label,
+  tint,
+  onPress,
+}: {
+  icon: ReactNode;
+  label: string;
+  tint: 'warm' | 'cool';
+  onPress: () => void;
+}) {
+  return (
+    <TouchableOpacity
+      style={[styles.uploadButton, tint === 'warm' ? styles.uploadButtonWarm : styles.uploadButtonCool]}
+      onPress={onPress}
+      activeOpacity={0.88}
+    >
+      {icon}
+      <Text style={styles.uploadButtonText}>{label}</Text>
+    </TouchableOpacity>
+  );
+}
+
+function SearchCustomerGlyph() {
+  return (
+    <View style={styles.customerGlyph}>
+      <View style={styles.customerGlyphTop} />
+      <View style={styles.customerGlyphBottom} />
+      <View style={styles.customerGlyphDot} />
+    </View>
+  );
+}
+
+function FrameArtwork({ shape, large }: { shape: string; large: boolean }) {
+  const stroke = '#1B1C20';
 
   if (shape === 'aviator') {
     return (
-      <View style={previewStyles.frameRow}>
-        <View style={[previewStyles.bridge, { backgroundColor: stroke }]} />
-        <View style={[previewStyles.aviatorLens, { borderColor: stroke }]} />
-        <View style={[previewStyles.aviatorLens, { borderColor: stroke }]} />
-      </View>
-    );
-  }
-
-  if (shape === 'contact-lens') {
-    return (
-      <View style={previewStyles.contactLensWrap}>
-        <View style={previewStyles.contactLens} />
-        <View style={previewStyles.contactLens} />
-      </View>
-    );
-  }
-
-  if (shape === 'geometric') {
-    return (
-      <View style={previewStyles.frameRow}>
-        <View style={[previewStyles.bridge, { backgroundColor: stroke }]} />
-        <View style={[previewStyles.geoLens, { borderColor: stroke }]} />
-        <View style={[previewStyles.geoLens, { borderColor: stroke }]} />
+      <View style={[artStyles.row, large ? artStyles.rowLarge : artStyles.rowSmall]}>
+        <View style={[artStyles.bridge, large ? artStyles.bridgeLarge : artStyles.bridgeSmall, { backgroundColor: stroke }]} />
+        <View style={[artStyles.aviatorLens, large ? artStyles.aviatorLensLarge : artStyles.aviatorLensSmall, { borderColor: stroke }]} />
+        <View style={[artStyles.aviatorLens, large ? artStyles.aviatorLensLarge : artStyles.aviatorLensSmall, { borderColor: stroke }]} />
       </View>
     );
   }
 
   return (
-    <View style={previewStyles.frameRow}>
-      <View style={[previewStyles.bridge, { backgroundColor: stroke }]} />
-      <View style={[shape === 'rectangle' ? previewStyles.rectangleLens : previewStyles.squareLens, { borderColor: stroke }]} />
-      <View style={[shape === 'rectangle' ? previewStyles.rectangleLens : previewStyles.squareLens, { borderColor: stroke }]} />
+    <View style={[artStyles.row, large ? artStyles.rowLarge : artStyles.rowSmall]}>
+      <View style={[artStyles.bridge, large ? artStyles.bridgeLarge : artStyles.bridgeSmall, { backgroundColor: stroke }]} />
+      <View style={[shape === 'rectangle' ? artStyles.rectangleLens : artStyles.squareLens, large ? artStyles.lensLarge : artStyles.lensSmall, { borderColor: stroke }]} />
+      <View style={[shape === 'rectangle' ? artStyles.rectangleLens : artStyles.squareLens, large ? artStyles.lensLarge : artStyles.lensSmall, { borderColor: stroke }]} />
     </View>
   );
 }
 
-const previewStyles = StyleSheet.create({
-  frameRow: {
-    height: 72,
+const artStyles = StyleSheet.create({
+  row: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 5,
   },
+  rowLarge: {
+    height: 154,
+  },
+  rowSmall: {
+    height: 112,
+  },
   bridge: {
     position: 'absolute',
-    top: 34,
-    width: 20,
+    borderRadius: 999,
+  },
+  bridgeLarge: {
+    top: 73,
+    width: 22,
+    height: 4,
+  },
+  bridgeSmall: {
+    top: 52,
+    width: 14,
     height: 3,
-    borderRadius: 2,
   },
   squareLens: {
-    width: 58,
-    height: 42,
-    borderWidth: 4,
-    borderRadius: 17,
-    backgroundColor: '#FEFEFF',
-  },
-  aviatorLens: {
-    width: 46,
-    height: 38,
     borderWidth: 3,
-    borderRadius: 18,
-    backgroundColor: '#FEFEFF',
-  },
-  roundLens: {
-    width: 44,
-    height: 44,
-    borderWidth: 3,
-    borderRadius: 22,
-    backgroundColor: '#FEFEFF',
+    borderRadius: 16,
+    backgroundColor: '#FFFFFF',
   },
   rectangleLens: {
-    width: 58,
-    height: 34,
-    borderWidth: 4,
-    borderRadius: 13,
-    backgroundColor: '#FEFEFF',
-  },
-  geoLens: {
-    width: 39,
-    height: 39,
     borderWidth: 3,
-    borderRadius: 10,
-    transform: [{ rotate: '18deg' }],
-    backgroundColor: '#FEFEFF',
+    borderRadius: 14,
+    backgroundColor: '#FFFFFF',
   },
-  contactLensWrap: {
+  lensLarge: {
+    width: 94,
     height: 72,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
   },
-  contactLens: {
-    width: 25,
-    height: 34,
-    borderWidth: 1.5,
-    borderColor: '#B6D9FF',
-    backgroundColor: '#EAF6FF',
-    borderTopLeftRadius: 18,
-    borderTopRightRadius: 18,
-    borderBottomLeftRadius: 18,
-    borderBottomRightRadius: 18,
-    transform: [{ rotate: '16deg' }],
+  lensSmall: {
+    width: 50,
+    height: 39,
+  },
+  aviatorLens: {
+    borderWidth: 3,
+    borderRadius: 18,
+    backgroundColor: '#FFFFFF',
+  },
+  aviatorLensLarge: {
+    width: 80,
+    height: 66,
+  },
+  aviatorLensSmall: {
+    width: 42,
+    height: 36,
   },
 });
 
 const styles = StyleSheet.create({
-  container: {
+  screen: {
     flex: 1,
-    backgroundColor: '#F5F5FB',
+    backgroundColor: '#F8F8FD',
   },
   header: {
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#ECECF3',
+    paddingTop: Platform.OS === 'ios' ? 52 : 28,
+    paddingBottom: 16,
+    paddingHorizontal: 16,
+  },
+  headerInner: {
+    width: '100%',
+    alignSelf: 'center',
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.white,
-    paddingTop: Platform.OS === 'ios' ? 52 : 36,
-    paddingBottom: Spacing.md,
-    paddingHorizontal: Spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: '#EFEFF4',
   },
-  backBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+  backButton: {
+    width: 28,
+    height: 28,
     alignItems: 'center',
     justifyContent: 'center',
+    marginRight: 8,
   },
   headerTitle: {
-    flex: 1,
-    fontSize: FontSize.lg,
-    fontWeight: '600',
-    color: '#20222B',
-    marginLeft: Spacing.xs,
+    fontSize: 17,
+    lineHeight: 22,
+    fontWeight: '500',
+    color: '#202128',
   },
-  headerSpacer: {
-    width: 24,
+  scrollContent: {
+    paddingHorizontal: 12,
+    paddingTop: 22,
+    paddingBottom: 40,
   },
-  body: {
-    padding: Spacing.md,
-    paddingBottom: Spacing.xxl,
-    alignItems: isTablet ? 'center' : undefined,
+  scrollContentTablet: {
+    alignItems: 'center',
+    paddingHorizontal: 24,
   },
-  maxWidth: {
+  content: {
     width: '100%',
+    alignSelf: 'center',
   },
-  maxWidthTablet: {
-    maxWidth: 760,
-  },
-  card: {
-    backgroundColor: Colors.white,
-    borderRadius: Radius.lg,
-    padding: Spacing.md,
-    marginBottom: Spacing.md,
+  fieldCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#ECECF4',
+    borderColor: '#E7E8F0',
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 10,
     ...Shadow.sm,
   },
-  blockHeader: {
+  sectionLabelRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.xs,
-    marginBottom: Spacing.sm,
+    marginBottom: 12,
   },
-  blockTitle: {
-    fontSize: FontSize.sm,
-    fontWeight: '600',
-    color: '#242733',
+  sectionLabelText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#202128',
   },
-  searchShell: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FAFAFC',
-    borderWidth: 1,
-    borderColor: '#EFEFF4',
-    borderRadius: Radius.md,
-    paddingHorizontal: Spacing.sm,
-  },
-  searchInput: {
-    flex: 1,
-    height: 42,
-    color: Colors.text,
-    fontSize: FontSize.sm,
-  },
-  frameGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.sm,
-  },
-  frameTile: {
-    flexGrow: 1,
-    minWidth: isTablet ? 148 : 132,
-    flexBasis: isTablet ? '23%' : '46%',
-    minHeight: 122,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: '#ECECF4',
-    backgroundColor: '#FFFFFF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: Spacing.sm,
+  customerGlyph: {
+    width: 18,
+    height: 18,
+    marginRight: 10,
+    borderWidth: 1.4,
+    borderColor: '#2080FF',
+    borderRadius: 3,
     position: 'relative',
   },
-  frameTileActive: {
-    borderColor: '#BFD8FF',
-    backgroundColor: '#FCFDFF',
-  },
-  tileClose: {
+  customerGlyphTop: {
     position: 'absolute',
-    top: 8,
-    right: 8,
-    zIndex: 1,
+    top: 3,
+    left: 5.5,
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    borderWidth: 1.2,
+    borderColor: '#2080FF',
   },
-  frameImage: {
-    width: 100,
-    height: 64,
+  customerGlyphBottom: {
+    position: 'absolute',
+    left: 3.5,
+    bottom: 3,
+    width: 9,
+    height: 4,
+    borderWidth: 1.2,
+    borderColor: '#2080FF',
+    borderTopWidth: 0,
+    borderBottomLeftRadius: 5,
+    borderBottomRightRadius: 5,
   },
-  frameLabel: {
-    marginTop: Spacing.xs,
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#30323B',
+  customerGlyphDot: {
+    position: 'absolute',
+    right: -2,
+    top: -2,
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: '#2080FF',
   },
-  uploadTile: {
+  selectFrameIcon: {
+    width: 18,
+    height: 18,
+    marginRight: 10,
+  },
+  inputShell: {
+    minHeight: 34,
+    backgroundColor: '#F7F7F8',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 2,
+  },
+  textInput: {
+    flex: 1,
+    height: 34,
+    fontSize: 12.5,
+    color: '#1E2028',
+  },
+  frameRow: {
+    gap: 10,
+    marginTop: 24,
+    marginBottom: 24,
+  },
+  frameRowTablet: {
+    flexDirection: 'row',
     alignItems: 'stretch',
-    justifyContent: 'space-between',
-    backgroundColor: '#FFFFFF',
+  },
+  frameRowMobile: {
+    flexDirection: 'column',
+  },
+  frameUploadCard: {
+    width: '100%',
+  },
+  frameUploadCardTablet: {
+    width: 278,
+    flexShrink: 0,
   },
   uploadOptions: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: Spacing.sm,
+    gap: 8,
   },
   uploadButton: {
     flex: 1,
-    minHeight: 54,
-    borderRadius: Radius.md,
-    backgroundColor: '#FFF5E8',
+    minHeight: 74,
+    borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 5,
   },
-  uploadButtonBlue: {
-    backgroundColor: '#EDF5FF',
+  uploadButtonWarm: {
+    backgroundColor: '#FFF4E7',
+  },
+  uploadButtonCool: {
+    backgroundColor: '#DCEBFF',
   },
   uploadButtonText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#7B4A14',
-  },
-  uploadButtonTextBlue: {
-    color: Colors.primary,
-  },
-  orText: {
-    fontSize: FontSize.xs,
-    color: '#B0B3BE',
-  },
-  uploadHint: {
-    marginTop: Spacing.sm,
-    fontSize: 11,
-    color: '#A6A8B2',
-    textAlign: 'center',
-  },
-  priceShell: {
-    backgroundColor: '#FAFAFC',
-    borderWidth: 1,
-    borderColor: '#EFEFF4',
-    borderRadius: Radius.md,
-    paddingHorizontal: Spacing.sm,
-  },
-  priceInput: {
-    height: 42,
-    color: Colors.text,
-    fontSize: FontSize.sm,
-  },
-  errorBox: {
-    backgroundColor: '#FEE2E2',
-    borderRadius: Radius.md,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    marginBottom: Spacing.md,
-  },
-  errorText: {
-    color: Colors.error,
-    fontSize: FontSize.sm,
+    marginTop: 8,
+    fontSize: 12,
     fontWeight: '500',
+    color: '#1F2026',
   },
-  nextButton: {
-    width: isTablet ? 220 : 200,
-    backgroundColor: Colors.primary,
-    borderRadius: Radius.md,
-    paddingVertical: Spacing.sm + 3,
+  orLabel: {
+    width: 20,
+    textAlign: 'center',
+    fontSize: 12,
+    color: '#8E919C',
+  },
+  uploadCaption: {
+    marginTop: 14,
+    marginBottom: 6,
+    textAlign: 'center',
+    fontSize: 12,
+    color: '#878A94',
+  },
+  previewStrip: {
+    flexDirection: 'row',
+    gap: 10,
+    flexWrap: 'wrap',
+  },
+  previewStripTablet: {
+    flex: 1,
+    flexWrap: 'nowrap',
+  },
+  previewCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E7E8F0',
+    overflow: 'hidden',
+    position: 'relative',
     alignItems: 'center',
     justifyContent: 'center',
     ...Shadow.sm,
   },
+  previewCardLarge: {
+    flex: 1.44,
+    minHeight: 170,
+    minWidth: 0,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  previewCardSmall: {
+    flex: 0.72,
+    minHeight: 170,
+    minWidth: 0,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+  },
+  removeButton: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#FFF4E7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 2,
+  },
+  previewLargeImage: {
+    width: '100%',
+    height: 132,
+  },
+  previewSmallImage: {
+    width: '100%',
+    height: 86,
+  },
+  errorBox: {
+    marginTop: 10,
+    borderRadius: 10,
+    backgroundColor: '#FEE2E2',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  errorText: {
+    fontSize: 12,
+    color: '#B42318',
+    fontWeight: '500',
+  },
+  nextButton: {
+    width: 278,
+    maxWidth: '100%',
+    minHeight: 42,
+    borderRadius: 8,
+    backgroundColor: '#1C71D8',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 22,
+    ...Shadow.sm,
+  },
   nextButtonText: {
-    color: Colors.white,
-    fontSize: FontSize.sm,
+    fontSize: 13.5,
     fontWeight: '700',
+    color: '#FFFFFF',
   },
 });

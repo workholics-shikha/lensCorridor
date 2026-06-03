@@ -162,6 +162,43 @@ profiles.set(seedUser.id, {
   created_at: now(),
 });
 
+orders.set(seedUser.id, [
+  {
+    id: 'ord_seed_demo_01',
+    user_id: seedUser.id,
+    status: 'delivered',
+    total_amount: 4599,
+    shipping_address: {
+      name: 'Demo Customer',
+      phone: '+91 9876543210',
+      line1: '22 Park Street',
+      city: 'Kolkata',
+      state: 'West Bengal',
+      pincode: '700016',
+    },
+    payment_method: 'card',
+    payment_status: 'paid',
+    created_at: '2026-05-12T10:30:00.000Z',
+    updated_at: '2026-05-16T10:30:00.000Z',
+    order_items: [
+      {
+        id: 'item_seed_demo_01',
+        order_id: 'ord_seed_demo_01',
+        product_id: 'prod-1',
+        quantity: 1,
+        unit_price: 2499,
+      },
+      {
+        id: 'item_seed_demo_02',
+        order_id: 'ord_seed_demo_01',
+        product_id: 'prod-2',
+        quantity: 1,
+        unit_price: 1999,
+      },
+    ],
+  },
+]);
+
 function cloneProduct(product: Product): Product {
   return {
     ...product,
@@ -193,6 +230,10 @@ function cloneOrder(order: Order): Order {
       products: getProductById(item.product_id) ?? undefined,
     })),
   };
+}
+
+function normalizePhone(phone: string) {
+  return phone.replace(/\D/g, '').slice(-10);
 }
 
 export function getSession(): AuthSession | null {
@@ -445,6 +486,44 @@ export async function createOrder(input: {
 
 export function getOrders(userId: string): Order[] {
   return (orders.get(userId) ?? []).map(cloneOrder);
+}
+
+export function findLatestCustomerByPhone(phone: string): {
+  name: string;
+  phone: string;
+  line1?: string;
+  city?: string;
+  state?: string;
+  pincode?: string;
+  lastOrderId: string;
+  lastOrderDate: string;
+} | null {
+  const normalizedPhone = normalizePhone(phone);
+
+  if (!normalizedPhone) {
+    return null;
+  }
+
+  const matches = [...orders.values()]
+    .flat()
+    .filter((order) => normalizePhone(order.shipping_address.phone ?? '') === normalizedPhone)
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+  const latestOrder = matches[0];
+  if (!latestOrder) {
+    return null;
+  }
+
+  return {
+    name: latestOrder.shipping_address.name || 'Customer',
+    phone: latestOrder.shipping_address.phone || phone,
+    line1: latestOrder.shipping_address.line1,
+    city: latestOrder.shipping_address.city,
+    state: latestOrder.shipping_address.state,
+    pincode: latestOrder.shipping_address.pincode,
+    lastOrderId: latestOrder.id,
+    lastOrderDate: latestOrder.created_at,
+  };
 }
 
 export async function savePrescription(
