@@ -6,13 +6,14 @@ import {
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Eye, EyeOff, Mail, Lock } from 'lucide-react-native';
-import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/context/AuthContext';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '@/lib/theme';
 
 const { width } = Dimensions.get('window');
 const isTablet = width >= 768;
 
 export default function LoginScreen() {
+  const { signIn } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -23,9 +24,9 @@ export default function LoginScreen() {
     if (!email || !password) { setError('Please fill in all fields'); return; }
     setLoading(true);
     setError('');
-    const { error: err } = await supabase.auth.signInWithPassword({ email, password });
+    const err = await signIn(email, password);
     setLoading(false);
-    if (err) { setError(err.message); return; }
+    if (err) { setError(err); return; }
     router.replace('/(tabs)');
   };
 
@@ -102,6 +103,8 @@ export default function LoginScreen() {
               <Text style={styles.signupLink}>Sign Up</Text>
             </TouchableOpacity>
           </View>
+
+          <Text style={styles.demoText}>Demo login: `demo@lenscorridor.com` / `password123`</Text>
 
           <TouchableOpacity style={styles.guestBtn} onPress={() => router.replace('/(tabs)')}>
             <Text style={styles.guestBtnText}>Continue as Guest</Text>
@@ -246,6 +249,12 @@ const styles = StyleSheet.create({
     color: Colors.primary,
     fontWeight: '700',
     fontSize: FontSize.md,
+  },
+  demoText: {
+    textAlign: 'center',
+    color: Colors.textMuted,
+    fontSize: FontSize.xs,
+    marginBottom: Spacing.md,
   },
   guestBtn: {
     borderWidth: 1,

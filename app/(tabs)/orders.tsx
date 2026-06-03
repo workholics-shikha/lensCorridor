@@ -5,7 +5,7 @@ import {
 import { useEffect, useState } from 'react';
 import { router } from 'expo-router';
 import { Package, ChevronRight, ShoppingBag } from 'lucide-react-native';
-import { supabase } from '@/lib/supabase';
+import { getOrders } from '@/lib/localStore';
 import { Order } from '@/lib/types';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '@/lib/theme';
 import { useAuth } from '@/context/AuthContext';
@@ -26,15 +26,8 @@ export default function OrdersScreen() {
 
   useEffect(() => {
     if (!user) { setLoading(false); return; }
-    supabase
-      .from('orders')
-      .select('*, order_items(*, products(name, images))')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
-      .then(({ data }) => {
-        setOrders(data as Order[] || []);
-        setLoading(false);
-      });
+    setOrders(getOrders(user.id));
+    setLoading(false);
   }, [user]);
 
   if (!user) {

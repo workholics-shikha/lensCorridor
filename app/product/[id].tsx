@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { ArrowLeft, Heart, ShoppingCart, Star, Shield, Truck, RotateCcw, ChevronRight } from 'lucide-react-native';
-import { supabase } from '@/lib/supabase';
+import { getProductById } from '@/lib/localStore';
 import { Product } from '@/lib/types';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '@/lib/theme';
 import { useCart } from '@/context/CartContext';
@@ -23,10 +23,8 @@ export default function ProductDetailScreen() {
 
   useEffect(() => {
     if (!id) return;
-    supabase.from('products').select('*, categories(*)').eq('id', id).maybeSingle().then(({ data }) => {
-      setProduct(data as Product);
-      setLoading(false);
-    });
+    setProduct(getProductById(id));
+    setLoading(false);
   }, [id]);
 
   const handleAddToCart = async () => {

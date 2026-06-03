@@ -6,13 +6,14 @@ import {
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Eye, EyeOff, Mail, Lock, User, Phone } from 'lucide-react-native';
-import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/context/AuthContext';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '@/lib/theme';
 
 const { width } = Dimensions.get('window');
 const isTablet = width >= 768;
 
 export default function SignupScreen() {
+  const { signUp } = useAuth();
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
@@ -26,15 +27,8 @@ export default function SignupScreen() {
     if (password.length < 6) { setError('Password must be at least 6 characters'); return; }
     setLoading(true);
     setError('');
-    const { data, error: err } = await supabase.auth.signUp({ email, password });
-    if (err) { setLoading(false); setError(err.message); return; }
-    if (data.user) {
-      await supabase.from('profiles').insert({
-        id: data.user.id,
-        full_name: fullName,
-        phone,
-      });
-    }
+    const err = await signUp({ fullName, email, phone, password });
+    if (err) { setLoading(false); setError(err); return; }
     setLoading(false);
     router.replace('/(tabs)');
   };

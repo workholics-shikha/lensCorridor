@@ -5,7 +5,8 @@ import {
 } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { Search, SlidersHorizontal, X } from 'lucide-react-native';
-import { supabase } from '@/lib/supabase';
+import { getFilteredProducts } from '@/lib/localStore';
+import { fetchFrameShapeCategories } from '@/lib/api';
 import { Product, Category } from '@/lib/types';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '@/lib/theme';
 import ProductCard from '@/components/ProductCard';
@@ -26,30 +27,14 @@ export default function ProductsScreen() {
   const [showFilters, setShowFilters] = useState(false);
 
   useEffect(() => {
-    supabase.from('categories').select('*').order('sort_order').then(({ data }) => setCategories(data || []));
+    fetchFrameShapeCategories().then(setCategories);
   }, []);
 
   const fetchProducts = useCallback(async () => {
     setLoading(true);
-    let query = supabase.from('products').select('*, categories(*)');
-
-    if (selectedCategory) {
-      const cat = categories.find(c => c.slug === selectedCategory);
-      if (cat) query = query.eq('category_id', cat.id);
-    }
-    if (searchQuery.trim()) {
-      query = query.ilike('name', `%${searchQuery.trim()}%`);
-    }
-
-    if (sortBy === 'popular') query = query.order('review_count', { ascending: false });
-    else if (sortBy === 'price_asc') query = query.order('price', { ascending: true });
-    else if (sortBy === 'price_desc') query = query.order('price', { ascending: false });
-    else if (sortBy === 'rating') query = query.order('rating', { ascending: false });
-
-    const { data } = await query;
-    setProducts(data as Product[] || []);
+    setProducts(getFilteredProducts({ categorySlug: selectedCategory, search: searchQuery, sortBy }));
     setLoading(false);
-  }, [selectedCategory, searchQuery, sortBy, categories]);
+  }, [selectedCategory, searchQuery, sortBy]);
 
   useEffect(() => {
     if (categories.length > 0 || !selectedCategory) fetchProducts();

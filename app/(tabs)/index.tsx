@@ -1,45 +1,78 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  Image, Dimensions, Platform, TextInput,
+  Image, ImageBackground, Platform, useWindowDimensions,
 } from 'react-native';
 import { router } from 'expo-router';
-import { Menu, ShoppingCart, Search, Bell } from 'lucide-react-native';
-import { supabase } from '@/lib/supabase';
-import { Category, Product } from '@/lib/types';
+import { Menu, ShoppingCart } from 'lucide-react-native';
+import { fetchFrameShapes } from '@/lib/api';
+import { FrameShape } from '@/lib/types';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '@/lib/theme';
 import { useCart } from '@/context/CartContext';
-import ProductCard from '@/components/ProductCard';
 
-const { width } = Dimensions.get('window');
-const isTablet = width >= 768;
+const logoImage = require('@/assets/images/Group 8734.png');
+const frameShapesTitleIcon = require('@/assets/images/healthicons_eyeglasses-24px.png');
+const eyeTestTitleIcon = require('@/assets/images/ChatGPT Image Apr 9, 2026, 04_10_40 PM 2.png');
+const repairTitleIcon = require('@/assets/images/ChatGPT Image Apr 9, 2026, 03_07_39 PM 6.png');
+const eyeTestCardImage = require('@/assets/images/types-of-eye-exams 1.png');
+const repairCardImage = require('@/assets/images/Optical-Lens-Lab-Replacement 1.png');
 
-const FRAME_SHAPES = [
-  { slug: 'square', label: 'Square', emoji: '⬛' },
-  { slug: 'rectangle', label: 'Rectangle', emoji: '▬' },
-  { slug: 'aviator', label: 'Aviator', emoji: '🕶' },
-  { slug: 'geometric', label: 'Geometric', emoji: '⬡' },
-  { slug: 'contact-lens', label: 'Contact Lens', emoji: '👁' },
+const QUICK_CARDS = [
+  {
+    key: 'eye-test',
+    title: 'Eye Test',
+    body: 'Book A Quick And Accurate Eye\nCheckup With Experts.',
+    titleIcon: eyeTestTitleIcon,
+    image: eyeTestCardImage,
+    action: () => router.push('/prescription'),
+  },
+  {
+    key: 'repair',
+    title: 'Repair',
+    body: 'Get Your Glasses Repaired\nQuickly And Hassle-Free.',
+    titleIcon: repairTitleIcon,
+    image: repairCardImage,
+    action: () => {},
+  },
 ];
 
 export default function HomeScreen() {
+  const { width, height } = useWindowDimensions();
+  const isTablet = width >= 768;
+  const isLandscape = width > height;
+  const isTabletLandscape = isTablet && isLandscape;
   const { cartCount } = useCart();
   const [selectedShape, setSelectedShape] = useState('rectangle');
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [featuredProducts, setFeaturedProducts] = useState<Product[]>([]);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [frameShapes, setFrameShapes] = useState<FrameShape[]>([]);
+
+  const metrics = useMemo(() => {
+    const horizontalPadding = isTabletLandscape ? 26 : 20;
+    const shapeCardWidth = isTabletLandscape ? 162 : isTablet ? 154 : 146;
+    const shapeCardHeight = isTabletLandscape ? 122 : isTablet ? 132 : 134;
+    const serviceCardHeight = isTabletLandscape ? 136 : isTablet ? 196 : 160;
+
+    return {
+      horizontalPadding,
+      headerTopPadding: Platform.OS === 'ios' ? (isTabletLandscape ? 22 : 52) : (isTabletLandscape ? 18 : 36),
+      headerBottomPadding: isTabletLandscape ? 24 : 18,
+      logoWidth: isTabletLandscape ? 206 : isTablet ? 248 : 240,
+      logoHeight: isTabletLandscape ? 34 : isTablet ? 48 : 42,
+      surfaceRadius: isTabletLandscape ? 32 : 30,
+      sectionTopPadding: isTabletLandscape ? 26 : 22,
+      sectionGap: isTabletLandscape ? 22 : isTablet ? 24 : 16,
+      shapeCardWidth: isTabletLandscape ? 172 : shapeCardWidth,
+      shapeCardHeight: isTabletLandscape ? 130 : shapeCardHeight,
+      shapeImageWidth: isTabletLandscape ? 128 : isTablet ? 138 : 114,
+      shapeImageHeight: isTabletLandscape ? 72 : isTablet ? 84 : 74,
+      shapeTitleSize: isTabletLandscape ? 20 : isTablet ? 22 : 17,
+      serviceCardHeight,
+      serviceBodySize: isTabletLandscape ? 13 : 14,
+      serviceBodyLineHeight: isTabletLandscape ? 18 : 19,
+    };
+  }, [height, isTablet, isTabletLandscape, width]);
 
   useEffect(() => {
-    supabase.from('categories').select('*').order('sort_order').then(({ data }) => {
-      setCategories(data || []);
-    });
-    supabase
-      .from('products')
-      .select('*, categories(*)')
-      .limit(isTablet ? 8 : 6)
-      .order('review_count', { ascending: false })
-      .then(({ data }) => setFeaturedProducts(data as Product[] || []));
+    fetchFrameShapes().then(setFrameShapes);
   }, []);
 
   const handleShapeSelect = (slug: string) => {
@@ -47,251 +80,552 @@ export default function HomeScreen() {
     router.push({ pathname: '/(tabs)/products', params: { category: slug } });
   };
 
-  const handleSearch = () => {
-    if (searchQuery.trim()) {
-      router.push({ pathname: '/(tabs)/products', params: { search: searchQuery.trim() } });
-    }
-  };
-
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerTop}>
-          <TouchableOpacity style={styles.menuBtn}>
-            <Menu size={22} color={Colors.white} />
+      <View
+        style={[
+          styles.header,
+          {
+            paddingTop: metrics.headerTopPadding,
+            paddingBottom: metrics.headerBottomPadding,
+            paddingHorizontal: metrics.horizontalPadding,
+          },
+        ]}
+      >
+        <View style={styles.headerRow}>
+          <TouchableOpacity style={styles.headerIconButton} activeOpacity={0.8}>
+            <Menu size={20} color={Colors.white} />
           </TouchableOpacity>
-          <View style={styles.headerBrand}>
-            <Text style={styles.headerLogo}>∞</Text>
-            <Text style={styles.headerTitle}>Lens Corridor</Text>
+
+          <View style={styles.brandRow}>
+            <Image
+              source={logoImage}
+              style={[
+                styles.logoImage,
+                { width: metrics.logoWidth, height: metrics.logoHeight },
+              ]}
+              resizeMode="contain"
+            />
           </View>
-          <TouchableOpacity style={styles.cartBtn} onPress={() => router.push('/cart')}>
-            <ShoppingCart size={22} color={Colors.white} />
-            {cartCount > 0 && (
+
+          <TouchableOpacity
+            style={styles.cartButton}
+            onPress={() => router.push('/cart')}
+            activeOpacity={0.85}
+          >
+            <ShoppingCart size={18} color={Colors.primary} />
+            {cartCount > 0 ? (
               <View style={styles.cartBadge}>
                 <Text style={styles.cartBadgeText}>{cartCount > 9 ? '9+' : cartCount}</Text>
               </View>
-            )}
+            ) : null}
           </TouchableOpacity>
-        </View>
-
-        {/* Search Bar */}
-        <View style={styles.searchBar}>
-          <Search size={16} color={Colors.gray400} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search eyeglasses, brands..."
-            placeholderTextColor={Colors.gray400}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            onSubmitEditing={handleSearch}
-            returnKeyType="search"
-          />
         </View>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Frame Shapes */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionIcon}>🕶</Text>
-            <Text style={styles.sectionTitle}>Select Frame Shapes</Text>
-          </View>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.shapesRow}>
-            {FRAME_SHAPES.map((shape) => (
-              <TouchableOpacity
-                key={shape.slug}
-                style={[styles.shapeCard, selectedShape === shape.slug && styles.shapeCardActive]}
-                onPress={() => handleShapeSelect(shape.slug)}
-                activeOpacity={0.8}
-              >
-                <FrameShapeIcon slug={shape.slug} active={selectedShape === shape.slug} />
-                <Text style={[styles.shapeLabel, selectedShape === shape.slug && styles.shapeLabelActive]}>
-                  {shape.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[styles.scrollContent, isTablet && styles.scrollContentTablet]}
+      >
+        <View
+          style={[
+            styles.surface,
+            {
+              borderTopLeftRadius: metrics.surfaceRadius,
+              borderTopRightRadius: metrics.surfaceRadius,
+              paddingTop: metrics.sectionTopPadding,
+              flex: isTablet ? 1 : undefined,
+              minHeight: isTablet ? height - 120 : undefined,
+            },
+          ]}
+        >
+          <SectionTitle title="Select Frame Shapes" iconSource={frameShapesTitleIcon} />
+          {isTabletLandscape ? (
+            <View
+              style={[
+                styles.shapeGrid,
+                {
+                  paddingHorizontal: metrics.horizontalPadding,
+                  marginBottom: metrics.sectionGap + 2,
+                },
+              ]}
+            >
+              {frameShapes.map((shape) => {
+                const active = selectedShape === shape.shape;
 
-        {/* Services Row */}
-        <View style={[styles.servicesRow, isTablet && styles.servicesRowTablet]}>
-          <ServiceCard
-            title="Eye Test"
-            subtitle="Book A Quick And Accurate Eye Checkup With Experts"
-            image="https://images.pexels.com/photos/5765828/pexels-photo-5765828.jpeg?auto=compress&cs=tinysrgb&w=600"
-            onPress={() => router.push('/prescription')}
-          />
-          <ServiceCard
-            title="Repair"
-            subtitle="Get Your Glasses Repaired Quickly And Hassle-Free."
-            image="https://images.pexels.com/photos/3825586/pexels-photo-3825586.jpeg?auto=compress&cs=tinysrgb&w=600"
-            onPress={() => {}}
-          />
-        </View>
-
-        {/* Banner */}
-        <TouchableOpacity style={styles.banner} onPress={() => router.push('/(tabs)/products')} activeOpacity={0.9}>
-          <Image
-            source={{ uri: 'https://images.pexels.com/photos/701877/pexels-photo-701877.jpeg?auto=compress&cs=tinysrgb&w=1200' }}
-            style={styles.bannerImage}
-            resizeMode="cover"
-          />
-          <View style={styles.bannerOverlay}>
-            <Text style={styles.bannerTag}>NEW ARRIVAL</Text>
-            <Text style={styles.bannerTitle}>Up to 50% Off</Text>
-            <Text style={styles.bannerSub}>Premium Eyewear Collection</Text>
-            <View style={styles.bannerBtn}>
-              <Text style={styles.bannerBtnText}>Shop Now</Text>
+                return (
+                  <TouchableOpacity
+                    key={shape.id}
+                    style={[
+                      styles.shapeCard,
+                      active && styles.shapeCardActive,
+                      {
+                        width: metrics.shapeCardWidth,
+                        minHeight: metrics.shapeCardHeight,
+                      },
+                    ]}
+                    onPress={() => handleShapeSelect(shape.shape)}
+                    activeOpacity={0.85}
+                  >
+                    {shape.image ? (
+                      <Image
+                        source={{ uri: shape.image }}
+                        style={[
+                          styles.shapeImage,
+                          {
+                            width: metrics.shapeImageWidth,
+                            height: metrics.shapeImageHeight,
+                          },
+                        ]}
+                        resizeMode="contain"
+                      />
+                    ) : (
+                      <FrameShapeArtwork slug={shape.shape} active={active} />
+                    )}
+                  <Text
+                      style={[
+                        styles.shapeLabel,
+                        active && styles.shapeLabelActive,
+                        { fontSize: metrics.shapeTitleSize },
+                      ]}
+                    >
+                      {shape.title}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
-          </View>
-        </TouchableOpacity>
+          ) : (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={[
+                styles.shapesRow,
+                {
+                  paddingHorizontal: metrics.horizontalPadding,
+                  paddingBottom: metrics.sectionGap + 4,
+                },
+              ]}
+            >
+              {frameShapes.map((shape) => {
+                const active = selectedShape === shape.shape;
 
-        {/* Featured Products */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionTitle}>Best Sellers</Text>
-            <TouchableOpacity onPress={() => router.push('/(tabs)/products')}>
-              <Text style={styles.seeAll}>See All</Text>
-            </TouchableOpacity>
-          </View>
-          <View style={[styles.productsGrid, isTablet && styles.productsGridTablet]}>
-            {featuredProducts.map((product) => (
-              <ProductCard key={product.id} product={product} style={isTablet ? styles.productCardTablet : styles.productCard} />
+                return (
+                  <TouchableOpacity
+                    key={shape.id}
+                    style={[
+                      styles.shapeCard,
+                      active && styles.shapeCardActive,
+                      {
+                        width: metrics.shapeCardWidth,
+                        minHeight: metrics.shapeCardHeight,
+                      },
+                    ]}
+                    onPress={() => handleShapeSelect(shape.shape)}
+                    activeOpacity={0.85}
+                  >
+                    {shape.image ? (
+                      <Image
+                        source={{ uri: shape.image }}
+                        style={[
+                          styles.shapeImage,
+                          {
+                            width: metrics.shapeImageWidth,
+                            height: metrics.shapeImageHeight,
+                          },
+                        ]}
+                        resizeMode="contain"
+                      />
+                    ) : (
+                      <FrameShapeArtwork slug={shape.shape} active={active} />
+                    )}
+                  <Text
+                      style={[
+                        styles.shapeLabel,
+                        active && styles.shapeLabelActive,
+                        { fontSize: metrics.shapeTitleSize },
+                      ]}
+                    >
+                      {shape.title}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          )}
+
+          <View
+            style={[
+              styles.quickCardsWrap,
+              {
+                paddingHorizontal: metrics.horizontalPadding,
+                marginTop: metrics.sectionGap,
+              },
+            ]}
+          >
+            {QUICK_CARDS.map((card) => (
+              <View key={card.key} style={styles.quickCardBlock}>
+                <SectionTitle title={card.title} compact iconSource={card.titleIcon} />
+                <TouchableOpacity
+                  style={styles.quickCard}
+                  onPress={card.action}
+                  activeOpacity={0.9}
+                >
+                  <ImageBackground
+                    source={card.image}
+                    style={[styles.quickCardImage, { height: metrics.serviceCardHeight }]}
+                    imageStyle={styles.quickCardImageStyle}
+                    resizeMode="cover"
+                  >
+                    <View style={styles.quickCardOverlay}>
+                      <Text
+                        style={[
+                          styles.quickCardBody,
+                          {
+                            fontSize: metrics.serviceBodySize,
+                            lineHeight: metrics.serviceBodyLineHeight,
+                          },
+                        ]}
+                      >
+                        {card.body}
+                      </Text>
+                      <View style={styles.quickCardButton}>
+                        <Text style={styles.quickCardButtonText}>Start Now</Text>
+                      </View>
+                    </View>
+                  </ImageBackground>
+                </TouchableOpacity>
+              </View>
             ))}
           </View>
         </View>
-
-        {/* Bottom Padding */}
-        <View style={{ height: Spacing.xxl }} />
       </ScrollView>
     </View>
   );
 }
 
-function FrameShapeIcon({ slug, active }: { slug: string; active: boolean }) {
-  const color = active ? Colors.primary : Colors.gray600;
-  const size = isTablet ? 40 : 36;
-
-  const shapes: Record<string, React.ReactNode> = {
-    'square': <View style={{ width: size * 0.7, height: size * 0.5, borderWidth: 2.5, borderColor: color, borderRadius: 3 }} />,
-    'rectangle': <View style={{ width: size * 0.9, height: size * 0.45, borderWidth: 2.5, borderColor: color, borderRadius: 3 }} />,
-    'aviator': (
-      <View style={{ alignItems: 'center' }}>
-        <View style={{ width: size * 0.25, height: 2, backgroundColor: color, marginBottom: 2 }} />
-        <View style={{ flexDirection: 'row', gap: 3 }}>
-          <View style={{ width: size * 0.38, height: size * 0.38, borderWidth: 2.5, borderColor: color, borderRadius: size * 0.19 }} />
-          <View style={{ width: size * 0.38, height: size * 0.38, borderWidth: 2.5, borderColor: color, borderRadius: size * 0.19 }} />
-        </View>
-      </View>
-    ),
-    'geometric': <View style={{ width: size * 0.6, height: size * 0.6, borderWidth: 2.5, borderColor: color, transform: [{ rotate: '45deg' }] }} />,
-    'contact-lens': <View style={{ width: size * 0.55, height: size * 0.55, borderWidth: 2.5, borderColor: color, borderRadius: size * 0.3, borderStyle: 'dashed' }} />,
-  };
-
+function SectionTitle({
+  title,
+  compact,
+  iconSource,
+}: {
+  title: string;
+  compact?: boolean;
+  iconSource?: number;
+}) {
   return (
-    <View style={{ height: size + 4, alignItems: 'center', justifyContent: 'center' }}>
-      {shapes[slug] || <View style={{ width: size * 0.6, height: size * 0.45, borderWidth: 2.5, borderColor: color, borderRadius: 3 }} />}
+    <View style={[styles.sectionTitleRow, compact && styles.sectionTitleRowCompact]}>
+      {iconSource ? (
+        <Image source={iconSource} style={styles.sectionTitleIcon} resizeMode="contain" />
+      ) : (
+        <View style={styles.sectionIconDot} />
+      )}
+      <Text style={styles.sectionTitle}>{title}</Text>
     </View>
   );
 }
 
-function ServiceCard({ title, subtitle, image, onPress }: { title: string; subtitle: string; image: string; onPress: () => void }) {
-  return (
-    <TouchableOpacity style={styles.serviceCard} onPress={onPress} activeOpacity={0.9}>
-      <Image source={{ uri: image }} style={styles.serviceImage} resizeMode="cover" />
-      <View style={styles.serviceOverlay}>
-        <Text style={styles.serviceTitle}>{title}</Text>
-        <Text style={styles.serviceSubtitle}>{subtitle}</Text>
-        <View style={styles.serviceBtn}>
-          <Text style={styles.serviceBtnText}>Start Now</Text>
-        </View>
+function FrameShapeArtwork({ slug, active }: { slug: string; active: boolean }) {
+  const stroke = active ? '#2B2B2B' : '#7C7C7C';
+
+  if (slug === 'contact-lens') {
+    return (
+      <View style={styles.contactLensWrap}>
+        <View style={[styles.contactLens, styles.contactLensLeft]} />
+        <View style={[styles.contactLens, styles.contactLensRight]} />
       </View>
-    </TouchableOpacity>
+    );
+  }
+
+  if (slug === 'aviator') {
+    return (
+      <View style={styles.frameArtwork}>
+        <View style={styles.bridgeLine} />
+        <View style={[styles.aviatorLens, { borderColor: stroke }]} />
+        <View style={[styles.aviatorLens, { borderColor: stroke }]} />
+      </View>
+    );
+  }
+
+  if (slug === 'geometric') {
+    return (
+      <View style={styles.frameArtwork}>
+        <View style={[styles.bridgeLine, { backgroundColor: stroke }]} />
+        <View style={[styles.geoLens, { borderColor: stroke }]} />
+        <View style={[styles.geoLens, { borderColor: stroke }]} />
+      </View>
+    );
+  }
+
+  const lensStyle = slug === 'rectangle' ? styles.rectLens : styles.squareLens;
+
+  return (
+    <View style={styles.frameArtwork}>
+      <View style={[styles.bridgeLine, { backgroundColor: stroke }]} />
+      <View style={[lensStyle, { borderColor: stroke }]} />
+      <View style={[lensStyle, { borderColor: stroke }]} />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+  container: {
+    flex: 1,
+    backgroundColor: '#D9D9D9',
+  },
   header: {
     backgroundColor: Colors.primary,
     paddingTop: Platform.OS === 'ios' ? 52 : 36,
-    paddingBottom: Spacing.md,
     paddingHorizontal: Spacing.md,
+    paddingBottom: Spacing.md,
   },
-  headerTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: Spacing.sm },
-  menuBtn: { padding: 4 },
-  headerBrand: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  headerLogo: { fontSize: 22, color: Colors.white, fontWeight: '800' },
-  headerTitle: { fontSize: FontSize.lg, fontWeight: '700', color: Colors.white },
-  cartBtn: { padding: 4, position: 'relative' },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  headerIconButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  brandRow: {
+    flex: 1,
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+    marginLeft: 8,
+  },
+  logoImage: {
+    maxWidth: '100%',
+  },
+  cartButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
   cartBadge: {
-    position: 'absolute', top: 0, right: 0,
-    backgroundColor: Colors.accent, borderRadius: 8, minWidth: 16, height: 16,
-    alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3,
+    position: 'absolute',
+    top: -2,
+    right: -3,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: Colors.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 3,
   },
-  cartBadgeText: { color: Colors.white, fontSize: 9, fontWeight: '800' },
-  searchBar: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.white,
-    borderRadius: Radius.md, paddingHorizontal: Spacing.sm + 2, paddingVertical: Spacing.xs + 2,
-    gap: Spacing.xs,
+  cartBadgeText: {
+    color: Colors.white,
+    fontSize: 9,
+    fontWeight: '800',
   },
-  searchInput: { flex: 1, fontSize: FontSize.md, color: Colors.text, paddingVertical: 2 },
-  section: { marginTop: Spacing.md, paddingHorizontal: Spacing.md },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: Spacing.sm },
-  sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: Spacing.sm },
-  sectionIcon: { fontSize: 16 },
-  sectionTitle: { fontSize: FontSize.lg, fontWeight: '700', color: Colors.text },
-  seeAll: { fontSize: FontSize.sm, fontWeight: '600', color: Colors.primary },
-  shapesRow: { paddingVertical: Spacing.xs, gap: Spacing.sm, paddingRight: Spacing.md },
+  scrollContent: {
+    paddingBottom: 10,
+  },
+  scrollContentTablet: {
+    flexGrow: 1,
+  },
+  surface: {
+    marginTop: -4,
+    backgroundColor: '#F7F7FC',
+    paddingBottom: Spacing.lg,
+    minHeight: '100%',
+  },
+  sectionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 14,
+    paddingHorizontal: 26,
+  },
+  sectionTitleRowCompact: {
+    paddingHorizontal: 0,
+    marginBottom: 12,
+  },
+  sectionTitleIcon: {
+    width: 24,
+    height: 24,
+  },
+  sectionIconDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#E4F0FF',
+    borderWidth: 2,
+    borderColor: '#1682FF',
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#20242E',
+  },
+  shapesRow: {
+    gap: 6,
+  },
+  shapeGrid: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    justifyContent: 'space-between',
+    gap: 6,
+  },
   shapeCard: {
-    alignItems: 'center', backgroundColor: Colors.white, borderRadius: Radius.md,
-    paddingHorizontal: isTablet ? Spacing.lg : Spacing.md, paddingVertical: Spacing.sm,
-    borderWidth: 1.5, borderColor: Colors.border, minWidth: isTablet ? 90 : 76,
+    borderRadius: 14,
+    backgroundColor: Colors.white,
+    borderWidth: 1,
+    borderColor: '#E8E8EE',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: Spacing.sm,
+    paddingTop: 16,
+    paddingBottom: 12,
     ...Shadow.sm,
   },
-  shapeCardActive: { borderColor: Colors.primary, backgroundColor: Colors.primaryLight },
-  shapeLabel: { fontSize: FontSize.xs, color: Colors.gray600, marginTop: 4, fontWeight: '500', textAlign: 'center' },
-  shapeLabelActive: { color: Colors.primary, fontWeight: '700' },
-  servicesRow: {
-    flexDirection: 'row', paddingHorizontal: Spacing.md, marginTop: Spacing.md, gap: Spacing.sm,
+  shapeCardActive: {
+    borderColor: '#FFB05B',
+    backgroundColor: '#FFFDFC',
   },
-  servicesRowTablet: { paddingHorizontal: Spacing.lg },
-  serviceCard: {
-    flex: 1, height: isTablet ? 160 : 130, borderRadius: Radius.lg, overflow: 'hidden', ...Shadow.sm,
+  shapeImage: {
+    marginTop: 2,
   },
-  serviceImage: { ...StyleSheet.absoluteFillObject },
-  serviceOverlay: {
-    flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', padding: Spacing.sm,
+  shapeLabel: {
+    marginTop: 18,
+    marginBottom: 2,
+    fontWeight: '700',
+    color: '#2D2F37',
+    textAlign: 'center',
+  },
+  shapeLabelActive: {
+    color: '#23242B',
+    fontWeight: '800',
+  },
+  frameArtwork: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    height: 42,
+  },
+  bridgeLine: {
+    position: 'absolute',
+    top: 17,
+    width: 14,
+    height: 2,
+    borderRadius: 1,
+    backgroundColor: '#7C7C7C',
+  },
+  squareLens: {
+    width: 30,
+    height: 24,
+    borderWidth: 2.5,
+    borderRadius: 10,
+    backgroundColor: '#FCFCFC',
+  },
+  rectLens: {
+    width: 34,
+    height: 22,
+    borderWidth: 2.5,
+    borderRadius: 8,
+    backgroundColor: '#FCFCFC',
+  },
+  aviatorLens: {
+    width: 28,
+    height: 24,
+    borderWidth: 2.5,
+    borderRadius: 12,
+    backgroundColor: '#FCFCFC',
+  },
+  geoLens: {
+    width: 24,
+    height: 24,
+    borderWidth: 2.5,
+    borderRadius: 7,
+    transform: [{ rotate: '20deg' }],
+    backgroundColor: '#FCFCFC',
+  },
+  contactLensWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    height: 42,
+  },
+  contactLens: {
+    width: 23,
+    height: 31,
+    borderWidth: 1.5,
+    borderColor: '#B6D9FF',
+    backgroundColor: '#EAF6FF',
+    opacity: 0.95,
+  },
+  contactLensLeft: {
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 18,
+    borderBottomLeftRadius: 18,
+    borderBottomRightRadius: 22,
+    transform: [{ rotate: '28deg' }],
+  },
+  contactLensRight: {
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 22,
+    borderBottomLeftRadius: 22,
+    borderBottomRightRadius: 18,
+    transform: [{ rotate: '-12deg' }],
+  },
+  quickCardsWrap: {
+    flexDirection: 'row',
+    gap: 20,
+  },
+  quickCardBlock: {
+    flex: 1,
+    minWidth: 0,
+  },
+  quickCard: {
+    width: '100%',
+    borderRadius: Radius.lg,
+    overflow: 'hidden',
+    backgroundColor: '#1B1B1F',
+    ...Shadow.sm,
+  },
+  quickCardImage: {
+    width: '100%',
     justifyContent: 'flex-end',
   },
-  serviceTitle: { fontSize: FontSize.md, fontWeight: '700', color: Colors.white, marginBottom: 2 },
-  serviceSubtitle: { fontSize: 10, color: 'rgba(255,255,255,0.85)', marginBottom: Spacing.xs, lineHeight: 14 },
-  serviceBtn: {
-    backgroundColor: Colors.accent, borderRadius: Radius.sm,
-    paddingHorizontal: Spacing.sm, paddingVertical: 4, alignSelf: 'flex-start',
+  quickCardImageStyle: {
+    width: '100%',
+    height: '100%',
+    borderRadius: Radius.lg,
   },
-  serviceBtnText: { color: Colors.white, fontSize: 11, fontWeight: '700' },
-  banner: {
-    marginHorizontal: Spacing.md, marginTop: Spacing.md,
-    height: isTablet ? 200 : 160, borderRadius: Radius.lg, overflow: 'hidden', ...Shadow.md,
+  quickCardOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(16,18,24,0.34)',
+    paddingHorizontal: 12,
+    paddingTop: 16,
+    paddingBottom: 14,
+    justifyContent: 'flex-end',
   },
-  bannerImage: { ...StyleSheet.absoluteFillObject },
-  bannerOverlay: {
-    flex: 1, backgroundColor: 'rgba(0,30,80,0.55)', padding: Spacing.lg, justifyContent: 'center',
+  quickCardBody: {
+    color: Colors.white,
+    maxWidth: '88%',
+    fontWeight: '400',
+    marginBottom: 10,
   },
-  bannerTag: { fontSize: FontSize.xs, fontWeight: '700', color: Colors.accent, letterSpacing: 1.5, marginBottom: 4 },
-  bannerTitle: { fontSize: isTablet ? 32 : FontSize.xxxl, fontWeight: '800', color: Colors.white, marginBottom: 2 },
-  bannerSub: { fontSize: FontSize.md, color: 'rgba(255,255,255,0.85)', marginBottom: Spacing.md },
-  bannerBtn: {
-    backgroundColor: Colors.white, borderRadius: Radius.full,
-    paddingHorizontal: Spacing.lg, paddingVertical: Spacing.xs + 2, alignSelf: 'flex-start',
+  quickCardButton: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 11,
+    paddingVertical: 4,
+    borderRadius: Radius.full,
+    backgroundColor: '#FFB300',
   },
-  bannerBtnText: { color: Colors.primary, fontWeight: '700', fontSize: FontSize.sm },
-  productsGrid: {
-    flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm,
+  quickCardButtonText: {
+    color: '#1E1E1E',
+    fontSize: 11,
+    fontWeight: '700',
   },
-  productsGridTablet: { gap: Spacing.md },
-  productCard: { width: (width - Spacing.md * 2 - Spacing.sm) / 2 },
-  productCardTablet: { width: (width - Spacing.lg * 2 - Spacing.md * 3) / 4 },
 });

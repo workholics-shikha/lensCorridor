@@ -1,7 +1,14 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase';
 import { CartItem, WishlistItem } from '@/lib/types';
 import { useAuth } from './AuthContext';
+import {
+  addCartItem,
+  getCart,
+  getWishlist,
+  removeCartItem as storeRemoveCartItem,
+  toggleWishlistItem,
+  updateCartItemQuantity,
+} from '@/lib/localStore';
 
 interface CartContextType {
   cartItems: CartItem[];
@@ -36,20 +43,12 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   const fetchCart = async () => {
     if (!user) { setCartItems([]); return; }
-    const { data } = await supabase
-      .from('cart_items')
-      .select('*, products(*, categories(*))')
-      .eq('user_id', user.id);
-    setCartItems((data as CartItem[]) || []);
+    setCartItems(getCart(user.id));
   };
 
   const fetchWishlist = async () => {
     if (!user) { setWishlistItems([]); return; }
-    const { data } = await supabase
-      .from('wishlists')
-      .select('*, products(*, categories(*))')
-      .eq('user_id', user.id);
-    setWishlistItems((data as WishlistItem[]) || []);
+    setWishlistItems(getWishlist(user.id));
   };
 
   useEffect(() => {
@@ -59,38 +58,26 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   const addToCart = async (productId: string, quantity = 1) => {
     if (!user) return;
-    const existing = cartItems.find(i => i.product_id === productId);
-    if (existing) {
-      await supabase.from('cart_items').update({ quantity: existing.quantity + quantity }).eq('id', existing.id);
-    } else {
-      await supabase.from('cart_items').insert({ user_id: user.id, product_id: productId, quantity });
-    }
-    await fetchCart();
+    setCartItems(await addCartItem(user.id, productId, quantity));
   };
 
   const removeFromCart = async (itemId: string) => {
-    await supabase.from('cart_items').delete().eq('id', itemId);
-    await fetchCart();
+    if (!user) return;
+    setCartItems(await storeRemoveCartItem(user.id, itemId));
   };
 
   const updateQuantity = async (itemId: string, quantity: number) => {
+    if (!user) return;
     if (quantity <= 0) {
       await removeFromCart(itemId);
       return;
     }
-    await supabase.from('cart_items').update({ quantity }).eq('id', itemId);
-    await fetchCart();
+    setCartItems(await updateCartItemQuantity(user.id, itemId, quantity));
   };
 
   const toggleWishlist = async (productId: string) => {
     if (!user) return;
-    const existing = wishlistItems.find(i => i.product_id === productId);
-    if (existing) {
-      await supabase.from('wishlists').delete().eq('id', existing.id);
-    } else {
-      await supabase.from('wishlists').insert({ user_id: user.id, product_id: productId });
-    }
-    await fetchWishlist();
+    setWishlistItems(await toggleWishlistItem(user.id, productId));
   };
 
   const isWishlisted = (productId: string) => wishlistItems.some(i => i.product_id === productId);

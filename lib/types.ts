@@ -1,5 +1,14 @@
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
+export interface AppUser {
+  id: string;
+  email: string;
+}
+
+export interface AuthSession {
+  user: AppUser;
+}
+
 export interface Profile {
   id: string;
   full_name: string;
@@ -21,6 +30,21 @@ export interface Category {
   slug: string;
   icon_name: string;
   sort_order: number;
+  image?: string;
+  imageAlt?: string;
+}
+
+export interface FrameShape {
+  id: string;
+  shape: string;
+  title: string;
+  subtitle: string;
+  meta: string;
+  code: string;
+  status: string;
+  priority: number;
+  image: string;
+  imageAlt: string;
 }
 
 export interface Product {

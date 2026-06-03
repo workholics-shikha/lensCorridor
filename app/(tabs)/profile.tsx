@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { User, Phone, Mail, LogOut, ChevronRight, Shield, FileText, Bell, HelpCircle, Star } from 'lucide-react-native';
-import { supabase } from '@/lib/supabase';
+import { getProfile, updateProfile } from '@/lib/localStore';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '@/lib/theme';
 import { useAuth } from '@/context/AuthContext';
 import { Profile } from '@/lib/types';
@@ -23,20 +23,19 @@ export default function ProfileScreen() {
 
   useEffect(() => {
     if (!user) return;
-    supabase.from('profiles').select('*').eq('id', user.id).maybeSingle().then(({ data }) => {
-      if (data) {
-        setProfile(data as Profile);
-        setFullName(data.full_name || '');
-        setPhone(data.phone || '');
-      }
-    });
+    const data = getProfile(user.id);
+    if (data) {
+      setProfile(data);
+      setFullName(data.full_name || '');
+      setPhone(data.phone || '');
+    }
   }, [user]);
 
   const handleSave = async () => {
     if (!user) return;
     setSaving(true);
-    await supabase.from('profiles').upsert({ id: user.id, full_name: fullName, phone });
-    setProfile(prev => prev ? { ...prev, full_name: fullName, phone } : null);
+    const updated = await updateProfile(user.id, { full_name: fullName, phone });
+    setProfile(updated);
     setSaving(false);
     setEditing(false);
   };

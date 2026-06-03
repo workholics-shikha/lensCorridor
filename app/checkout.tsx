@@ -1,71 +1,41 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  TextInput, Platform, Dimensions,
+  TextInput, Platform, Dimensions, Image,
 } from 'react-native';
 import { router } from 'expo-router';
-import { ArrowLeft, MapPin, CreditCard, Banknote, ChevronRight } from 'lucide-react-native';
-import { supabase } from '@/lib/supabase';
+import {
+  ArrowLeft, Camera, Image as ImageIcon, IndianRupee, ScanSearch, X,
+} from 'lucide-react-native';
+import { fetchFrameShapes } from '@/lib/api';
+import { FrameShape } from '@/lib/types';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '@/lib/theme';
-import { useCart } from '@/context/CartContext';
-import { useAuth } from '@/context/AuthContext';
 
 const { width } = Dimensions.get('window');
 const isTablet = width >= 768;
 
-type PaymentMethod = 'cod' | 'online' | 'upi';
-
 export default function CheckoutScreen() {
-  const { cartItems, cartTotal, refreshCart } = useCart();
-  const { user } = useAuth();
-
-  const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [line1, setLine1] = useState('');
-  const [city, setCity] = useState('');
-  const [state, setState] = useState('');
-  const [pincode, setPincode] = useState('');
-  const [payment, setPayment] = useState<PaymentMethod>('cod');
-  const [loading, setLoading] = useState(false);
+  const [customerSearch, setCustomerSearch] = useState('');
+  const [frameShapes, setFrameShapes] = useState<FrameShape[]>([]);
+  const [selectedFrame, setSelectedFrame] = useState('');
+  const [price, setPrice] = useState('');
   const [error, setError] = useState('');
 
-  const deliveryFee = cartTotal >= 1500 ? 0 : 99;
-  const total = cartTotal + deliveryFee;
+  useEffect(() => {
+    fetchFrameShapes().then((items) => {
+      setFrameShapes(items);
+      setSelectedFrame((current) => current || items[0]?.shape || '');
+    });
+  }, []);
 
-  const handlePlaceOrder = async () => {
-    if (!user) { router.push('/(auth)/login'); return; }
-    if (!name || !phone || !line1 || !city || !state || !pincode) {
-      setError('Please fill all address fields'); return;
+  const handleNext = () => {
+    if (!selectedFrame || !price.trim()) {
+      setError('Please select a frame and enter the price before continuing.');
+      return;
     }
-    setLoading(true);
+
     setError('');
-
-    const { data: order, error: orderErr } = await supabase.from('orders').insert({
-      user_id: user.id,
-      status: 'confirmed',
-      total_amount: total,
-      shipping_address: { name, phone, line1, city, state, pincode },
-      payment_method: payment,
-      payment_status: payment === 'cod' ? 'pending' : 'paid',
-    }).select().maybeSingle();
-
-    if (orderErr || !order) { setLoading(false); setError('Failed to place order. Try again.'); return; }
-
-    const orderItems = cartItems.map(item => ({
-      order_id: order.id,
-      product_id: item.product_id,
-      quantity: item.quantity,
-      unit_price: item.products?.discount_price ?? item.products?.price ?? 0,
-    }));
-
-    await supabase.from('order_items').insert(orderItems);
-    // Clear cart
-    for (const item of cartItems) {
-      await supabase.from('cart_items').delete().eq('id', item.id);
-    }
-    await refreshCart();
-    setLoading(false);
-    router.replace({ pathname: '/order-success', params: { orderId: order.id } });
+    router.push('/cart');
   };
 
   return (
@@ -74,171 +44,428 @@ export default function CheckoutScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
           <ArrowLeft size={20} color={Colors.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Checkout</Text>
-        <View style={{ width: 36 }} />
+        <Text style={styles.headerTitle}>Order Placement</Text>
+        <View style={styles.headerSpacer} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.body}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={[styles.maxWidth, isTablet && styles.maxWidthTablet]}>
-          {/* Delivery Address */}
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <MapPin size={18} color={Colors.primary} />
-              <Text style={styles.sectionTitle}>Delivery Address</Text>
+          <View style={styles.card}>
+            <View style={styles.blockHeader}>
+              <ScanSearch size={16} color={Colors.primary} />
+              <Text style={styles.blockTitle}>Search customer mobile number</Text>
             </View>
-            {error ? <View style={styles.errorBox}><Text style={styles.errorText}>{error}</Text></View> : null}
-            <Field label="Full Name" value={name} onChangeText={setName} placeholder="Recipient name" />
-            <Field label="Phone Number" value={phone} onChangeText={setPhone} placeholder="+91 98765 43210" keyboardType="phone-pad" />
-            <Field label="Address Line" value={line1} onChangeText={setLine1} placeholder="House/Flat, Street, Area" />
-            <View style={styles.row2}>
-              <View style={{ flex: 1 }}>
-                <Field label="City" value={city} onChangeText={setCity} placeholder="City" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Field label="State" value={state} onChangeText={setState} placeholder="State" />
-              </View>
+            <View style={styles.searchShell}>
+              <TextInput
+                style={styles.searchInput}
+                value={customerSearch}
+                onChangeText={setCustomerSearch}
+                placeholder="Search customer mobile number"
+                placeholderTextColor="#A5A8B2"
+                keyboardType="phone-pad"
+              />
+              <ScanSearch size={16} color="#B4B7C2" />
             </View>
-            <Field label="PIN Code" value={pincode} onChangeText={setPincode} placeholder="6-digit PIN" keyboardType="numeric" maxLength={6} />
           </View>
 
-          {/* Payment Method */}
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <CreditCard size={18} color={Colors.primary} />
-              <Text style={styles.sectionTitle}>Payment Method</Text>
+          <View style={styles.card}>
+            <View style={styles.blockHeader}>
+              <Text style={styles.blockTitle}>Select Frame</Text>
             </View>
-            {([
-              { key: 'cod', label: 'Cash on Delivery', sub: 'Pay when you receive', icon: <Banknote size={20} color={Colors.success} /> },
-              { key: 'upi', label: 'UPI Payment', sub: 'GPay, PhonePe, Paytm', icon: <CreditCard size={20} color={Colors.primary} /> },
-              { key: 'online', label: 'Credit / Debit Card', sub: 'Visa, Mastercard, RuPay', icon: <CreditCard size={20} color={Colors.accent} /> },
-            ] as const).map(opt => (
+
+            <View style={styles.frameGrid}>
               <TouchableOpacity
-                key={opt.key}
-                style={[styles.paymentOption, payment === opt.key && styles.paymentOptionActive]}
-                onPress={() => setPayment(opt.key)}
+                style={[styles.uploadTile, styles.frameTile]}
+                activeOpacity={0.9}
               >
-                {opt.icon}
-                <View style={{ flex: 1, marginLeft: Spacing.sm }}>
-                  <Text style={[styles.paymentLabel, payment === opt.key && { color: Colors.primary }]}>{opt.label}</Text>
-                  <Text style={styles.paymentSub}>{opt.sub}</Text>
+                <View style={styles.uploadOptions}>
+                  <TouchableOpacity style={styles.uploadButton} activeOpacity={0.85}>
+                    <Camera size={18} color={Colors.accent} />
+                    <Text style={styles.uploadButtonText}>Add Photo</Text>
+                  </TouchableOpacity>
+                  <Text style={styles.orText}>Or</Text>
+                  <TouchableOpacity style={[styles.uploadButton, styles.uploadButtonBlue]} activeOpacity={0.85}>
+                    <ImageIcon size={18} color={Colors.primary} />
+                    <Text style={[styles.uploadButtonText, styles.uploadButtonTextBlue]}>Gallery</Text>
+                  </TouchableOpacity>
                 </View>
-                <View style={[styles.radio, payment === opt.key && styles.radioActive]}>
-                  {payment === opt.key && <View style={styles.radioDot} />}
-                </View>
+                <Text style={styles.uploadHint}>Upload to camera & gallery</Text>
               </TouchableOpacity>
-            ))}
+
+              {frameShapes.map((frame) => {
+                const active = selectedFrame === frame.shape;
+
+                return (
+                  <TouchableOpacity
+                    key={frame.id}
+                    style={[styles.frameTile, active && styles.frameTileActive]}
+                    onPress={() => {
+                      setSelectedFrame(frame.shape);
+                      setError('');
+                    }}
+                    activeOpacity={0.88}
+                  >
+                    <View style={styles.tileClose}>
+                      <X size={12} color="#FF9B3D" />
+                    </View>
+                    {frame.image ? (
+                      <Image
+                        source={{ uri: frame.image }}
+                        style={styles.frameImage}
+                        resizeMode="contain"
+                      />
+                    ) : (
+                      <FramePreview shape={frame.shape} active={active} />
+                    )}
+                    <Text style={styles.frameLabel} numberOfLines={1}>{frame.title}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
           </View>
 
-          {/* Order Summary */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Order Summary</Text>
-            <SummaryRow label={`Subtotal (${cartItems.length} items)`} value={`₹${cartTotal.toLocaleString('en-IN')}`} />
-            <SummaryRow label="Delivery" value={deliveryFee === 0 ? 'FREE' : `₹${deliveryFee}`} valueColor={deliveryFee === 0 ? Colors.success : undefined} />
-            <View style={styles.divider} />
-            <SummaryRow label="Total Amount" value={`₹${total.toLocaleString('en-IN')}`} bold />
+          <View style={styles.card}>
+            <View style={styles.blockHeader}>
+              <IndianRupee size={16} color={Colors.primary} />
+              <Text style={styles.blockTitle}>Enter Price</Text>
+            </View>
+            <View style={styles.priceShell}>
+              <TextInput
+                style={styles.priceInput}
+                value={price}
+                onChangeText={setPrice}
+                placeholder="Enter price"
+                placeholderTextColor="#A5A8B2"
+                keyboardType="numeric"
+              />
+            </View>
           </View>
+
+          {error ? (
+            <View style={styles.errorBox}>
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
+          ) : null}
+
+          <TouchableOpacity style={styles.nextButton} onPress={handleNext} activeOpacity={0.88}>
+            <Text style={styles.nextButtonText}>Next</Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
+    </View>
+  );
+}
 
-      <View style={styles.bottom}>
-        <View>
-          <Text style={styles.totalLabel}>Total</Text>
-          <Text style={styles.totalAmount}>₹{total.toLocaleString('en-IN')}</Text>
-        </View>
-        <TouchableOpacity
-          style={[styles.placeOrderBtn, loading && { opacity: 0.65 }]}
-          onPress={handlePlaceOrder}
-          disabled={loading}
-          activeOpacity={0.85}
-        >
-          <Text style={styles.placeOrderText}>{loading ? 'Placing Order...' : 'Place Order'}</Text>
-          <ChevronRight size={18} color={Colors.white} />
-        </TouchableOpacity>
+function FramePreview({ shape, active }: { shape: string; active: boolean }) {
+  const stroke = active ? '#1F1F23' : '#34363F';
+
+  if (shape === 'aviator') {
+    return (
+      <View style={previewStyles.frameRow}>
+        <View style={[previewStyles.bridge, { backgroundColor: stroke }]} />
+        <View style={[previewStyles.aviatorLens, { borderColor: stroke }]} />
+        <View style={[previewStyles.aviatorLens, { borderColor: stroke }]} />
       </View>
-    </View>
-  );
-}
+    );
+  }
 
-function Field({ label, value, onChangeText, placeholder, keyboardType, maxLength }: any) {
+  if (shape === 'contact-lens') {
+    return (
+      <View style={previewStyles.contactLensWrap}>
+        <View style={previewStyles.contactLens} />
+        <View style={previewStyles.contactLens} />
+      </View>
+    );
+  }
+
+  if (shape === 'geometric') {
+    return (
+      <View style={previewStyles.frameRow}>
+        <View style={[previewStyles.bridge, { backgroundColor: stroke }]} />
+        <View style={[previewStyles.geoLens, { borderColor: stroke }]} />
+        <View style={[previewStyles.geoLens, { borderColor: stroke }]} />
+      </View>
+    );
+  }
+
   return (
-    <View style={fieldStyles.group}>
-      <Text style={fieldStyles.label}>{label}</Text>
-      <TextInput
-        style={fieldStyles.input}
-        value={value}
-        onChangeText={onChangeText}
-        placeholder={placeholder}
-        placeholderTextColor={Colors.gray400}
-        keyboardType={keyboardType}
-        maxLength={maxLength}
-      />
+    <View style={previewStyles.frameRow}>
+      <View style={[previewStyles.bridge, { backgroundColor: stroke }]} />
+      <View style={[shape === 'rectangle' ? previewStyles.rectangleLens : previewStyles.squareLens, { borderColor: stroke }]} />
+      <View style={[shape === 'rectangle' ? previewStyles.rectangleLens : previewStyles.squareLens, { borderColor: stroke }]} />
     </View>
   );
 }
 
-function SummaryRow({ label, value, bold, valueColor }: { label: string; value: string; bold?: boolean; valueColor?: string }) {
-  return (
-    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: Spacing.sm }}>
-      <Text style={{ fontSize: FontSize.sm, color: Colors.textSecondary }}>{label}</Text>
-      <Text style={{ fontWeight: bold ? '800' : '600', color: valueColor ?? Colors.text, fontSize: bold ? FontSize.md : FontSize.sm }}>{value}</Text>
-    </View>
-  );
-}
-
-const fieldStyles = StyleSheet.create({
-  group: { marginBottom: Spacing.sm },
-  label: { fontSize: FontSize.xs, fontWeight: '600', color: Colors.gray700, marginBottom: 4 },
-  input: {
-    backgroundColor: Colors.gray50, borderRadius: Radius.md,
-    borderWidth: 1, borderColor: Colors.border,
-    paddingHorizontal: Spacing.sm, paddingVertical: Spacing.sm,
-    fontSize: FontSize.md, color: Colors.text,
+const previewStyles = StyleSheet.create({
+  frameRow: {
+    height: 72,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+  },
+  bridge: {
+    position: 'absolute',
+    top: 34,
+    width: 20,
+    height: 3,
+    borderRadius: 2,
+  },
+  squareLens: {
+    width: 58,
+    height: 42,
+    borderWidth: 4,
+    borderRadius: 17,
+    backgroundColor: '#FEFEFF',
+  },
+  aviatorLens: {
+    width: 46,
+    height: 38,
+    borderWidth: 3,
+    borderRadius: 18,
+    backgroundColor: '#FEFEFF',
+  },
+  roundLens: {
+    width: 44,
+    height: 44,
+    borderWidth: 3,
+    borderRadius: 22,
+    backgroundColor: '#FEFEFF',
+  },
+  rectangleLens: {
+    width: 58,
+    height: 34,
+    borderWidth: 4,
+    borderRadius: 13,
+    backgroundColor: '#FEFEFF',
+  },
+  geoLens: {
+    width: 39,
+    height: 39,
+    borderWidth: 3,
+    borderRadius: 10,
+    transform: [{ rotate: '18deg' }],
+    backgroundColor: '#FEFEFF',
+  },
+  contactLensWrap: {
+    height: 72,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  contactLens: {
+    width: 25,
+    height: 34,
+    borderWidth: 1.5,
+    borderColor: '#B6D9FF',
+    backgroundColor: '#EAF6FF',
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
+    borderBottomLeftRadius: 18,
+    borderBottomRightRadius: 18,
+    transform: [{ rotate: '16deg' }],
   },
 });
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+  container: {
+    flex: 1,
+    backgroundColor: '#F5F5FB',
+  },
   header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    backgroundColor: Colors.white, paddingTop: Platform.OS === 'ios' ? 52 : 36,
-    paddingBottom: Spacing.md, paddingHorizontal: Spacing.md, ...Shadow.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.white,
+    paddingTop: Platform.OS === 'ios' ? 52 : 36,
+    paddingBottom: Spacing.md,
+    paddingHorizontal: Spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EFEFF4',
   },
-  backBtn: { padding: 4 },
-  headerTitle: { fontSize: FontSize.lg, fontWeight: '700', color: Colors.text },
-  body: { padding: Spacing.md, paddingBottom: 120, alignItems: isTablet ? 'center' : undefined },
-  maxWidth: { width: '100%' },
-  maxWidthTablet: { maxWidth: 600 },
-  section: { backgroundColor: Colors.white, borderRadius: Radius.lg, padding: Spacing.md, marginBottom: Spacing.md, ...Shadow.sm },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginBottom: Spacing.md },
-  sectionTitle: { fontSize: FontSize.lg, fontWeight: '700', color: Colors.text },
-  row2: { flexDirection: 'row', gap: Spacing.sm },
-  errorBox: { backgroundColor: '#FEE2E2', borderRadius: Radius.md, padding: Spacing.sm, marginBottom: Spacing.sm },
-  errorText: { color: Colors.error, fontSize: FontSize.sm },
-  paymentOption: {
-    flexDirection: 'row', alignItems: 'center',
-    borderWidth: 1.5, borderColor: Colors.border, borderRadius: Radius.md,
-    padding: Spacing.sm + 2, marginBottom: Spacing.sm,
+  backBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  paymentOptionActive: { borderColor: Colors.primary, backgroundColor: Colors.primaryLight },
-  paymentLabel: { fontSize: FontSize.md, fontWeight: '600', color: Colors.text },
-  paymentSub: { fontSize: FontSize.xs, color: Colors.textMuted, marginTop: 1 },
-  radio: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: Colors.gray300, alignItems: 'center', justifyContent: 'center' },
-  radioActive: { borderColor: Colors.primary },
-  radioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: Colors.primary },
-  divider: { height: 1, backgroundColor: Colors.border, marginBottom: Spacing.sm },
-  bottom: {
-    position: 'absolute', bottom: 0, left: 0, right: 0,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    backgroundColor: Colors.white, padding: Spacing.md,
-    paddingBottom: Platform.OS === 'ios' ? 28 : Spacing.md,
-    borderTopWidth: 1, borderTopColor: Colors.border, ...Shadow.lg,
+  headerTitle: {
+    flex: 1,
+    fontSize: FontSize.lg,
+    fontWeight: '600',
+    color: '#20222B',
+    marginLeft: Spacing.xs,
   },
-  totalLabel: { fontSize: FontSize.xs, color: Colors.textMuted },
-  totalAmount: { fontSize: FontSize.xl, fontWeight: '800', color: Colors.text },
-  placeOrderBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: Colors.primary, borderRadius: Radius.md,
-    paddingHorizontal: Spacing.xl, paddingVertical: Spacing.sm + 6,
+  headerSpacer: {
+    width: 24,
   },
-  placeOrderText: { color: Colors.white, fontWeight: '700', fontSize: FontSize.md },
+  body: {
+    padding: Spacing.md,
+    paddingBottom: Spacing.xxl,
+    alignItems: isTablet ? 'center' : undefined,
+  },
+  maxWidth: {
+    width: '100%',
+  },
+  maxWidthTablet: {
+    maxWidth: 760,
+  },
+  card: {
+    backgroundColor: Colors.white,
+    borderRadius: Radius.lg,
+    padding: Spacing.md,
+    marginBottom: Spacing.md,
+    borderWidth: 1,
+    borderColor: '#ECECF4',
+    ...Shadow.sm,
+  },
+  blockHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+    marginBottom: Spacing.sm,
+  },
+  blockTitle: {
+    fontSize: FontSize.sm,
+    fontWeight: '600',
+    color: '#242733',
+  },
+  searchShell: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FAFAFC',
+    borderWidth: 1,
+    borderColor: '#EFEFF4',
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.sm,
+  },
+  searchInput: {
+    flex: 1,
+    height: 42,
+    color: Colors.text,
+    fontSize: FontSize.sm,
+  },
+  frameGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.sm,
+  },
+  frameTile: {
+    flexGrow: 1,
+    minWidth: isTablet ? 148 : 132,
+    flexBasis: isTablet ? '23%' : '46%',
+    minHeight: 122,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: '#ECECF4',
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: Spacing.sm,
+    position: 'relative',
+  },
+  frameTileActive: {
+    borderColor: '#BFD8FF',
+    backgroundColor: '#FCFDFF',
+  },
+  tileClose: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    zIndex: 1,
+  },
+  frameImage: {
+    width: 100,
+    height: 64,
+  },
+  frameLabel: {
+    marginTop: Spacing.xs,
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#30323B',
+  },
+  uploadTile: {
+    alignItems: 'stretch',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFFFFF',
+  },
+  uploadOptions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.sm,
+  },
+  uploadButton: {
+    flex: 1,
+    minHeight: 54,
+    borderRadius: Radius.md,
+    backgroundColor: '#FFF5E8',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+  },
+  uploadButtonBlue: {
+    backgroundColor: '#EDF5FF',
+  },
+  uploadButtonText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#7B4A14',
+  },
+  uploadButtonTextBlue: {
+    color: Colors.primary,
+  },
+  orText: {
+    fontSize: FontSize.xs,
+    color: '#B0B3BE',
+  },
+  uploadHint: {
+    marginTop: Spacing.sm,
+    fontSize: 11,
+    color: '#A6A8B2',
+    textAlign: 'center',
+  },
+  priceShell: {
+    backgroundColor: '#FAFAFC',
+    borderWidth: 1,
+    borderColor: '#EFEFF4',
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.sm,
+  },
+  priceInput: {
+    height: 42,
+    color: Colors.text,
+    fontSize: FontSize.sm,
+  },
+  errorBox: {
+    backgroundColor: '#FEE2E2',
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    marginBottom: Spacing.md,
+  },
+  errorText: {
+    color: Colors.error,
+    fontSize: FontSize.sm,
+    fontWeight: '500',
+  },
+  nextButton: {
+    width: isTablet ? 220 : 200,
+    backgroundColor: Colors.primary,
+    borderRadius: Radius.md,
+    paddingVertical: Spacing.sm + 3,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Shadow.sm,
+  },
+  nextButtonText: {
+    color: Colors.white,
+    fontSize: FontSize.sm,
+    fontWeight: '700',
+  },
 });

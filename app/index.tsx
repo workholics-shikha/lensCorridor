@@ -1,42 +1,63 @@
 import { useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ActivityIndicator,
-  Dimensions, Platform,
+  Dimensions, Platform, Image, ImageBackground,
 } from 'react-native';
 import { router } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
 import { ChevronDown } from 'lucide-react-native';
-import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
+import { fetchSalespeople, fetchStores, StoreOption } from '@/lib/api';
 import { Salesperson } from '@/lib/types';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '@/lib/theme';
 
-const { width, height } = Dimensions.get('window');
+const { width } = Dimensions.get('window');
 const isTablet = width >= 768;
+const logoImage = require('@/assets/images/lens-corridor-logo.png');
+const splashBackground = require('@/assets/images/splash-background.png');
+const logoWidth = Math.min(width * 0.58, isTablet ? 320 : 220);
+const logoHeight = logoWidth * 0.53;
 
 export default function SplashScreen() {
-  const { session, loading } = useAuth();
+  const { user, loading } = useAuth();
+  const [stores, setStores] = useState<StoreOption[]>([]);
+  const [selectedStore, setSelectedStore] = useState<StoreOption | null>(null);
   const [salespeople, setSalespeople] = useState<Salesperson[]>([]);
   const [selectedSalesperson, setSelectedSalesperson] = useState<Salesperson | null>(null);
-  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [storeDropdownOpen, setStoreDropdownOpen] = useState(false);
+  const [salespersonDropdownOpen, setSalespersonDropdownOpen] = useState(false);
+  const [selectionError, setSelectionError] = useState('');
 
   useEffect(() => {
-    supabase.from('salespeople').select('*').eq('active', true).order('name').then(({ data }) => {
-      setSalespeople(data || []);
-    });
+    fetchStores().then(setStores);
+    fetchSalespeople().then(setSalespeople);
   }, []);
 
   useEffect(() => {
-    if (!loading && session) {
+    fetchSalespeople(selectedStore?.id).then((items) => {
+      setSalespeople(items);
+      setSelectedSalesperson(null);
+    });
+  }, [selectedStore]);
+
+  useEffect(() => {
+    if (!loading && user) {
       router.replace('/(tabs)');
     }
-  }, [session, loading]);
+  }, [user, loading]);
 
   const handleNewOrder = () => {
+    if (!selectedStore || !selectedSalesperson) {
+      setSelectionError('Please select both a store and a salesman before continuing.');
+      return;
+    }
     router.push('/(auth)/login');
   };
 
   const handleReturnExchange = () => {
+    if (!selectedStore || !selectedSalesperson) {
+      setSelectionError('Please select both a store and a salesman before continuing.');
+      return;
+    }
     router.push('/(auth)/login');
   };
 
@@ -49,20 +70,72 @@ export default function SplashScreen() {
   }
 
   return (
-    <LinearGradient colors={['#1A6FD4', '#1456A8']} style={styles.container}>
-      {/* Logo */}
+    <ImageBackground
+      source={splashBackground}
+      style={styles.container}
+      imageStyle={styles.backgroundImage}
+      resizeMode="cover"
+    >
       <View style={styles.logoSection}>
         <View style={styles.logoContainer}>
-          <Text style={[styles.infinitySymbol, isTablet && { fontSize: 80 }]}>∞</Text>
+          <Image
+            source={logoImage}
+            style={[
+              styles.logoImage,
+              { width: logoWidth, height: logoHeight },
+              isTablet && styles.logoImageTablet,
+            ]}
+            resizeMode="contain"
+          />
         </View>
-        <Text style={[styles.brandName, isTablet && styles.brandNameTablet]}>Lens Corridor</Text>
       </View>
 
-      {/* Salesman Dropdown */}
       <View style={[styles.controlsSection, isTablet && styles.controlsSectionTablet]}>
         <TouchableOpacity
           style={styles.dropdown}
-          onPress={() => setDropdownOpen(!dropdownOpen)}
+          onPress={() => {
+            setStoreDropdownOpen(!storeDropdownOpen);
+            setSalespersonDropdownOpen(false);
+          }}
+          activeOpacity={0.8}
+        >
+          <Text style={[styles.dropdownText, selectedStore && styles.dropdownTextSelected]}>
+            {selectedStore
+              ? `${selectedStore.name} (${selectedStore.code})`
+              : 'Select Store'}
+          </Text>
+          <ChevronDown
+            size={18}
+            color={selectedStore ? Colors.text : Colors.gray500}
+            style={{ transform: [{ rotate: storeDropdownOpen ? '180deg' : '0deg' }] }}
+          />
+        </TouchableOpacity>
+
+        {storeDropdownOpen && (
+          <View style={styles.dropdownList}>
+            {stores.map((store) => (
+              <TouchableOpacity
+                key={store.id}
+                style={styles.dropdownItem}
+                onPress={() => {
+                  setSelectedStore(store);
+                  setStoreDropdownOpen(false);
+                  setSelectionError('');
+                }}
+              >
+                <Text style={styles.dropdownItemText}>{store.name}</Text>
+                <Text style={styles.dropdownItemSub}>{store.code}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+
+        <TouchableOpacity
+          style={[styles.dropdown, styles.secondaryDropdown]}
+          onPress={() => {
+            setSalespersonDropdownOpen(!salespersonDropdownOpen);
+            setStoreDropdownOpen(false);
+          }}
           activeOpacity={0.8}
         >
           <Text style={[styles.dropdownText, selectedSalesperson && styles.dropdownTextSelected]}>
@@ -73,17 +146,21 @@ export default function SplashScreen() {
           <ChevronDown
             size={18}
             color={selectedSalesperson ? Colors.text : Colors.gray500}
-            style={{ transform: [{ rotate: dropdownOpen ? '180deg' : '0deg' }] }}
+            style={{ transform: [{ rotate: salespersonDropdownOpen ? '180deg' : '0deg' }] }}
           />
         </TouchableOpacity>
 
-        {dropdownOpen && (
+        {salespersonDropdownOpen && (
           <View style={styles.dropdownList}>
             {salespeople.map((sp) => (
               <TouchableOpacity
                 key={sp.id}
                 style={styles.dropdownItem}
-                onPress={() => { setSelectedSalesperson(sp); setDropdownOpen(false); }}
+                onPress={() => {
+                  setSelectedSalesperson(sp);
+                  setSalespersonDropdownOpen(false);
+                  setSelectionError('');
+                }}
               >
                 <Text style={styles.dropdownItemText}>{sp.name}</Text>
                 <Text style={styles.dropdownItemSub}>{sp.employee_id}</Text>
@@ -92,7 +169,12 @@ export default function SplashScreen() {
           </View>
         )}
 
-        {/* CTA Buttons */}
+        {selectionError ? (
+          <View style={styles.errorBox}>
+            <Text style={styles.errorText}>{selectionError}</Text>
+          </View>
+        ) : null}
+
         <View style={styles.buttonsRow}>
           <TouchableOpacity style={styles.btnPrimary} onPress={handleNewOrder} activeOpacity={0.85}>
             <Text style={styles.btnPrimaryText}>New Order</Text>
@@ -103,14 +185,12 @@ export default function SplashScreen() {
         </View>
       </View>
 
-      {/* Bottom indicator */}
       <View style={styles.bottomIndicator}>
         <View style={styles.indicatorBar} />
       </View>
-    </LinearGradient>
+    </ImageBackground>
   );
 }
-
 
 const styles = StyleSheet.create({
   loadingContainer: {
@@ -121,30 +201,27 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
+    backgroundColor: Colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: Spacing.xl,
+  },
+  backgroundImage: {
+    width: '100%',
+    height: '100%',
   },
   logoSection: {
     alignItems: 'center',
     marginBottom: Spacing.xxl,
   },
   logoContainer: {
-    marginBottom: Spacing.md,
+    alignItems: 'center',
   },
-  infinitySymbol: {
-    fontSize: 60,
-    fontWeight: '800',
-    color: Colors.white,
+  logoImage: {
+    maxWidth: '100%',
   },
-  brandName: {
-    fontSize: FontSize.xxl,
-    fontWeight: '700',
-    color: Colors.white,
-    letterSpacing: 0.5,
-  },
-  brandNameTablet: {
-    fontSize: 32,
+  logoImageTablet: {
+    maxWidth: 320,
   },
   controlsSection: {
     width: '100%',
@@ -164,6 +241,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     ...Shadow.sm,
+  },
+  secondaryDropdown: {
+    marginTop: Spacing.sm,
+  },
+  errorBox: {
+    width: '100%',
+    backgroundColor: '#FEE2E2',
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    marginTop: Spacing.sm,
+  },
+  errorText: {
+    color: Colors.error,
+    fontSize: FontSize.sm,
+    fontWeight: '500',
   },
   dropdownText: {
     fontSize: FontSize.md,

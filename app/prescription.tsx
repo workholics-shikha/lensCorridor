@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { ArrowLeft, Upload, Eye, CheckCircle } from 'lucide-react-native';
-import { supabase } from '@/lib/supabase';
+import { savePrescription } from '@/lib/localStore';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '@/lib/theme';
 import { useAuth } from '@/context/AuthContext';
 
@@ -29,18 +29,23 @@ export default function PrescriptionScreen() {
     if (!user) { router.push('/(auth)/login'); return; }
     setSaving(true);
     setError('');
-    const { error: err } = await supabase.from('prescriptions').insert({
-      user_id: user.id,
-      right_eye_sph: rightSph ? parseFloat(rightSph) : null,
-      right_eye_cyl: rightCyl ? parseFloat(rightCyl) : null,
-      right_eye_axis: rightAxis ? parseInt(rightAxis) : null,
-      left_eye_sph: leftSph ? parseFloat(leftSph) : null,
-      left_eye_cyl: leftCyl ? parseFloat(leftCyl) : null,
-      left_eye_axis: leftAxis ? parseInt(leftAxis) : null,
-      notes,
-    });
+    try {
+      await savePrescription(user.id, {
+        notes,
+        order_id: undefined,
+        right_eye_sph: rightSph ? parseFloat(rightSph) : null,
+        right_eye_cyl: rightCyl ? parseFloat(rightCyl) : null,
+        right_eye_axis: rightAxis ? parseInt(rightAxis) : null,
+        left_eye_sph: leftSph ? parseFloat(leftSph) : null,
+        left_eye_cyl: leftCyl ? parseFloat(leftCyl) : null,
+        left_eye_axis: leftAxis ? parseInt(leftAxis) : null,
+      });
+    } catch (_error) {
+      setSaving(false);
+      setError('Failed to save prescription');
+      return;
+    }
     setSaving(false);
-    if (err) { setError('Failed to save prescription'); return; }
     setSaved(true);
   };
 
