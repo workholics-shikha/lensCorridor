@@ -56,10 +56,20 @@ export default function SelectLensScreen() {
 
   const handleSelect = (item: PowerTypeOption) => {
     updateLensSelection({
+      powerTypeId: item.id,
       powerType: item.name,
       lensType: item.name,
+      lensCategory: '',
+      lensCategoryId: '',
+      lensPrice: 0,
       image: item.image,
     });
+
+    if (item.name.toLowerCase() === 'frame only') {
+      router.push('/billing');
+      return;
+    }
+
     router.push('/lens-details');
   };
 
@@ -184,7 +194,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   headerTitle: {
-    fontSize: 17,
+    fontSize: 22,
     fontWeight: '500',
     color: '#202128',
   },
@@ -245,13 +255,13 @@ const styles = StyleSheet.create({
     height: 22,
   },
   cardTitle: {
-    fontSize: 13.5,
+    fontSize: 16,
     fontWeight: '600',
     color: '#202128',
   },
   cardSubtitle: {
     marginTop: 4,
-    fontSize: 11.5,
+    fontSize: 13.5,
     color: '#9A9DA9',
   },
   iconWrap: {

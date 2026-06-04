@@ -50,9 +50,9 @@ export default function ProfileScreen() {
       <View style={styles.center}>
         <User size={56} color={Colors.gray300} />
         <Text style={styles.guestTitle}>You're browsing as a guest</Text>
-        <Text style={styles.guestSub}>Sign in to access your profile, orders and more</Text>
-        <TouchableOpacity style={styles.signInBtn} onPress={() => router.push('/(auth)/login')}>
-          <Text style={styles.signInBtnText}>Sign In / Register</Text>
+        <Text style={styles.guestSub}>Browse the catalog and continue shopping without signing in.</Text>
+        <TouchableOpacity style={styles.signInBtn} onPress={() => router.replace('/(tabs)')}>
+          <Text style={styles.signInBtnText}>Go to Home</Text>
         </TouchableOpacity>
       </View>
     );

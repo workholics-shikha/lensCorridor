@@ -1,175 +1,615 @@
+import { useEffect, useMemo, useState } from 'react';
 import {
-  View, Text, StyleSheet, FlatList, TouchableOpacity,
-  Platform, Dimensions, ActivityIndicator,
+  ActivityIndicator,
+  FlatList,
+  Image,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+  useWindowDimensions,
 } from 'react-native';
-import { useEffect, useState } from 'react';
 import { router } from 'expo-router';
-import { Package, ChevronRight, ShoppingBag } from 'lucide-react-native';
-import { getOrders } from '@/lib/localStore';
-import { Order } from '@/lib/types';
-import { Colors, Spacing, Radius, FontSize, Shadow } from '@/lib/theme';
-import { useAuth } from '@/context/AuthContext';
-
-const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
-  pending: { bg: '#FEF3C7', text: '#D97706' },
-  confirmed: { bg: '#DBEAFE', text: '#1D4ED8' },
-  processing: { bg: '#EDE9FE', text: '#7C3AED' },
-  shipped: { bg: '#D1FAE5', text: '#065F46' },
-  delivered: { bg: '#D1FAE5', text: '#065F46' },
-  cancelled: { bg: '#FEE2E2', text: '#B91C1C' },
-};
+import { History, Phone, Search } from 'lucide-react-native';
+import { fetchOrderPlacements, type OrderPlacementRecord } from '@/lib/api';
+import { Colors, FontSize, Radius, Shadow, Spacing } from '@/lib/theme';
 
 export default function OrdersScreen() {
-  const { user } = useAuth();
-  const [orders, setOrders] = useState<Order[]>([]);
+  const { width } = useWindowDimensions();
+  const isTablet = width >= 920;
+  const pageSize = isTablet ? 4 : 6;
+  const [orders, setOrders] = useState<OrderPlacementRecord[]>([]);
+  const [suggestions, setSuggestions] = useState<OrderPlacementRecord[]>([]);
+  const [searchValue, setSearchValue] = useState('');
   const [loading, setLoading] = useState(true);
+  const [searching, setSearching] = useState(false);
+  const [error, setError] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => {
-    if (!user) { setLoading(false); return; }
-    setOrders(getOrders(user.id));
-    setLoading(false);
-  }, [user]);
+    let active = true;
 
-  if (!user) {
+    fetchOrderPlacements()
+      .then((items) => {
+        if (!active) {
+          return;
+        }
+
+        setOrders(items);
+      })
+      .catch(() => {
+        if (active) {
+          setError('Unable to load order history right now.');
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    const normalizedPhone = searchValue.replace(/\D/g, '').slice(-10);
+    if (normalizedPhone.length < 3) {
+      setSuggestions([]);
+      return;
+    }
+
+    let active = true;
+    const timer = setTimeout(() => {
+      setSearching(true);
+      fetchOrderPlacements({ phone: normalizedPhone, limit: 6 })
+        .then((items) => {
+          if (active) {
+            setSuggestions(items);
+          }
+        })
+        .catch(() => {
+          if (active) {
+            setSuggestions([]);
+          }
+        })
+        .finally(() => {
+          if (active) {
+            setSearching(false);
+          }
+        });
+    }, 250);
+
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [searchValue]);
+
+  const visibleOrders = useMemo(() => {
+    const normalizedPhone = searchValue.replace(/\D/g, '').slice(-10);
+    if (normalizedPhone.length < 3) {
+      return orders;
+    }
+
+    const suggestionIds = new Set(suggestions.map((item) => item.id));
+    return orders.filter((item) => (
+      item.customer.phone.replace(/\D/g, '').includes(normalizedPhone) || suggestionIds.has(item.id)
+    ));
+  }, [orders, searchValue, suggestions]);
+
+  const totalPages = Math.max(1, Math.ceil(visibleOrders.length / pageSize));
+  const paginatedOrders = useMemo(() => {
+    const startIndex = (currentPage - 1) * pageSize;
+    return visibleOrders.slice(startIndex, startIndex + pageSize);
+  }, [currentPage, pageSize, visibleOrders]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchValue, pageSize]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
+
+  const paginationItems = useMemo(() => {
+    if (totalPages <= 5) {
+      return Array.from({ length: totalPages }, (_, index) => index + 1);
+    }
+
+    if (currentPage <= 3) {
+      return [1, 2, 3, '...', totalPages] as const;
+    }
+
+    if (currentPage >= totalPages - 2) {
+      return [1, '...', totalPages - 2, totalPages - 1, totalPages] as const;
+    }
+
+    return [1, '...', currentPage, '...', totalPages] as const;
+  }, [currentPage, totalPages]);
+
+  if (loading) {
     return (
       <View style={styles.center}>
-        <ShoppingBag size={56} color={Colors.gray300} />
-        <Text style={styles.emptyTitle}>Sign in to view orders</Text>
-        <TouchableOpacity style={styles.signInBtn} onPress={() => router.push('/(auth)/login')}>
-          <Text style={styles.signInBtnText}>Sign In</Text>
-        </TouchableOpacity>
+        <ActivityIndicator size="large" color={Colors.primary} />
       </View>
     );
   }
 
-  if (loading) return <View style={styles.center}><ActivityIndicator size="large" color={Colors.primary} /></View>;
-
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>My Orders</Text>
+        <Text style={styles.headerTitle}>My Order</Text>
       </View>
-      <FlatList
-        data={orders}
-        keyExtractor={(i) => i.id}
-        contentContainerStyle={styles.list}
-        renderItem={({ item }) => <OrderCard order={item} />}
-        ListEmptyComponent={
-          <View style={styles.empty}>
-            <Package size={60} color={Colors.gray300} />
-            <Text style={styles.emptyTitle}>No orders yet</Text>
-            <Text style={styles.emptySub}>Start an order from the home screen to see it here</Text>
-            <TouchableOpacity style={styles.shopBtn} onPress={() => router.push('/(tabs)')}>
-              <Text style={styles.shopBtnText}>Go to Home</Text>
+
+      <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
+        <View style={styles.sectionHeader}>
+          <View style={styles.sectionLabelRow}>
+            <History size={14} color={Colors.primary} />
+            <Text style={styles.sectionLabel}>Order History</Text>
+          </View>
+
+          <View style={styles.searchWrap}>
+            <Search size={14} color="#BABFCB" />
+            <TextInput
+              value={searchValue}
+              onChangeText={setSearchValue}
+              placeholder="Enter customer mobile number"
+              placeholderTextColor="#A0A5B1"
+              keyboardType="phone-pad"
+              style={styles.searchInput}
+            />
+          </View>
+
+          {(suggestions.length > 0 || searching) && searchValue.replace(/\D/g, '').slice(-10).length >= 3 ? (
+            <View style={styles.dropdown}>
+              {searching ? (
+                <Text style={styles.dropdownHint}>Searching...</Text>
+              ) : (
+                suggestions.map((item) => (
+                  <TouchableOpacity
+                    key={item.id}
+                    style={styles.dropdownItem}
+                    activeOpacity={0.86}
+                    onPress={() => {
+                      setSearchValue(item.customer.phone);
+                      setSuggestions([]);
+                    }}
+                  >
+                    <Text style={styles.dropdownName}>{item.customer.name || 'Customer'}</Text>
+                    <Text style={styles.dropdownPhone}>{item.customer.phone}</Text>
+                  </TouchableOpacity>
+                ))
+              )}
+            </View>
+          ) : null}
+        </View>
+
+        {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+        <FlatList
+          data={paginatedOrders}
+          key={isTablet ? 'grid' : 'list'}
+          numColumns={isTablet ? 2 : 1}
+          scrollEnabled={false}
+          columnWrapperStyle={isTablet ? styles.gridRow : undefined}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.listContent}
+          ListEmptyComponent={<Text style={styles.emptyText}>No matching orders found.</Text>}
+          renderItem={({ item, index }) => (
+            <OrderHistoryCard
+              order={item}
+              highlighted={index === 1}
+              isTablet={isTablet}
+            />
+          )}
+        />
+
+        {visibleOrders.length > pageSize ? (
+          <View style={styles.paginationRow}>
+            <TouchableOpacity
+              style={[styles.paginationNav, currentPage === 1 && styles.paginationNavDisabled]}
+              activeOpacity={0.86}
+              onPress={() => setCurrentPage((page) => Math.max(1, page - 1))}
+              disabled={currentPage === 1}
+            >
+              <Text style={styles.paginationNavText}>{'<'}</Text>
+            </TouchableOpacity>
+
+            {paginationItems.map((item, index) => (
+              typeof item === 'number' ? (
+                <TouchableOpacity
+                  key={`${item}-${index}`}
+                  style={[styles.paginationPage, currentPage === item && styles.paginationPageActive]}
+                  activeOpacity={0.86}
+                  onPress={() => setCurrentPage(item)}
+                >
+                  <Text style={[styles.paginationPageText, currentPage === item && styles.paginationPageTextActive]}>
+                    {item}
+                  </Text>
+                </TouchableOpacity>
+              ) : (
+                <View key={`${item}-${index}`} style={styles.paginationEllipsisWrap}>
+                  <Text style={styles.paginationEllipsis}>{item}</Text>
+                </View>
+              )
+            ))}
+
+            <TouchableOpacity
+              style={[styles.paginationNav, currentPage === totalPages && styles.paginationNavDisabled]}
+              activeOpacity={0.86}
+              onPress={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+              disabled={currentPage === totalPages}
+            >
+              <Text style={styles.paginationNavText}>{'>'}</Text>
             </TouchableOpacity>
           </View>
-        }
-      />
+        ) : null}
+      </ScrollView>
     </View>
   );
 }
 
-function OrderCard({ order }: { order: Order }) {
-  const statusStyle = STATUS_COLORS[order.status] || STATUS_COLORS.pending;
-  const date = new Date(order.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+function OrderHistoryCard({
+  order,
+  highlighted,
+  isTablet,
+}: {
+  order: OrderPlacementRecord;
+  highlighted?: boolean;
+  isTablet: boolean;
+}) {
+  const frameImage = order.frame.images.find((item) => item.image)?.image;
+  const orderDate = new Date(order.createdAt).toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+  });
+  const cardWidth = isTablet ? '49%' : '100%';
 
   return (
-    <View style={cardStyles.card}>
-      <View style={cardStyles.topRow}>
-        <View>
-          <Text style={cardStyles.orderId}>Order #{order.id.slice(-8).toUpperCase()}</Text>
-          <Text style={cardStyles.date}>{date}</Text>
+    <TouchableOpacity
+      style={[styles.orderCard, highlighted && styles.orderCardHighlighted, { width: cardWidth }]}
+      activeOpacity={0.9}
+      onPress={() => router.push({ pathname: '/order-details', params: { orderId: order.id } })}
+    >
+      <View style={styles.customerRow}>
+        <Text style={styles.customerMeta}>
+          Customer Name - <Text style={styles.customerMetaStrong}>{order.customer.name || 'Customer'}</Text>
+        </Text>
+        <View style={styles.customerPhoneWrap}>
+          <Phone size={11} color={Colors.primary} />
+          <Text style={styles.customerPhone}>{order.customer.phone}</Text>
         </View>
-        <View style={[cardStyles.statusBadge, { backgroundColor: statusStyle.bg }]}>
-          <Text style={[cardStyles.statusText, { color: statusStyle.text }]}>
-            {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
+      </View>
+
+      <View style={styles.productRow}>
+        <View style={styles.productImageShell}>
+          {frameImage ? (
+            <Image source={{ uri: frameImage }} resizeMode="contain" style={styles.productImage} />
+          ) : (
+            <View style={styles.imageFallback} />
+          )}
+        </View>
+
+        <View style={styles.productBody}>
+          <Text style={styles.productTitle}>Lenskorridor frame</Text>
+          <Text style={styles.productSub}>
+            Frame + {order.lensSelection.lensCategory || order.lensSelection.powerType || 'Lens'}
           </Text>
+          <Text style={styles.productPrice}>Rs {order.billing.totalPayable}</Text>
         </View>
       </View>
 
-      <View style={cardStyles.divider} />
-
-      <View style={cardStyles.itemsRow}>
-        {order.order_items?.slice(0, 2).map((item: any) => (
-          <Text key={item.id} style={cardStyles.itemName} numberOfLines={1}>
-            • {item.products?.name}
-          </Text>
-        ))}
-        {(order.order_items?.length ?? 0) > 2 && (
-          <Text style={cardStyles.moreItems}>+{(order.order_items?.length ?? 0) - 2} more</Text>
-        )}
+      <View style={styles.footerRow}>
+        <FooterMeta label="Order ID:" value={order.orderNumber} />
+        <FooterMeta label="Order Date:" value={orderDate} centered />
+        <FooterMeta label="Total Price:" value={`Rs${order.billing.totalPayable}`} right />
       </View>
+    </TouchableOpacity>
+  );
+}
 
-      <View style={cardStyles.bottomRow}>
-        <View>
-          <Text style={cardStyles.totalLabel}>Total Amount</Text>
-          <Text style={cardStyles.total}>₹{order.total_amount.toLocaleString('en-IN')}</Text>
-        </View>
-        <View>
-          <Text style={cardStyles.payLabel}>Payment</Text>
-          <Text style={cardStyles.payMethod}>{order.payment_method === 'cod' ? 'Cash on Delivery' : order.payment_method.toUpperCase()}</Text>
-        </View>
-      </View>
-
-      {/* Progress Bar */}
-      <View style={cardStyles.progressBar}>
-        {['confirmed', 'processing', 'shipped', 'delivered'].map((step, idx) => {
-          const steps = ['confirmed', 'processing', 'shipped', 'delivered'];
-          const currentIdx = steps.indexOf(order.status);
-          const active = idx <= currentIdx;
-          return (
-            <View key={step} style={cardStyles.progressStep}>
-              <View style={[cardStyles.progressDot, active && cardStyles.progressDotActive]} />
-              {idx < 3 && <View style={[cardStyles.progressLine, active && idx < currentIdx && cardStyles.progressLineActive]} />}
-              <Text style={[cardStyles.progressLabel, active && cardStyles.progressLabelActive]}>{step.charAt(0).toUpperCase() + step.slice(1)}</Text>
-            </View>
-          );
-        })}
-      </View>
+function FooterMeta({
+  label,
+  value,
+  centered,
+  right,
+}: {
+  label: string;
+  value: string;
+  centered?: boolean;
+  right?: boolean;
+}) {
+  return (
+    <View style={[styles.footerMeta, centered && styles.footerMetaCenter, right && styles.footerMetaRight]}>
+      <Text style={styles.footerLabel}>{label}</Text>
+      <Text style={styles.footerValue}>{value}</Text>
     </View>
   );
 }
 
-const cardStyles = StyleSheet.create({
-  card: { backgroundColor: Colors.white, borderRadius: Radius.lg, padding: Spacing.md, marginBottom: Spacing.md, ...Shadow.sm },
-  topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  orderId: { fontSize: FontSize.md, fontWeight: '700', color: Colors.text },
-  date: { fontSize: FontSize.xs, color: Colors.textMuted, marginTop: 2 },
-  statusBadge: { borderRadius: Radius.full, paddingHorizontal: Spacing.sm, paddingVertical: 3 },
-  statusText: { fontSize: FontSize.xs, fontWeight: '700' },
-  divider: { height: 1, backgroundColor: Colors.border, marginVertical: Spacing.sm },
-  itemsRow: { marginBottom: Spacing.sm },
-  itemName: { fontSize: FontSize.sm, color: Colors.textSecondary, marginBottom: 2 },
-  moreItems: { fontSize: FontSize.xs, color: Colors.primary, fontWeight: '600' },
-  bottomRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: Spacing.md },
-  totalLabel: { fontSize: FontSize.xs, color: Colors.textMuted },
-  total: { fontSize: FontSize.lg, fontWeight: '800', color: Colors.text },
-  payLabel: { fontSize: FontSize.xs, color: Colors.textMuted, textAlign: 'right' },
-  payMethod: { fontSize: FontSize.sm, fontWeight: '600', color: Colors.text, textAlign: 'right' },
-  progressBar: { flexDirection: 'row', alignItems: 'center' },
-  progressStep: { flex: 1, alignItems: 'center', position: 'relative' },
-  progressDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: Colors.gray300, marginBottom: 4 },
-  progressDotActive: { backgroundColor: Colors.primary },
-  progressLine: { position: 'absolute', top: 5, left: '55%', right: '-55%', height: 2, backgroundColor: Colors.gray200, zIndex: -1 },
-  progressLineActive: { backgroundColor: Colors.primary },
-  progressLabel: { fontSize: 9, color: Colors.gray400, textAlign: 'center' },
-  progressLabelActive: { color: Colors.primary, fontWeight: '600' },
-});
-
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.background, padding: Spacing.xl },
-  header: {
-    backgroundColor: Colors.white, paddingTop: Platform.OS === 'ios' ? 52 : 36,
-    paddingBottom: Spacing.md, paddingHorizontal: Spacing.md, ...Shadow.sm,
+  container: {
+    flex: 1,
+    backgroundColor: '#F4F5FA',
   },
-  headerTitle: { fontSize: FontSize.xl, fontWeight: '700', color: Colors.text },
-  list: { padding: Spacing.md, paddingBottom: Spacing.xxl },
-  empty: { alignItems: 'center', justifyContent: 'center', paddingVertical: Spacing.xxl },
-  emptyTitle: { fontSize: FontSize.xl, fontWeight: '700', color: Colors.text, marginTop: Spacing.md, marginBottom: 4 },
-  emptySub: { fontSize: FontSize.md, color: Colors.textSecondary, textAlign: 'center', marginBottom: Spacing.lg },
-  shopBtn: { backgroundColor: Colors.primary, borderRadius: Radius.md, paddingHorizontal: Spacing.xl, paddingVertical: Spacing.sm + 4 },
-  shopBtnText: { color: Colors.white, fontWeight: '700', fontSize: FontSize.md },
-  signInBtn: { backgroundColor: Colors.primary, borderRadius: Radius.md, paddingHorizontal: Spacing.xl, paddingVertical: Spacing.sm + 4, marginTop: Spacing.lg },
-  signInBtnText: { color: Colors.white, fontWeight: '700', fontSize: FontSize.md },
+  center: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F4F5FA',
+  },
+  header: {
+    backgroundColor: Colors.white,
+    paddingTop: Platform.OS === 'ios' ? 52 : 36,
+    paddingBottom: 12,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EAEDF3',
+  },
+  headerTitle: {
+    fontSize: 17,
+    fontWeight: '500',
+    color: '#20242B',
+  },
+  body: {
+    padding: 14,
+    paddingBottom: 110,
+  },
+  sectionHeader: {
+    position: 'relative',
+    zIndex: 2,
+  },
+  sectionLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  sectionLabel: {
+    marginLeft: 6,
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#252A33',
+  },
+  searchWrap: {
+    height: 32,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E1E5EE',
+    backgroundColor: Colors.white,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    marginBottom: 12,
+  },
+  searchInput: {
+    flex: 1,
+    marginLeft: 8,
+    fontSize: 12,
+    color: '#1F2430',
+  },
+  dropdown: {
+    position: 'absolute',
+    top: 68,
+    right: 0,
+    left: 0,
+    backgroundColor: Colors.white,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E6EAF1',
+    ...Shadow.md,
+  },
+  dropdownItem: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F3F7',
+  },
+  dropdownHint: {
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    fontSize: 12,
+    color: '#6E7584',
+  },
+  dropdownName: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: '#20242B',
+  },
+  dropdownPhone: {
+    marginTop: 2,
+    fontSize: 11.5,
+    color: '#6E7584',
+  },
+  errorText: {
+    marginBottom: 10,
+    fontSize: 12,
+    color: Colors.error,
+  },
+  listContent: {
+    paddingTop: 4,
+  },
+  gridRow: {
+    justifyContent: 'space-between',
+  },
+  orderCard: {
+    backgroundColor: Colors.white,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E9EDF4',
+    padding: 10,
+    marginBottom: 12,
+    ...Shadow.sm,
+  },
+  orderCardHighlighted: {
+    borderColor: '#F0A252',
+  },
+  customerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  customerMeta: {
+    flex: 1,
+    fontSize: 10.5,
+    color: '#8B92A1',
+    marginRight: 8,
+  },
+  customerMetaStrong: {
+    color: '#20242B',
+    fontWeight: '600',
+  },
+  customerPhoneWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  customerPhone: {
+    marginLeft: 4,
+    fontSize: 10.5,
+    color: '#20242B',
+  },
+  productRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  productImageShell: {
+    width: 104,
+    height: 64,
+    borderRadius: 10,
+    backgroundColor: '#F6F8FC',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  productImage: {
+    width: '100%',
+    height: '100%',
+  },
+  imageFallback: {
+    width: 64,
+    height: 34,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#1C1D21',
+  },
+  productBody: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  productTitle: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#20242B',
+  },
+  productSub: {
+    marginTop: 4,
+    fontSize: 10.5,
+    color: '#878E9D',
+  },
+  productPrice: {
+    marginTop: 6,
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.primary,
+  },
+  footerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 10,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#EFF2F6',
+  },
+  footerMeta: {
+    flex: 1,
+  },
+  footerMetaCenter: {
+    alignItems: 'center',
+  },
+  footerMetaRight: {
+    alignItems: 'flex-end',
+  },
+  footerLabel: {
+    fontSize: 9.5,
+    color: '#8A91A1',
+  },
+  footerValue: {
+    marginTop: 2,
+    fontSize: 10.5,
+    color: '#20242B',
+    fontWeight: '500',
+  },
+  emptyText: {
+    paddingVertical: 28,
+    textAlign: 'center',
+    color: '#6E7584',
+    fontSize: 13,
+  },
+  paginationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  paginationNav: {
+    width: 24,
+    height: 24,
+    borderRadius: 4,
+    backgroundColor: '#F1F4F8',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: 4,
+  },
+  paginationNavDisabled: {
+    opacity: 0.45,
+  },
+  paginationNavText: {
+    fontSize: 11,
+    color: '#8A91A1',
+    fontWeight: '700',
+  },
+  paginationPage: {
+    minWidth: 24,
+    height: 24,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#E3E8F1',
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
+    marginHorizontal: 4,
+  },
+  paginationPageActive: {
+    borderColor: '#AFCBFF',
+    backgroundColor: '#EAF2FF',
+  },
+  paginationPageText: {
+    fontSize: 11,
+    color: '#5F6778',
+    fontWeight: '500',
+  },
+  paginationPageTextActive: {
+    color: Colors.primary,
+    fontWeight: '700',
+  },
+  paginationEllipsisWrap: {
+    minWidth: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: 2,
+  },
+  paginationEllipsis: {
+    fontSize: 11,
+    color: '#8A91A1',
+    fontWeight: '600',
+  },
 });

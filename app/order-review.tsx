@@ -2,15 +2,17 @@ import { router } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
 import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useOrderFlow } from '@/context/OrderFlowContext';
+import { getOrderAmounts } from '@/lib/orderPricing';
 import { Shadow } from '@/lib/theme';
 
 export default function OrderReviewScreen() {
   const { draft } = useOrderFlow();
   const primaryFrame = draft.frameImages[0];
+  const { framePrice, lensPrice, discount, totalPayable, paidAmount, remainingAmount } = getOrderAmounts(draft);
 
   return (
     <View style={styles.screen}>
-      <Header title="Add Lens Details" />
+      <Header title="Order Review" />
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.summaryCard}>
           <View style={styles.frameCard}>
@@ -24,17 +26,21 @@ export default function OrderReviewScreen() {
           <View style={styles.summaryBody}>
             <Text style={styles.summaryTitle}>{draft.customerName || 'Customer order details'}</Text>
             <Text style={styles.summaryMeta}>Mobile: {draft.phone || 'Not added'}</Text>
-            <Text style={styles.summaryMeta}>Lens: {draft.lensSelection.lensType}</Text>
-            <Text style={styles.summaryMeta}>Category: {draft.lensSelection.lensCategory}</Text>
+            <Text style={styles.summaryMeta}>Lens: {draft.lensSelection.lensType || draft.lensSelection.powerType}</Text>
+            <Text style={styles.summaryMeta}>Category: {draft.lensSelection.lensCategory || 'Not selected'}</Text>
           </View>
         </View>
 
         <View style={styles.billCard}>
-          <Row label="Frame Price" value={`₹${draft.price || '0'}`} />
-          <Row label="Lens Charges" value="₹1200" />
-          <Row label="Coating" value="₹300" />
+          <Row label="Frame Price" value={`Rs. ${framePrice.toLocaleString('en-IN')}`} />
+          <Row label="Lens Charges" value={`Rs. ${lensPrice.toLocaleString('en-IN')}`} />
+          <Row label="Discount" value={`Rs. ${discount.toLocaleString('en-IN')}`} />
+          <Row label="Paid Now" value={`Rs. ${paidAmount.toLocaleString('en-IN')}`} />
+          {remainingAmount > 0 ? (
+            <Row label="Remaining Amount" value={`Rs. ${remainingAmount.toLocaleString('en-IN')}`} />
+          ) : null}
           <View style={styles.divider} />
-          <Row label="Grand Total" value={`₹${(Number(draft.price || 0) + 1500).toLocaleString('en-IN')}`} bold />
+          <Row label="Grand Total" value={`Rs. ${totalPayable.toLocaleString('en-IN')}`} bold />
         </View>
 
         <TouchableOpacity style={styles.primaryButton} onPress={() => router.push('/payment-summary')} activeOpacity={0.88}>

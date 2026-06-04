@@ -2,14 +2,12 @@ import { router } from 'expo-router';
 import { ArrowLeft, CheckCircle2 } from 'lucide-react-native';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useOrderFlow } from '@/context/OrderFlowContext';
+import { getOrderAmounts } from '@/lib/orderPricing';
 import { Shadow } from '@/lib/theme';
 
 export default function PaymentSummaryScreen() {
   const { draft, resetDraft } = useOrderFlow();
-  const framePrice = Number(draft.price || 0);
-  const lensPrice = 1200;
-  const coatingPrice = 300;
-  const total = framePrice + lensPrice + coatingPrice;
+  const { framePrice, lensPrice, discount, totalPayable, paidAmount, remainingAmount } = getOrderAmounts(draft);
 
   const handlePlaceOrder = () => {
     resetDraft();
@@ -25,7 +23,7 @@ export default function PaymentSummaryScreen() {
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()} activeOpacity={0.8}>
           <ArrowLeft size={20} color="#1C1D21" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Add Lens Details</Text>
+        <Text style={styles.headerTitle}>Payment Summary</Text>
       </View>
 
       <View style={styles.content}>
@@ -35,13 +33,17 @@ export default function PaymentSummaryScreen() {
             <Text style={styles.customerName}>{draft.customerName || 'Customer order'}</Text>
           </View>
 
-          <AmountRow label="Frame" value={`₹${framePrice.toLocaleString('en-IN')}`} />
-          <AmountRow label="Lens" value={`₹${lensPrice.toLocaleString('en-IN')}`} />
-          <AmountRow label="Coating" value={`₹${coatingPrice.toLocaleString('en-IN')}`} />
-          <AmountRow label="Discount" value="₹0" />
+          <AmountRow label="Frame" value={`Rs. ${framePrice.toLocaleString('en-IN')}`} />
+          <AmountRow label="Lens" value={`Rs. ${lensPrice.toLocaleString('en-IN')}`} />
+          <AmountRow label="Discount" value={`Rs. ${discount.toLocaleString('en-IN')}`} />
+          <AmountRow label="Payment mode" value={draft.paymentMode} />
+          <AmountRow label="Paid now" value={`Rs. ${paidAmount.toLocaleString('en-IN')}`} />
+          {remainingAmount > 0 ? (
+            <AmountRow label="Remaining amount" value={`Rs. ${remainingAmount.toLocaleString('en-IN')}`} />
+          ) : null}
 
           <View style={styles.divider} />
-          <AmountRow label="Total" value={`₹${total.toLocaleString('en-IN')}`} total />
+          <AmountRow label="Total" value={`Rs. ${totalPayable.toLocaleString('en-IN')}`} total />
         </View>
 
         <TouchableOpacity style={styles.placeButton} onPress={handlePlaceOrder} activeOpacity={0.88}>

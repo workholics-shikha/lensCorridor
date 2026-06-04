@@ -20,8 +20,7 @@ import {
   Search,
   X,
 } from 'lucide-react-native';
-import { fetchFrameShapes } from '@/lib/api';
-import { findLatestCustomerByPhone } from '@/lib/localStore';
+import { fetchFrameShapes, fetchOrderPlacements, type OrderPlacementRecord } from '@/lib/api';
 import { Shadow } from '@/lib/theme';
 import { useOrderFlow } from '@/context/OrderFlowContext';
 
@@ -42,10 +41,73 @@ export default function CheckoutScreen() {
   const { draft, updateDraft } = useOrderFlow();
 
   const [customerSearch, setCustomerSearch] = useState(draft.phone);
-  const [matchedCustomer, setMatchedCustomer] = useState<ReturnType<typeof findLatestCustomerByPhone>>(null);
+  const [matchedCustomer, setMatchedCustomer] = useState<OrderPlacementRecord | null>(null);
+  const [customerSuggestions, setCustomerSuggestions] = useState<OrderPlacementRecord[]>([]);
+  const [searchingCustomer, setSearchingCustomer] = useState(false);
   const [price, setPrice] = useState(draft.price);
   const [error, setError] = useState('');
   const [framePreviews, setFramePreviews] = useState<FramePreviewItem[]>(draft.frameImages);
+
+  const applyOrderHistory = (order: OrderPlacementRecord) => {
+    const nextFrames = Array.isArray(order.frame.images) && order.frame.images.length
+      ? order.frame.images.map((item, index) => ({
+        id: item.id || `history-frame-${index}`,
+        image: item.image,
+        shape: item.shape,
+      }))
+      : framePreviews;
+
+    setCustomerSearch(order.customer.phone || '');
+    setMatchedCustomer(order);
+    setCustomerSuggestions([]);
+    setPrice(String(order.frame.price || order.billing.totalPayable || ''));
+    setFramePreviews(nextFrames);
+
+    updateDraft({
+      phone: order.customer.phone || '',
+      customerName: order.customer.name || '',
+      billingAddress: order.customer.billingAddress || '',
+      price: String(order.frame.price || order.billing.totalPayable || ''),
+      billingDiscount: String(order.billing.discount ?? 0),
+      partialPaymentEnabled: Boolean(order.billing.partialPaymentEnabled),
+      partialPaymentAmount: order.billing.partialPaymentEnabled
+        ? String(order.billing.paidAmount ?? '')
+        : '',
+      paymentMode: order.billing.paymentMode,
+      selectedShape: order.frame.selectedShape || draft.selectedShape,
+      frameImages: nextFrames,
+      lensSelection: {
+        lensType: order.lensSelection.lensType || draft.lensSelection.lensType,
+        lensCategory: order.lensSelection.lensCategory || draft.lensSelection.lensCategory,
+        lensCategoryId: order.lensSelection.lensCategoryId || draft.lensSelection.lensCategoryId,
+        lensPrice: Number(order.lensSelection.lensPrice ?? draft.lensSelection.lensPrice),
+        coating: order.lensSelection.coating || draft.lensSelection.coating,
+        powerType: order.lensSelection.powerType || draft.lensSelection.powerType,
+        powerTypeId: order.lensSelection.powerTypeId || draft.lensSelection.powerTypeId,
+        image: order.lensSelection.image || draft.lensSelection.image,
+      },
+      lensDetails: Array.isArray(order.lensDetails) && order.lensDetails.length
+        ? order.lensDetails.map((item, index) => ({
+          id: item.id || `history-lens-${index}`,
+          label: item.label || 'Distance Vision',
+          eye: item.eye,
+          sph: item.sph || '',
+          cyl: item.cyl || '',
+          axis: item.axis || '',
+          add: item.add || '',
+        }))
+        : draft.lensDetails,
+    });
+  };
+
+  const handleBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+
+    router.replace('/(tabs)');
+  };
 
   useEffect(() => {
     let active = true;
@@ -80,17 +142,46 @@ export default function CheckoutScreen() {
   }, [shape]);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      const normalizedPhone = customerSearch.replace(/\D/g, '').slice(-10);
-      if (normalizedPhone.length < 10) {
-        setMatchedCustomer(null);
-        return;
-      }
+    const normalizedPhone = customerSearch.replace(/\D/g, '').slice(-10);
+    if (normalizedPhone.length < 3) {
+      setMatchedCustomer(null);
+      setCustomerSuggestions([]);
+      setSearchingCustomer(false);
+      return;
+    }
 
-      setMatchedCustomer(findLatestCustomerByPhone(normalizedPhone));
+    let active = true;
+    const timer = setTimeout(() => {
+      setSearchingCustomer(true);
+      fetchOrderPlacements({ phone: normalizedPhone, limit: 6 })
+        .then((items) => {
+          if (!active) {
+            return;
+          }
+
+          setCustomerSuggestions(items);
+          const exactMatch = items.find((item) => item.customer.phone.replace(/\D/g, '').slice(-10) === normalizedPhone);
+          setMatchedCustomer(exactMatch ?? null);
+        })
+        .catch(() => {
+          if (!active) {
+            return;
+          }
+
+          setMatchedCustomer(null);
+          setCustomerSuggestions([]);
+        })
+        .finally(() => {
+          if (active) {
+            setSearchingCustomer(false);
+          }
+        });
     }, 250);
 
-    return () => clearTimeout(timer);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
   }, [customerSearch]);
 
   const handleUploadPress = (source: 'camera' | 'gallery') => {
@@ -172,7 +263,7 @@ export default function CheckoutScreen() {
 
     updateDraft({
       phone: customerSearch,
-      customerName: matchedCustomer?.name ?? draft.customerName,
+      customerName: matchedCustomer?.customer.name ?? draft.customerName,
       price,
       selectedShape: shape ?? draft.selectedShape,
       frameImages: framePreviews,
@@ -185,7 +276,7 @@ export default function CheckoutScreen() {
     <View style={styles.screen}>
       <View style={styles.header}>
         <View style={[styles.headerInner, { maxWidth: containerWidth }]}>
-          <TouchableOpacity style={styles.backButton} onPress={() => router.back()} activeOpacity={0.85}>
+          <TouchableOpacity style={styles.backButton} onPress={handleBack} activeOpacity={0.85}>
             <ArrowLeft size={21} color="#1C1D21" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Order Placement</Text>
@@ -207,6 +298,7 @@ export default function CheckoutScreen() {
                 value={customerSearch}
                 onChangeText={(value) => {
                   setCustomerSearch(value);
+                  setMatchedCustomer(null);
                   setError('');
                 }}
                 style={styles.textInput}
@@ -216,6 +308,40 @@ export default function CheckoutScreen() {
               />
               <Search size={18} color="#C0C2CA" strokeWidth={2} />
             </View>
+
+            {(searchingCustomer || customerSuggestions.length > 0) && customerSearch.replace(/\D/g, '').slice(-10).length >= 3 ? (
+              <View style={styles.customerDropdown}>
+                {searchingCustomer ? (
+                  <Text style={styles.customerDropdownHint}>Searching customer...</Text>
+                ) : (
+                  customerSuggestions.map((item) => (
+                    <TouchableOpacity
+                      key={item.id}
+                      style={styles.customerDropdownItem}
+                      activeOpacity={0.86}
+                      onPress={() => {
+                        applyOrderHistory(item);
+                      }}
+                    >
+                      <Text style={styles.customerDropdownName}>{item.customer.name || 'Customer'}</Text>
+                      <Text style={styles.customerDropdownPhone}>{item.customer.phone}</Text>
+                    </TouchableOpacity>
+                  ))
+                )}
+              </View>
+            ) : null}
+
+            {matchedCustomer ? (
+              <View style={styles.customerMatchCard}>
+                <Text style={styles.customerMatchTitle}>Matched Customer</Text>
+                <Text style={styles.customerMatchText}>
+                  {matchedCustomer.customer.name || 'Customer'} • {matchedCustomer.customer.phone}
+                </Text>
+                {matchedCustomer.customer.billingAddress ? (
+                  <Text style={styles.customerMatchSub}>{matchedCustomer.customer.billingAddress}</Text>
+                ) : null}
+              </View>
+            ) : null}
           </View>
 
           <View style={[styles.frameRow, isTablet ? styles.frameRowTablet : styles.frameRowMobile]}>
@@ -566,6 +692,62 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 2,
+  },
+  customerDropdown: {
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: '#E7E8F0',
+    borderRadius: 10,
+    backgroundColor: '#FFFFFF',
+    overflow: 'hidden',
+  },
+  customerDropdownHint: {
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    fontSize: 12,
+    color: '#7E8491',
+  },
+  customerDropdownItem: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F2F6',
+  },
+  customerDropdownName: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: '#1E2028',
+  },
+  customerDropdownPhone: {
+    marginTop: 3,
+    fontSize: 11.5,
+    color: '#7E8491',
+  },
+  customerMatchCard: {
+    marginTop: 10,
+    borderRadius: 10,
+    backgroundColor: '#F5F9FF',
+    borderWidth: 1,
+    borderColor: '#D8E8FF',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  customerMatchTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#1B73DE',
+    marginBottom: 4,
+  },
+  customerMatchText: {
+    fontSize: 12.5,
+    color: '#1E2028',
+    fontWeight: '500',
+  },
+  customerMatchSub: {
+    marginTop: 4,
+    fontSize: 11.5,
+    color: '#6F7480',
+    lineHeight: 16,
   },
   textInput: {
     flex: 1,

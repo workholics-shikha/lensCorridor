@@ -50,7 +50,7 @@ export default function SplashScreen() {
       setSelectionError('Please select both a store and a salesman before continuing.');
       return;
     }
-    router.push('/(auth)/login');
+    router.push('/(tabs)');
   };
 
   const handleReturnExchange = () => {
@@ -58,7 +58,7 @@ export default function SplashScreen() {
       setSelectionError('Please select both a store and a salesman before continuing.');
       return;
     }
-    router.push('/(auth)/login');
+    router.push('/(tabs)');
   };
 
   if (loading) {

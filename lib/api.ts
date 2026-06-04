@@ -55,6 +55,123 @@ export interface PowerTypeOption {
   priority: number;
 }
 
+export interface LensCategoryOption {
+  id: string;
+  categoryName: string;
+  displayLabel: string;
+  description: string;
+  linkedPricingBand: string;
+  usageAndMapping: string;
+  priority: number;
+  powerTypeIds: string[];
+}
+
+export interface OrderPlacementPayload {
+  orderNumber?: string;
+  customer: {
+    name: string;
+    phone: string;
+    billingAddress: string;
+  };
+  frame: {
+    selectedShape: string;
+    price: number;
+    images: Array<{
+      id: string;
+      image?: string;
+      shape?: string;
+    }>;
+  };
+  lensSelection: {
+    lensType: string;
+    lensCategory: string;
+    lensCategoryId: string;
+    lensPrice: number;
+    coating: string;
+    powerType: string;
+    powerTypeId: string;
+    image: string;
+  };
+  lensDetails: Array<{
+    id: string;
+    label: string;
+    eye: 'left' | 'right';
+    sph: string;
+    cyl: string;
+    axis: string;
+    add: string;
+  }>;
+  billing: {
+    discount: number;
+    paymentMode: 'Online' | 'Card' | 'Cash';
+    subtotal: number;
+    totalPayable: number;
+    partialPaymentEnabled?: boolean;
+    paidAmount?: number;
+    remainingAmount?: number;
+  };
+  meta?: {
+    source?: string;
+  };
+}
+
+export interface OrderPlacementResponse {
+  id: string;
+  orderNumber: string;
+  invoiceDate: string;
+  createdAt: string;
+}
+
+export interface OrderPlacementRecord extends OrderPlacementResponse {
+  customer: {
+    name: string;
+    phone: string;
+    billingAddress: string;
+  };
+  frame: {
+    selectedShape: string;
+    price: number;
+    images: Array<{
+      id: string;
+      image?: string;
+      shape?: string;
+    }>;
+  };
+  lensSelection: {
+    lensType: string;
+    lensCategory: string;
+    lensCategoryId: string;
+    lensPrice: number;
+    coating: string;
+    powerType: string;
+    powerTypeId: string;
+    image: string;
+  };
+  lensDetails: Array<{
+    id: string;
+    label: string;
+    eye: 'left' | 'right';
+    sph: string;
+    cyl: string;
+    axis: string;
+    add: string;
+  }>;
+  billing: {
+    discount: number;
+    paymentMode: 'Online' | 'Card' | 'Cash';
+    subtotal: number;
+    totalPayable: number;
+    partialPaymentEnabled?: boolean;
+    paidAmount?: number;
+    remainingAmount?: number;
+  };
+  meta?: {
+    source?: string;
+  };
+  status: string;
+  updatedAt: string;
+}
+
 function getApiBaseUrl() {
   const configuredBaseUrl = process.env.EXPO_PUBLIC_API_BASE_URL?.trim();
   if (configuredBaseUrl) {
@@ -247,4 +364,196 @@ export async function fetchPowerTypes(): Promise<PowerTypeOption[]> {
   } catch (_error) {
     return POWER_TYPE_FALLBACK;
   }
+}
+
+const LENS_CATEGORY_FALLBACK: LensCategoryOption[] = [
+  {
+    id: 'lens-category-with-power-anti-glare-premium',
+    categoryName: 'Anti-Glare Premium',
+    displayLabel: 'Anti-Glare Premium',
+    description: 'Double side anti-glare lens with scratch resistant coating',
+    linkedPricingBand: 'Band-A',
+    usageAndMapping: 'Double Side Anti-Glare Lens, Scratch Resistant',
+    priority: 1,
+    powerTypeIds: ['power-with-power'],
+  },
+  {
+    id: 'lens-category-with-power-lenskart-blu-screen',
+    categoryName: 'Lenskart BLU Screen Lens',
+    displayLabel: 'Lenskart BLU Screen Lens',
+    description: 'Screen protection lenses that minimize eye strain',
+    linkedPricingBand: 'Band-B',
+    usageAndMapping: 'Screen Friendly, Screen Protection, Minimizes Eyestrain, Scratch & Smudge Resistant',
+    priority: 2,
+    powerTypeIds: ['power-with-power'],
+  },
+  {
+    id: 'lens-category-with-power-owndays-ishield',
+    categoryName: 'Owndays Japan BLU+ iShield',
+    displayLabel: 'Owndays Japan BLU+ iShield',
+    description: 'Night drive and low-light visibility enhancement lenses',
+    linkedPricingBand: 'Band-C',
+    usageAndMapping: 'Designed in Japan, Night Drive & Selfie Coating, Improves visibility in low-light and reduces glare, Advanced Screen Protection',
+    priority: 3,
+    powerTypeIds: ['power-with-power'],
+  },
+  {
+    id: 'lens-category-zero-power-blu-screen',
+    categoryName: 'BLU Screen Lenses',
+    displayLabel: 'BLU Screen Lenses',
+    description: 'Screen protection lenses that minimize eyestrain and resist scratches & smudges',
+    linkedPricingBand: 'Band-A',
+    usageAndMapping: 'Screen Friendly, Minimizes Eyestrain, Scratch & Smudge Resistant',
+    priority: 1,
+    powerTypeIds: ['power-zero-power'],
+  },
+  {
+    id: 'lens-category-zero-power-owndays-ishield',
+    categoryName: 'Owndays Japan BLU+ iShield',
+    displayLabel: 'Owndays Japan BLU+ iShield',
+    description: 'Japanese night-driving lenses with reflection control and screen protection',
+    linkedPricingBand: 'Band-B',
+    usageAndMapping: 'Designed in Japan, Reflection Control, Night Driving Support, Screen Protection',
+    priority: 2,
+    powerTypeIds: ['power-zero-power'],
+  },
+  {
+    id: 'lens-category-progressive-anti-glare',
+    categoryName: 'Lenskart Anti-Glare Normal Corridor Progressive',
+    displayLabel: 'Lenskart Anti-Glare Normal Corridor Progressive',
+    description: 'Anti-glare progressive lenses perfect for outdoors with enhanced reading experience',
+    linkedPricingBand: 'Band-A',
+    usageAndMapping: 'Anti-glare, Progressive Vision, Outdoor Usage',
+    priority: 1,
+    powerTypeIds: ['power-progressive-bifocals'],
+  },
+  {
+    id: 'lens-category-progressive-blu',
+    categoryName: 'Lenskart BLU Thin Wide Corridor Progressive',
+    displayLabel: 'Lenskart BLU Thin Wide Corridor Progressive',
+    description: 'Wide field progressive lenses with thin design and blue light protection',
+    linkedPricingBand: 'Band-C',
+    usageAndMapping: 'Wide Vision, Progressive Lens, Blue Light Protection',
+    priority: 2,
+    powerTypeIds: ['power-progressive-bifocals'],
+  },
+  {
+    id: 'lens-category-reading-circular-bifocal',
+    categoryName: 'Circular Bi-focal KT',
+    displayLabel: 'Circular Bi-focal KT',
+    description: 'Bi-focal lenses with concentrated circular reading zone and enhanced outdoor vision',
+    linkedPricingBand: 'Band-A',
+    usageAndMapping: 'Bifocal Vision, Reading Support, Outdoor Usage',
+    priority: 1,
+    powerTypeIds: ['power-reading-power'],
+  },
+];
+
+export async function fetchLensCategories(powerTypeId?: string): Promise<LensCategoryOption[]> {
+  try {
+    const url = new URL(`${getApiBaseUrl()}/api/lens-categories`);
+    if (powerTypeId) {
+      url.searchParams.set('powerTypeId', powerTypeId);
+    }
+
+    const response = await fetch(url.toString());
+    if (!response.ok) {
+      throw new Error(`Lens categories API returned ${response.status}`);
+    }
+
+    const payload = (await response.json()) as { data?: Array<{
+      id?: string;
+      _id?: string;
+      categoryName?: string;
+      displayLabel?: string;
+      description?: string;
+      linkedPricingBand?: string;
+      usageAndMapping?: string;
+      priority?: number;
+      powertype_id?: Array<{ id?: string; _id?: string } | string>;
+    }> };
+
+    return (payload.data ?? [])
+      .filter((item) => item.categoryName)
+      .sort((a, b) => (a.priority ?? 999) - (b.priority ?? 999))
+      .map((item, index) => ({
+        id: item.id ?? item._id ?? `lens-category-${index}`,
+        categoryName: item.categoryName ?? '',
+        displayLabel: item.displayLabel ?? item.categoryName ?? '',
+        description: item.description ?? '',
+        linkedPricingBand: item.linkedPricingBand ?? '',
+        usageAndMapping: item.usageAndMapping ?? '',
+        priority: item.priority ?? index + 1,
+        powerTypeIds: (item.powertype_id ?? []).map((powerType) => (
+          typeof powerType === 'string'
+            ? powerType
+            : powerType.id ?? powerType._id ?? ''
+        )).filter(Boolean),
+      }));
+  } catch (_error) {
+    const fallbackItems = powerTypeId
+      ? LENS_CATEGORY_FALLBACK.filter((item) => item.powerTypeIds.includes(powerTypeId))
+      : LENS_CATEGORY_FALLBACK;
+
+    return [...fallbackItems].sort((a, b) => a.priority - b.priority);
+  }
+}
+
+export async function createOrderPlacement(payload: OrderPlacementPayload): Promise<OrderPlacementResponse> {
+  const response = await fetch(`${getApiBaseUrl()}/api/order-placement`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Order placement API returned ${response.status}`);
+  }
+
+  const result = (await response.json()) as { data?: OrderPlacementResponse };
+  if (!result.data) {
+    throw new Error('Order placement API returned an invalid payload');
+  }
+
+  return result.data;
+}
+
+export async function fetchOrderPlacements(input?: {
+  phone?: string;
+  limit?: number;
+}): Promise<OrderPlacementRecord[]> {
+  const url = new URL(`${getApiBaseUrl()}/api/order-placement`);
+  const normalizedPhone = input?.phone?.replace(/\D/g, '').slice(-10);
+
+  if (normalizedPhone) {
+    url.searchParams.set('phone', normalizedPhone);
+  }
+
+  if (input?.limit) {
+    url.searchParams.set('limit', String(input.limit));
+  }
+
+  const response = await fetch(url.toString());
+  if (!response.ok) {
+    throw new Error(`Order placement list API returned ${response.status}`);
+  }
+
+  const result = (await response.json()) as { data?: OrderPlacementRecord[] };
+  return result.data ?? [];
+}
+
+export async function fetchOrderPlacementById(id: string): Promise<OrderPlacementRecord> {
+  const response = await fetch(`${getApiBaseUrl()}/api/order-placement/${id}`);
+  if (!response.ok) {
+    throw new Error(`Order placement details API returned ${response.status}`);
+  }
+
+  const result = (await response.json()) as { data?: OrderPlacementRecord };
+  if (!result.data) {
+    throw new Error('Order placement details API returned an invalid payload');
+  }
+
+  return result.data;
 }

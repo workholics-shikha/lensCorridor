@@ -22,9 +22,9 @@ export default function WishlistScreen() {
     return (
       <View style={styles.center}>
         <Heart size={56} color={Colors.gray300} />
-        <Text style={styles.emptyTitle}>Sign in to see your wishlist</Text>
-        <TouchableOpacity style={styles.signInBtn} onPress={() => router.push('/(auth)/login')}>
-          <Text style={styles.signInBtnText}>Sign In</Text>
+        <Text style={styles.emptyTitle}>Your wishlist is empty</Text>
+        <TouchableOpacity style={styles.signInBtn} onPress={() => router.push('/(tabs)')}>
+          <Text style={styles.signInBtnText}>Go to Home</Text>
         </TouchableOpacity>
       </View>
     );

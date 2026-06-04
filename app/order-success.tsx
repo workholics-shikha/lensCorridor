@@ -1,33 +1,54 @@
-import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
-import { useLocalSearchParams, router } from 'expo-router';
-import { CheckCircle, ShoppingBag, Home } from 'lucide-react-native';
-import { Colors, Spacing, Radius, FontSize, Shadow } from '@/lib/theme';
+import { router, useLocalSearchParams } from 'expo-router';
+import { Check, X } from 'lucide-react-native';
+import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+
+const brandImage = require('@/assets/images/Group-8734.png');
 
 export default function OrderSuccessScreen() {
-  const { orderId } = useLocalSearchParams<{ orderId: string }>();
+  const { orderId, invoiceDate } = useLocalSearchParams<{
+    orderId?: string;
+    invoiceDate?: string;
+  }>();
+
+  const resolvedOrderId = orderId || `INV-${Date.now().toString().slice(-8)}`;
+  const resolvedInvoiceDate = invoiceDate || new Date().toLocaleDateString('en-GB');
 
   return (
-    <View style={styles.container}>
+    <View style={styles.screen}>
+      <TouchableOpacity
+        style={styles.closeButton}
+        onPress={() => router.back()}
+        activeOpacity={0.88}
+      >
+        <X size={18} color="#5E6470" />
+      </TouchableOpacity>
+
+      <Image source={brandImage} resizeMode="contain" style={styles.brandImage} />
+
       <View style={styles.card}>
         <View style={styles.iconCircle}>
-          <CheckCircle size={60} color={Colors.success} />
+          <Check size={42} color="#FFFFFF" strokeWidth={4.2} />
         </View>
+
         <Text style={styles.title}>Order Placed!</Text>
-        <Text style={styles.subtitle}>Your order has been successfully placed and is being processed.</Text>
-        {orderId && (
-          <View style={styles.orderIdBox}>
-            <Text style={styles.orderIdLabel}>Order ID</Text>
-            <Text style={styles.orderId}>#{orderId.slice(-8).toUpperCase()}</Text>
-          </View>
-        )}
-        <Text style={styles.eta}>Estimated delivery: 3-5 business days</Text>
-        <TouchableOpacity style={styles.trackBtn} onPress={() => router.replace('/(tabs)/orders')}>
-          <ShoppingBag size={18} color={Colors.white} />
-          <Text style={styles.trackBtnText}>Track Order</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.homeBtn} onPress={() => router.replace('/(tabs)')}>
-          <Home size={16} color={Colors.primary} />
-          <Text style={styles.homeBtnText}>Back to Home</Text>
+        <Text style={styles.subtitle}>
+          Your order #{resolvedOrderId} has{'\n'}been placed success
+        </Text>
+
+        <TouchableOpacity
+          style={styles.invoiceButton}
+          activeOpacity={0.88}
+          onPress={() => {
+            router.push({
+              pathname: '/invoice',
+              params: {
+                orderId: resolvedOrderId,
+                invoiceDate: resolvedInvoiceDate,
+              },
+            });
+          }}
+        >
+          <Text style={styles.invoiceButtonText}>View Invoice</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -35,37 +56,72 @@ export default function OrderSuccessScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1, backgroundColor: Colors.background,
-    alignItems: 'center', justifyContent: 'center', padding: Spacing.xl,
+  screen: {
+    flex: 1,
+    backgroundColor: '#F8F8FD',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
+  brandImage: {
+    width: 170,
+    height: 36,
+    marginBottom: 18,
+  },
+  closeButton: {
+    position: 'absolute',
+    top: 24,
+    right: 24,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   card: {
-    backgroundColor: Colors.white, borderRadius: Radius.xl,
-    padding: Spacing.xl, alignItems: 'center', width: '100%', maxWidth: 420, ...Shadow.lg,
+    width: '100%',
+    maxWidth: 192,
+    borderRadius: 18,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingTop: 22,
+    paddingBottom: 16,
   },
   iconCircle: {
-    width: 100, height: 100, borderRadius: 50,
-    backgroundColor: '#DCFCE7', alignItems: 'center', justifyContent: 'center', marginBottom: Spacing.lg,
+    width: 78,
+    height: 78,
+    borderRadius: 39,
+    backgroundColor: '#156FE5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
   },
-  title: { fontSize: FontSize.xxl, fontWeight: '800', color: Colors.text, marginBottom: 8 },
-  subtitle: { fontSize: FontSize.md, color: Colors.textSecondary, textAlign: 'center', lineHeight: 22, marginBottom: Spacing.lg },
-  orderIdBox: {
-    backgroundColor: Colors.gray50, borderRadius: Radius.md,
-    paddingHorizontal: Spacing.lg, paddingVertical: Spacing.sm, marginBottom: Spacing.md, alignItems: 'center',
+  title: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#1C2027',
+    marginBottom: 6,
   },
-  orderIdLabel: { fontSize: FontSize.xs, color: Colors.textMuted, marginBottom: 2 },
-  orderId: { fontSize: FontSize.lg, fontWeight: '700', color: Colors.text, letterSpacing: 1.5 },
-  eta: { fontSize: FontSize.sm, color: Colors.textMuted, marginBottom: Spacing.xl },
-  trackBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    backgroundColor: Colors.primary, borderRadius: Radius.md,
-    paddingHorizontal: Spacing.xl, paddingVertical: Spacing.sm + 6, marginBottom: Spacing.sm, width: '100%', justifyContent: 'center',
+  subtitle: {
+    fontSize: 11.5,
+    lineHeight: 16,
+    color: '#8A8F99',
+    textAlign: 'center',
+    marginBottom: 16,
   },
-  trackBtnText: { color: Colors.white, fontWeight: '700', fontSize: FontSize.md },
-  homeBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    borderWidth: 1, borderColor: Colors.border, borderRadius: Radius.md,
-    paddingHorizontal: Spacing.xl, paddingVertical: Spacing.sm + 4, width: '100%', justifyContent: 'center',
+  invoiceButton: {
+    alignSelf: 'stretch',
+    minHeight: 28,
+    borderRadius: 6,
+    backgroundColor: '#EEF1F6',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  homeBtnText: { color: Colors.primary, fontWeight: '600', fontSize: FontSize.md },
+  invoiceButtonText: {
+    fontSize: 11.5,
+    fontWeight: '500',
+    color: '#1C2027',
+  },
 });

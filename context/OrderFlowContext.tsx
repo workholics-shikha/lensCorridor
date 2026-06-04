@@ -3,8 +3,11 @@ import React, { createContext, useContext, useMemo, useState } from 'react';
 type LensSelection = {
   lensType: string;
   lensCategory: string;
+  lensCategoryId: string;
+  lensPrice: number;
   coating: string;
   powerType: string;
+  powerTypeId: string;
   image: string;
 };
 
@@ -28,6 +31,11 @@ type OrderDraft = {
   phone: string;
   customerName: string;
   price: string;
+  billingAddress: string;
+  billingDiscount: string;
+  partialPaymentEnabled: boolean;
+  partialPaymentAmount: string;
+  paymentMode: 'Online' | 'Card' | 'Cash';
   selectedShape: string;
   frameImages: FrameImage[];
   lensSelection: LensSelection;
@@ -51,13 +59,21 @@ const defaultDraft: OrderDraft = {
   phone: '',
   customerName: '',
   price: '',
+  billingAddress: '',
+  billingDiscount: '0',
+  partialPaymentEnabled: false,
+  partialPaymentAmount: '',
+  paymentMode: 'Online',
   selectedShape: '',
   frameImages: [],
   lensSelection: {
     lensType: 'Single Vision',
     lensCategory: 'Blue Cut',
+    lensCategoryId: '',
+    lensPrice: 0,
     coating: 'Standard',
     powerType: 'Distance',
+    powerTypeId: '',
     image: '',
   },
   lensDetails: defaultLensDetails,
