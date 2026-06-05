@@ -1,3 +1,4 @@
+import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import { getCategories, getFrameShapes, getSalespeople } from './localStore';
 import { Category, FrameShape, Salesperson } from './types';
@@ -112,6 +113,16 @@ export interface OrderPlacementPayload {
   };
   meta?: {
     source?: string;
+    store?: {
+      id: string;
+      name: string;
+      code: string;
+    };
+    salesperson?: {
+      id: string;
+      name: string;
+      employeeId: string;
+    };
   };
 }
 
@@ -167,6 +178,16 @@ export interface OrderPlacementRecord extends OrderPlacementResponse {
   };
   meta?: {
     source?: string;
+    store?: {
+      id: string;
+      name: string;
+      code: string;
+    };
+    salesperson?: {
+      id: string;
+      name: string;
+      employeeId: string;
+    };
   };
   status: string;
   updatedAt: string;
@@ -178,11 +199,19 @@ function getApiBaseUrl() {
     return configuredBaseUrl.replace(/\/$/, '');
   }
 
+  const expoHostUri = Constants.expoConfig?.hostUri?.trim();
+  if (expoHostUri) {
+    const host = expoHostUri.split(':')[0]?.trim();
+    if (host) {
+      return `http://${host}:5000`;
+    }
+  }
+
   if (Platform.OS === 'android') {
     return 'http://10.0.2.2:5000';
   }
 
-  return 'http://localhost:5000';
+  return 'http://192.168.29.202:5000';
 }
 
 function resolveApiAssetUrl(path?: string) {
@@ -522,13 +551,19 @@ export async function createOrderPlacement(payload: OrderPlacementPayload): Prom
 
 export async function fetchOrderPlacements(input?: {
   phone?: string;
+  orderNumber?: string;
   limit?: number;
 }): Promise<OrderPlacementRecord[]> {
   const url = new URL(`${getApiBaseUrl()}/api/order-placement`);
   const normalizedPhone = input?.phone?.replace(/\D/g, '').slice(-10);
+  const normalizedOrderNumber = input?.orderNumber?.trim();
 
   if (normalizedPhone) {
     url.searchParams.set('phone', normalizedPhone);
+  }
+
+  if (normalizedOrderNumber) {
+    url.searchParams.set('orderNumber', normalizedOrderNumber);
   }
 
   if (input?.limit) {

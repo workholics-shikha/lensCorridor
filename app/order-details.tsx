@@ -125,7 +125,7 @@ export default function OrderDetailsScreen() {
             </View>
 
             <View style={styles.productInfo}>
-              <Text style={styles.productTitle}>Lenskorridor frame</Text>
+              <Text style={styles.productTitle}>Lenscorridor frame</Text>
               <Text style={styles.productSubtitle}>
                 Frame + {order.lensSelection.lensCategory || order.lensSelection.powerType || 'Lens'}
               </Text>

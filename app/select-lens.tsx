@@ -55,6 +55,8 @@ export default function SelectLensScreen() {
   }, []);
 
   const handleSelect = (item: PowerTypeOption) => {
+    const normalizedName = item.name.toLowerCase();
+
     updateLensSelection({
       powerTypeId: item.id,
       powerType: item.name,
@@ -65,8 +67,24 @@ export default function SelectLensScreen() {
       image: item.image,
     });
 
-    if (item.name.toLowerCase() === 'frame only') {
+    if (normalizedName === 'frame only') {
       router.push('/billing');
+      return;
+    }
+
+    if (normalizedName === 'with power') {
+      router.push('/lens-details');
+      return;
+    }
+
+    if (
+      normalizedName === 'reading power'
+      || normalizedName === 'progressive bifocals'
+    ) {
+      router.push({
+        pathname: '/prescription',
+        params: { mode: 'order-flow', nextPath: '/lens-details' },
+      });
       return;
     }
 

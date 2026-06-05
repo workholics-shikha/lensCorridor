@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import * as ImagePicker from 'expo-image-picker';
 import {
   Alert,
   Image,
+  KeyboardAvoidingView,
   Platform,
   ScrollView,
   StyleSheet,
@@ -20,7 +22,7 @@ import {
   Search,
   X,
 } from 'lucide-react-native';
-import { fetchFrameShapes, fetchOrderPlacements, type OrderPlacementRecord } from '@/lib/api';
+import { fetchOrderPlacements, type OrderPlacementRecord } from '@/lib/api';
 import { Shadow } from '@/lib/theme';
 import { useOrderFlow } from '@/context/OrderFlowContext';
 
@@ -110,36 +112,13 @@ export default function CheckoutScreen() {
   };
 
   useEffect(() => {
-    let active = true;
+    if (draft.frameImages.length) {
+      setFramePreviews(draft.frameImages);
+      return;
+    }
 
-    fetchFrameShapes().then((items) => {
-      if (!active) {
-        return;
-      }
-
-      const ordered = [...items].sort((a, b) => {
-        if (a.shape === shape) {
-          return -1;
-        }
-        if (b.shape === shape) {
-          return 1;
-        }
-        return 0;
-      });
-
-      setFramePreviews(
-        ordered.slice(0, 3).map((item, index) => ({
-          id: `${item.id}-${index}`,
-          image: item.image || undefined,
-          shape: item.shape,
-        }))
-      );
-    });
-
-    return () => {
-      active = false;
-    };
-  }, [shape]);
+    setFramePreviews([]);
+  }, [draft.frameImages]);
 
   useEffect(() => {
     const normalizedPhone = customerSearch.replace(/\D/g, '').slice(-10);
@@ -184,12 +163,64 @@ export default function CheckoutScreen() {
     };
   }, [customerSearch]);
 
-  const handleUploadPress = (source: 'camera' | 'gallery') => {
+  const appendFramePreview = (source: 'camera' | 'gallery', image?: string) => {
+    if (!image) {
+      return;
+    }
+
+    setFramePreviews((current) => ([
+      ...current,
+      {
+        id: `${source}-${Date.now()}-${current.length}`,
+        image,
+      },
+    ]));
+    setError('');
+  };
+
+  const handleUploadPress = async (source: 'camera' | 'gallery') => {
     if (Platform.OS !== 'web') {
-      Alert.alert(
-        'Upload unavailable',
-        `${source === 'camera' ? 'Camera' : 'Gallery'} selection needs an image-picker native module in this app build.`
-      );
+      try {
+        if (source === 'camera') {
+          const permission = await ImagePicker.requestCameraPermissionsAsync();
+          if (!permission.granted) {
+            Alert.alert('Permission required', 'Please allow camera access to capture a frame photo.');
+            return;
+          }
+        } else {
+          const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+          if (!permission.granted) {
+            Alert.alert('Permission required', 'Please allow photo library access to select a frame image.');
+            return;
+          }
+        }
+
+        const result = source === 'camera'
+          ? await ImagePicker.launchCameraAsync({
+            mediaTypes: ['images'],
+            quality: 0.8,
+            base64: true,
+          })
+          : await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ['images'],
+            quality: 0.8,
+            base64: true,
+          });
+
+        if (result.canceled || !result.assets?.length) {
+          return;
+        }
+
+        const asset = result.assets[0];
+        const image = asset.base64
+          ? `data:${asset.mimeType || 'image/jpeg'};base64,${asset.base64}`
+          : asset.uri;
+
+        appendFramePreview(source, image);
+      } catch (_error) {
+        Alert.alert('Upload unavailable', 'We could not open the image picker. Please try again.');
+      }
+
       return;
     }
 
@@ -217,21 +248,7 @@ export default function CheckoutScreen() {
           return;
         }
 
-        setFramePreviews((current) => {
-          const image = typeof reader.result === 'string' ? reader.result : undefined;
-          if (!image) {
-            return current;
-          }
-
-          return [
-            ...current,
-            {
-              id: `${source}-${Date.now()}-${current.length}`,
-              image,
-            },
-          ];
-        });
-        setError('');
+        appendFramePreview(source, typeof reader.result === 'string' ? reader.result : undefined);
       };
 
       reader.readAsDataURL(file);
@@ -273,7 +290,11 @@ export default function CheckoutScreen() {
   };
 
   return (
-    <View style={styles.screen}>
+    <KeyboardAvoidingView
+      style={styles.screen}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}
+    >
       <View style={styles.header}>
         <View style={[styles.headerInner, { maxWidth: containerWidth }]}>
           <TouchableOpacity style={styles.backButton} onPress={handleBack} activeOpacity={0.85}>
@@ -286,6 +307,8 @@ export default function CheckoutScreen() {
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.scrollContent, isTablet && styles.scrollContentTablet]}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
       >
         <View style={[styles.content, { maxWidth: containerWidth }]}>
           <View style={styles.fieldCard}>
@@ -379,7 +402,7 @@ export default function CheckoutScreen() {
             </View>
 
             <View style={[styles.previewStrip, isTablet && styles.previewStripTablet]}>
-              {framePreviews.map((item, index) => (
+              {framePreviews.length ? framePreviews.map((item, index) => (
                 <View
                   key={item.id}
                   style={[
@@ -405,7 +428,13 @@ export default function CheckoutScreen() {
                     <FrameArtwork shape={item.shape || 'rectangle'} large={index === 0} />
                   )}
                 </View>
-              ))}
+              )) : (
+                <View style={styles.emptyPreviewCard}>
+                  <FrameArtwork shape={shape || draft.selectedShape || 'rectangle'} large />
+                  <Text style={styles.emptyPreviewTitle}>No frame image added yet</Text>
+                  <Text style={styles.emptyPreviewText}>Use camera or gallery to attach the customer frame before continuing.</Text>
+                </View>
+              )}
             </View>
           </View>
 
@@ -440,7 +469,7 @@ export default function CheckoutScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -607,9 +636,10 @@ const styles = StyleSheet.create({
     color: '#202128',
   },
   scrollContent: {
+    flexGrow: 1,
     paddingHorizontal: 12,
     paddingTop: 22,
-    paddingBottom: 40,
+    paddingBottom: 56,
   },
   scrollContentTablet: {
     alignItems: 'center',
@@ -819,6 +849,33 @@ const styles = StyleSheet.create({
   previewStripTablet: {
     flex: 1,
     flexWrap: 'nowrap',
+  },
+  emptyPreviewCard: {
+    width: '100%',
+    minHeight: 170,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E7E8F0',
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 18,
+    paddingVertical: 18,
+    ...Shadow.sm,
+  },
+  emptyPreviewTitle: {
+    marginTop: 14,
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1E2028',
+  },
+  emptyPreviewText: {
+    marginTop: 6,
+    fontSize: 12,
+    lineHeight: 18,
+    textAlign: 'center',
+    color: '#7E8491',
+    maxWidth: 250,
   },
   previewCard: {
     backgroundColor: '#FFFFFF',

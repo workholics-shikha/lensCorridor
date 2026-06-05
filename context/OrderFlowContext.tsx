@@ -27,6 +27,18 @@ type FrameImage = {
   shape?: string;
 };
 
+type SelectedStore = {
+  id: string;
+  name: string;
+  code: string;
+};
+
+type SelectedSalesperson = {
+  id: string;
+  name: string;
+  employeeId: string;
+};
+
 type OrderDraft = {
   phone: string;
   customerName: string;
@@ -38,6 +50,8 @@ type OrderDraft = {
   paymentMode: 'Online' | 'Card' | 'Cash';
   selectedShape: string;
   frameImages: FrameImage[];
+  store: SelectedStore | null;
+  salesperson: SelectedSalesperson | null;
   lensSelection: LensSelection;
   lensDetails: LensDetail[];
 };
@@ -51,8 +65,8 @@ type OrderFlowContextType = {
 };
 
 const defaultLensDetails: LensDetail[] = [
-  { id: 'lens-right', label: 'Distance Vision', eye: 'right', sph: '-1.25', cyl: '-0.50', axis: '20', add: '0.00' },
-  { id: 'lens-left', label: 'Distance Vision', eye: 'left', sph: '-1.00', cyl: '-0.25', axis: '15', add: '0.00' },
+  { id: 'lens-right', label: 'Distance Vision', eye: 'right', sph: '', cyl: '', axis: '', add: '' },
+  { id: 'lens-left', label: 'Distance Vision', eye: 'left', sph: '', cyl: '', axis: '', add: '' },
 ];
 
 const defaultDraft: OrderDraft = {
@@ -66,6 +80,8 @@ const defaultDraft: OrderDraft = {
   paymentMode: 'Online',
   selectedShape: '',
   frameImages: [],
+  store: null,
+  salesperson: null,
   lensSelection: {
     lensType: 'Single Vision',
     lensCategory: 'Blue Cut',

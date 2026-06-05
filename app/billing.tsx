@@ -3,7 +3,9 @@ import { router } from 'expo-router';
 import {
   Alert,
   Image,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -21,6 +23,15 @@ import { Shadow } from '@/lib/theme';
 type PaymentMode = 'Online' | 'Card' | 'Cash';
 
 const userIcon = require('@/assets/images/user.png');
+
+const createFallbackOrderNumber = () => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = `${now.getMonth() + 1}`.padStart(2, '0');
+  const day = `${now.getDate()}`.padStart(2, '0');
+  const sequence = `${Math.floor(Math.random() * 10000)}`.padStart(4, '0');
+  return `LC-${year}${month}${day}-${sequence}`;
+};
 
 export default function BillingScreen() {
   const { draft, updateDraft } = useOrderFlow();
@@ -114,7 +125,11 @@ export default function BillingScreen() {
   };
 
   return (
-    <View style={styles.screen}>
+    <KeyboardAvoidingView
+      style={styles.screen}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}
+    >
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()} activeOpacity={0.8}>
           <ArrowLeft size={20} color="#1C1D21" />
@@ -122,7 +137,12 @@ export default function BillingScreen() {
         <Text style={styles.headerTitle}>Cart (1 item)</Text>
       </View>
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+      >
         <View style={styles.productCard}>
           <View style={styles.productImageShell}>
             {primaryFrame?.image ? (
@@ -133,7 +153,7 @@ export default function BillingScreen() {
           </View>
 
           <View style={styles.productBody}>
-            <Text style={styles.productTitle}>Lenskorridor frame</Text>
+            <Text style={styles.productTitle}>Lenscorridor frame</Text>
             <View style={styles.productDivider} />
             <View style={styles.productFooter}>
               <Text style={styles.productMeta}>{productSubtitle}</Text>
@@ -299,7 +319,7 @@ export default function BillingScreen() {
               return;
             }
 
-            const fallbackOrderId = `ord_${Date.now()}`;
+            const fallbackOrderId = createFallbackOrderNumber();
             const fallbackInvoiceDate = new Date().toLocaleDateString('en-GB', {
               day: '2-digit',
               month: 'short',
@@ -353,6 +373,8 @@ export default function BillingScreen() {
                 },
                 meta: {
                   source: 'mobile-app',
+                  store: draft.store ?? undefined,
+                  salesperson: draft.salesperson ?? undefined,
                 },
               });
 
@@ -394,82 +416,94 @@ export default function BillingScreen() {
         onRequestClose={() => setDetailsOpen(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <View style={styles.modalHeader}>
-              <Image source={userIcon} style={styles.modalHeaderIcon} resizeMode="contain" />
-              <Text style={styles.modalTitle}>Customer Information</Text>
-            </View>
-
-            <TextInput
-              value={customerName}
-              onChangeText={(value) => {
-                setCustomerName(formatPersonName(value));
-                if (detailsErrors.name) {
-                  setDetailsErrors((current) => ({ ...current, name: undefined }));
-                }
-              }}
-              placeholder="Name"
-              placeholderTextColor="#9095A0"
-              style={[styles.modalInput, detailsErrors.name && styles.modalInputError]}
-            />
-            {detailsErrors.name ? <Text style={styles.modalErrorText}>{detailsErrors.name}</Text> : null}
-
-            <TextInput
-              value={customerPhone}
-              onChangeText={(value) => {
-                setCustomerPhone(value.replace(/[^0-9]/g, ''));
-                if (detailsErrors.phone) {
-                  setDetailsErrors((current) => ({ ...current, phone: undefined }));
-                }
-              }}
-              placeholder="Mobile Number"
-              placeholderTextColor="#9095A0"
-              keyboardType="phone-pad"
-              style={[styles.modalInput, detailsErrors.phone && styles.modalInputError]}
-            />
-            {detailsErrors.phone ? <Text style={styles.modalErrorText}>{detailsErrors.phone}</Text> : null}
-
-            <TextInput
-              value={customerAddress}
-              onChangeText={(value) => {
-                setCustomerAddress(value);
-                if (detailsErrors.address) {
-                  setDetailsErrors((current) => ({ ...current, address: undefined }));
-                }
-              }}
-              placeholder="Address"
-              placeholderTextColor="#9095A0"
-              multiline
-              textAlignVertical="top"
-              style={[styles.modalInput, styles.modalTextarea, detailsErrors.address && styles.modalInputError]}
-            />
-            {detailsErrors.address ? <Text style={styles.modalErrorText}>{detailsErrors.address}</Text> : null}
-
-            <TouchableOpacity
-              style={styles.modalSaveButton}
-              activeOpacity={0.88}
-              onPress={() => {
-                if (!validateCustomerFields()) {
-                  return;
-                }
-
-                const savedAddress = customerAddress.trim();
-                setAddress(savedAddress);
-                setCustomerName(formatPersonName(customerName));
-                updateDraft({
-                  customerName: formatPersonName(customerName),
-                  phone: customerPhone.trim(),
-                  billingAddress: savedAddress,
-                });
-                setDetailsOpen(false);
-              }}
+          <KeyboardAvoidingView
+            style={styles.modalAvoidingView}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 24 : 0}
+          >
+            <ScrollView
+              contentContainerStyle={styles.modalScrollContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
             >
-              <Text style={styles.modalSaveText}>Save</Text>
-            </TouchableOpacity>
-          </View>
+              <View style={styles.modalCard}>
+                <View style={styles.modalHeader}>
+                  <Image source={userIcon} style={styles.modalHeaderIcon} resizeMode="contain" />
+                  <Text style={styles.modalTitle}>Customer Information</Text>
+                </View>
+
+                <TextInput
+                  value={customerName}
+                  onChangeText={(value) => {
+                    setCustomerName(formatPersonName(value));
+                    if (detailsErrors.name) {
+                      setDetailsErrors((current) => ({ ...current, name: undefined }));
+                    }
+                  }}
+                  placeholder="Name"
+                  placeholderTextColor="#9095A0"
+                  style={[styles.modalInput, detailsErrors.name && styles.modalInputError]}
+                />
+                {detailsErrors.name ? <Text style={styles.modalErrorText}>{detailsErrors.name}</Text> : null}
+
+                <TextInput
+                  value={customerPhone}
+                  onChangeText={(value) => {
+                    setCustomerPhone(value.replace(/[^0-9]/g, ''));
+                    if (detailsErrors.phone) {
+                      setDetailsErrors((current) => ({ ...current, phone: undefined }));
+                    }
+                  }}
+                  placeholder="Mobile Number"
+                  placeholderTextColor="#9095A0"
+                  keyboardType="phone-pad"
+                  style={[styles.modalInput, detailsErrors.phone && styles.modalInputError]}
+                />
+                {detailsErrors.phone ? <Text style={styles.modalErrorText}>{detailsErrors.phone}</Text> : null}
+
+                <TextInput
+                  value={customerAddress}
+                  onChangeText={(value) => {
+                    setCustomerAddress(value);
+                    if (detailsErrors.address) {
+                      setDetailsErrors((current) => ({ ...current, address: undefined }));
+                    }
+                  }}
+                  placeholder="Address"
+                  placeholderTextColor="#9095A0"
+                  multiline
+                  textAlignVertical="top"
+                  style={[styles.modalInput, styles.modalTextarea, detailsErrors.address && styles.modalInputError]}
+                />
+                {detailsErrors.address ? <Text style={styles.modalErrorText}>{detailsErrors.address}</Text> : null}
+
+                <TouchableOpacity
+                  style={styles.modalSaveButton}
+                  activeOpacity={0.88}
+                  onPress={() => {
+                    if (!validateCustomerFields()) {
+                      return;
+                    }
+
+                    const savedAddress = customerAddress.trim();
+                    setAddress(savedAddress);
+                    setCustomerName(formatPersonName(customerName));
+                    updateDraft({
+                      customerName: formatPersonName(customerName),
+                      phone: customerPhone.trim(),
+                      billingAddress: savedAddress,
+                    });
+                    setDetailsOpen(false);
+                  }}
+                >
+                  <Text style={styles.modalSaveText}>Save</Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          </KeyboardAvoidingView>
         </View>
       </Modal>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -545,9 +579,10 @@ const styles = StyleSheet.create({
     letterSpacing: 0.1,
   },
   content: {
+    flexGrow: 1,
     paddingHorizontal: 14,
     paddingTop: 18,
-    paddingBottom: 40,
+    paddingBottom: 64,
   },
   productCard: {
     backgroundColor: '#FFFFFF',
@@ -851,6 +886,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 20,
+  },
+  modalAvoidingView: {
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalScrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    paddingVertical: 20,
   },
   modalCard: {
     width: '100%',

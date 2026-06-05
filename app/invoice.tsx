@@ -243,7 +243,7 @@ function buildInvoiceText({
   paymentMode: string;
 }) {
   return [
-    'LensCorridor Invoice',
+    'Lens Corridor Invoice',
     `Order ID: ${orderId}`,
     `Date: ${invoiceDate}`,
     '',

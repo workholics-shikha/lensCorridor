@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   TextInput, Platform, Dimensions, Image,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { router } from 'expo-router';
 import { User, Phone, Mail, LogOut, ChevronRight, Shield, FileText, Bell, HelpCircle, Star } from 'lucide-react-native';
@@ -59,7 +60,18 @@ export default function ProfileScreen() {
   }
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 12 : 0}
+    >
+      <ScrollView
+        style={styles.container}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+        contentContainerStyle={styles.scrollContent}
+      >
       {/* Header */}
       <View style={styles.profileHeader}>
         <View style={styles.avatar}>
@@ -123,7 +135,8 @@ export default function ProfileScreen() {
       </View>
 
       <View style={{ height: Spacing.xxl }} />
-    </ScrollView>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -145,6 +158,7 @@ const menuStyles = StyleSheet.create({
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
+  scrollContent: { flexGrow: 1, paddingBottom: Spacing.xl },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.background, padding: Spacing.xl },
   profileHeader: {
     flexDirection: 'row', alignItems: 'center',

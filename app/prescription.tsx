@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import {
+  KeyboardAvoidingView,
   Modal,
   Platform,
   ScrollView,
@@ -11,8 +12,10 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { router } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { ArrowLeft, CheckCircle, ChevronDown, FileText, X } from 'lucide-react-native';
 import { useAuth } from '@/context/AuthContext';
+import { useOrderFlow } from '@/context/OrderFlowContext';
 import { savePrescription } from '@/lib/localStore';
 import { Colors, FontSize, Radius, Shadow, Spacing } from '@/lib/theme';
 
@@ -30,17 +33,29 @@ type SelectorState = {
 
 export default function PrescriptionScreen() {
   const { user } = useAuth();
+  const { draft, updateLensDetail } = useOrderFlow();
+  const { mode, nextPath } = useLocalSearchParams<{ mode?: string; nextPath?: string }>();
   const { width } = useWindowDimensions();
   const isCompact = width < 760;
+  const isOrderFlow = mode === 'order-flow';
+  const resolvedNextPath = nextPath === '/billing' ? '/billing' : '/lens-details';
   const [samePower, setSamePower] = useState(false);
   const [hasCylindricalPower, setHasCylindricalPower] = useState(false);
   const [selector, setSelector] = useState<SelectorState>({ open: false, eye: 'right', field: 'sph' });
-  const [rightEye, setRightEye] = useState({ sph: '', cyl: '', axis: '' });
-  const [leftEye, setLeftEye] = useState({ sph: '', cyl: '', axis: '' });
-  const [customerName, setCustomerName] = useState('');
-  const [mobileNumber, setMobileNumber] = useState('');
+  const [rightEye, setRightEye] = useState({
+    sph: draft.lensDetails.find((item) => item.eye === 'right')?.sph ?? '',
+    cyl: draft.lensDetails.find((item) => item.eye === 'right')?.cyl ?? '',
+    axis: draft.lensDetails.find((item) => item.eye === 'right')?.axis ?? '',
+  });
+  const [leftEye, setLeftEye] = useState({
+    sph: draft.lensDetails.find((item) => item.eye === 'left')?.sph ?? '',
+    cyl: draft.lensDetails.find((item) => item.eye === 'left')?.cyl ?? '',
+    axis: draft.lensDetails.find((item) => item.eye === 'left')?.axis ?? '',
+  });
+  const [customerName, setCustomerName] = useState(draft.customerName);
+  const [mobileNumber, setMobileNumber] = useState(draft.phone);
   const [email, setEmail] = useState(user?.email ?? '');
-  const [address, setAddress] = useState('');
+  const [address, setAddress] = useState(draft.billingAddress);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
@@ -115,6 +130,30 @@ export default function PrescriptionScreen() {
   const handleSave = async () => {
     setError('');
 
+    if (!rightEye.sph && !leftEye.sph) {
+      setError('Please select at least one spherical power value.');
+      return;
+    }
+
+    if (isOrderFlow) {
+      updateLensDetail('lens-right', {
+        label: draft.lensSelection.powerType || 'Distance Vision',
+        sph: rightEye.sph,
+        cyl: hasCylindricalPower ? rightEye.cyl : '',
+        axis: hasCylindricalPower ? rightEye.axis : '',
+        add: rightEye.sph,
+      });
+      updateLensDetail('lens-left', {
+        label: draft.lensSelection.powerType || 'Distance Vision',
+        sph: samePower ? rightEye.sph : leftEye.sph,
+        cyl: hasCylindricalPower ? (samePower ? rightEye.cyl : leftEye.cyl) : '',
+        axis: hasCylindricalPower ? (samePower ? rightEye.axis : leftEye.axis) : '',
+        add: samePower ? rightEye.sph : leftEye.sph,
+      });
+      router.push(resolvedNextPath);
+      return;
+    }
+
     if (!customerName.trim()) {
       setError('Please enter customer name.');
       return;
@@ -122,11 +161,6 @@ export default function PrescriptionScreen() {
 
     if (!mobileNumber.trim() || mobileNumber.trim().length < 10) {
       setError('Please enter a valid mobile number.');
-      return;
-    }
-
-    if (!rightEye.sph && !leftEye.sph) {
-      setError('Please select at least one spherical power value.');
       return;
     }
 
@@ -177,15 +211,24 @@ export default function PrescriptionScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}
+    >
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.86}>
           <ArrowLeft size={18} color={Colors.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Eye Test</Text>
+        <Text style={styles.headerTitle}>{isOrderFlow ? 'Power Selection' : 'Eye Test'}</Text>
       </View>
 
-      <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.body}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+      >
         <View style={styles.canvas}>
           <View style={styles.prescriptionCard}>
             <View style={styles.cardHeader}>
@@ -243,7 +286,7 @@ export default function PrescriptionScreen() {
             ) : null}
           </View>
 
-          <Text style={styles.sectionTitle}>Customer Details</Text>
+          {!isOrderFlow ? <Text style={styles.sectionTitle}>Customer Details</Text> : null}
 
           {error ? (
             <View style={styles.errorBox}>
@@ -251,40 +294,44 @@ export default function PrescriptionScreen() {
             </View>
           ) : null}
 
-          <View style={[styles.formGrid, isCompact && styles.formGridCompact]}>
-            <TextInput
-              value={customerName}
-              onChangeText={setCustomerName}
-              placeholder="Name"
-              placeholderTextColor={Colors.gray400}
-              style={[styles.input, styles.flexField]}
-            />
-            <TextInput
-              value={mobileNumber}
-              onChangeText={(value) => setMobileNumber(value.replace(/[^0-9]/g, '').slice(0, 10))}
-              placeholder="Mobile Number"
-              placeholderTextColor={Colors.gray400}
-              keyboardType="phone-pad"
-              style={[styles.input, styles.flexField]}
-            />
-            <TextInput
-              value={email}
-              onChangeText={setEmail}
-              placeholder="Email"
-              placeholderTextColor={Colors.gray400}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              style={[styles.input, styles.flexField]}
-            />
-          </View>
+          {!isOrderFlow ? (
+            <>
+              <View style={[styles.formGrid, isCompact && styles.formGridCompact]}>
+                <TextInput
+                  value={customerName}
+                  onChangeText={setCustomerName}
+                  placeholder="Name"
+                  placeholderTextColor={Colors.gray400}
+                  style={[styles.input, styles.flexField]}
+                />
+                <TextInput
+                  value={mobileNumber}
+                  onChangeText={(value) => setMobileNumber(value.replace(/[^0-9]/g, '').slice(0, 10))}
+                  placeholder="Mobile Number"
+                  placeholderTextColor={Colors.gray400}
+                  keyboardType="phone-pad"
+                  style={[styles.input, styles.flexField]}
+                />
+                <TextInput
+                  value={email}
+                  onChangeText={setEmail}
+                  placeholder="Email"
+                  placeholderTextColor={Colors.gray400}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  style={[styles.input, styles.flexField]}
+                />
+              </View>
 
-          <TextInput
-            value={address}
-            onChangeText={setAddress}
-            placeholder="Address"
-            placeholderTextColor={Colors.gray400}
-            style={[styles.input, styles.addressInput]}
-          />
+              <TextInput
+                value={address}
+                onChangeText={setAddress}
+                placeholder="Address"
+                placeholderTextColor={Colors.gray400}
+                style={[styles.input, styles.addressInput]}
+              />
+            </>
+          ) : null}
 
           <TouchableOpacity
             style={[styles.saveBtn, saving && styles.saveBtnDisabled]}
@@ -292,7 +339,9 @@ export default function PrescriptionScreen() {
             onPress={handleSave}
             disabled={saving}
           >
-            <Text style={styles.saveBtnText}>{saving ? 'Saving...' : 'Save'}</Text>
+            <Text style={styles.saveBtnText}>
+              {saving ? 'Saving...' : isOrderFlow ? 'Continue' : 'Save'}
+            </Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -335,25 +384,34 @@ export default function PrescriptionScreen() {
                     return (
                       <TouchableOpacity
                         key={option}
-                        style={styles.optionCell}
-                        activeOpacity={0.86}
-                        onPress={() => {
-                          updateEyeValue(selector.eye, selector.field, option);
-                          setSelector((current) => ({ ...current, open: false }));
-                        }}
-                      >
-                        <View style={[styles.optionRadio, selected && styles.optionRadioActive]} />
-                        <Text style={[styles.optionText, selected && styles.optionTextActive]}>{option}</Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              ))}
+                      style={styles.optionCell}
+                      activeOpacity={0.86}
+                      onPress={() => {
+                        updateEyeValue(selector.eye, selector.field, option);
+                      }}
+                    >
+                      <View style={[styles.optionRadio, selected && styles.optionRadioActive]} />
+                      <Text style={[styles.optionText, selected && styles.optionTextActive]}>{option}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            ))}
             </ScrollView>
+
+            <View style={styles.selectorFooter}>
+              <TouchableOpacity
+                style={styles.selectorDoneButton}
+                activeOpacity={0.88}
+                onPress={() => setSelector((current) => ({ ...current, open: false }))}
+              >
+                <Text style={styles.selectorDoneText}>Done</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -487,8 +545,9 @@ const styles = StyleSheet.create({
     color: Colors.text,
   },
   body: {
+    flexGrow: 1,
     padding: 22,
-    paddingBottom: 44,
+    paddingBottom: 56,
   },
   canvas: {
     backgroundColor: '#F8F8FD',
@@ -713,6 +772,25 @@ const styles = StyleSheet.create({
   },
   selectorList: {
     maxHeight: 320,
+  },
+  selectorFooter: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#EEF1F5',
+    backgroundColor: Colors.white,
+  },
+  selectorDoneButton: {
+    minHeight: 36,
+    borderRadius: 10,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  selectorDoneText: {
+    color: Colors.white,
+    fontSize: 13,
+    fontWeight: '700',
   },
   optionRow: {
     flexDirection: 'row',

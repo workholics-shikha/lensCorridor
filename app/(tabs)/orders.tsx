@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   FlatList,
   Image,
+  KeyboardAvoidingView,
   Platform,
   ScrollView,
   StyleSheet,
@@ -143,12 +144,21 @@ export default function OrdersScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 12 : 0}
+    >
       <View style={styles.header}>
         <Text style={styles.headerTitle}>My Order</Text>
       </View>
 
-      <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.body}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+      >
         <View style={styles.sectionHeader}>
           <View style={styles.sectionLabelRow}>
             <History size={14} color={Colors.primary} />
@@ -252,7 +262,7 @@ export default function OrdersScreen() {
           </View>
         ) : null}
       </ScrollView>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -298,7 +308,7 @@ function OrderHistoryCard({
         </View>
 
         <View style={styles.productBody}>
-          <Text style={styles.productTitle}>Lenskorridor frame</Text>
+          <Text style={styles.productTitle}>Lenscorridor frame</Text>
           <Text style={styles.productSub}>
             Frame + {order.lensSelection.lensCategory || order.lensSelection.powerType || 'Lens'}
           </Text>
@@ -359,6 +369,7 @@ const styles = StyleSheet.create({
     color: '#20242B',
   },
   body: {
+    flexGrow: 1,
     padding: 14,
     paddingBottom: 110,
   },

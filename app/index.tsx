@@ -1,24 +1,26 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ActivityIndicator,
-  Dimensions, Platform, Image, ImageBackground,
+  Platform, Image, ImageBackground, ScrollView, useWindowDimensions,
 } from 'react-native';
 import { router } from 'expo-router';
 import { ChevronDown } from 'lucide-react-native';
 import { useAuth } from '@/context/AuthContext';
+import { useOrderFlow } from '@/context/OrderFlowContext';
 import { fetchSalespeople, fetchStores, StoreOption } from '@/lib/api';
 import { Salesperson } from '@/lib/types';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '@/lib/theme';
 
-const { width } = Dimensions.get('window');
-const isTablet = width >= 768;
 const logoImage = require('@/assets/images/lens-corridor-logo.png');
 const splashBackground = require('@/assets/images/splash-background.png');
-const logoWidth = Math.min(width * 0.58, isTablet ? 320 : 220);
-const logoHeight = logoWidth * 0.53;
 
 export default function SplashScreen() {
   const { user, loading } = useAuth();
+  const { updateDraft } = useOrderFlow();
+  const { width } = useWindowDimensions();
+  const isTablet = width >= 768;
+  const logoWidth = useMemo(() => Math.min(width * 0.58, isTablet ? 320 : 220), [width, isTablet]);
+  const logoHeight = logoWidth * 0.53;
   const [stores, setStores] = useState<StoreOption[]>([]);
   const [selectedStore, setSelectedStore] = useState<StoreOption | null>(null);
   const [salespeople, setSalespeople] = useState<Salesperson[]>([]);
@@ -26,6 +28,13 @@ export default function SplashScreen() {
   const [storeDropdownOpen, setStoreDropdownOpen] = useState(false);
   const [salespersonDropdownOpen, setSalespersonDropdownOpen] = useState(false);
   const [selectionError, setSelectionError] = useState('');
+  const capitalizeWords = (text: string) => {
+    return text
+      ?.toLowerCase()
+      .replace(/\b\w/g, (char) => char.toUpperCase());
+  };
+
+  const controlsWidth = isTablet ? Math.min(width * 0.62, 480) : Math.min(width * 0.9, 420);
 
   useEffect(() => {
     fetchStores().then(setStores);
@@ -50,6 +59,20 @@ export default function SplashScreen() {
       setSelectionError('Please select both a store and a salesman before continuing.');
       return;
     }
+
+    updateDraft({
+      store: {
+        id: selectedStore.id,
+        name: selectedStore.name,
+        code: selectedStore.code,
+      },
+      salesperson: {
+        id: selectedSalesperson.id,
+        name: selectedSalesperson.name,
+        employeeId: selectedSalesperson.employee_id,
+      },
+    });
+
     router.push('/(tabs)');
   };
 
@@ -58,6 +81,20 @@ export default function SplashScreen() {
       setSelectionError('Please select both a store and a salesman before continuing.');
       return;
     }
+
+    updateDraft({
+      store: {
+        id: selectedStore.id,
+        name: selectedStore.name,
+        code: selectedStore.code,
+      },
+      salesperson: {
+        id: selectedSalesperson.id,
+        name: selectedSalesperson.name,
+        employeeId: selectedSalesperson.employee_id,
+      },
+    });
+
     router.push('/(tabs)');
   };
 
@@ -76,118 +113,141 @@ export default function SplashScreen() {
       imageStyle={styles.backgroundImage}
       resizeMode="cover"
     >
-      <View style={styles.logoSection}>
-        <View style={styles.logoContainer}>
-          <Image
-            source={logoImage}
-            style={[
-              styles.logoImage,
-              { width: logoWidth, height: logoHeight },
-              isTablet && styles.logoImageTablet,
-            ]}
-            resizeMode="contain"
-          />
-        </View>
-      </View>
-
-      <View style={[styles.controlsSection, isTablet && styles.controlsSectionTablet]}>
-        <TouchableOpacity
-          style={styles.dropdown}
-          onPress={() => {
-            setStoreDropdownOpen(!storeDropdownOpen);
-            setSalespersonDropdownOpen(false);
-          }}
-          activeOpacity={0.8}
-        >
-          <Text style={[styles.dropdownText, selectedStore && styles.dropdownTextSelected]}>
-            {selectedStore
-              ? `${selectedStore.name} (${selectedStore.code})`
-              : 'Select Store'}
-          </Text>
-          <ChevronDown
-            size={18}
-            color={selectedStore ? Colors.text : Colors.gray500}
-            style={{ transform: [{ rotate: storeDropdownOpen ? '180deg' : '0deg' }] }}
-          />
-        </TouchableOpacity>
-
-        {storeDropdownOpen && (
-          <View style={styles.dropdownList}>
-            {stores.map((store) => (
-              <TouchableOpacity
-                key={store.id}
-                style={styles.dropdownItem}
-                onPress={() => {
-                  setSelectedStore(store);
-                  setStoreDropdownOpen(false);
-                  setSelectionError('');
-                }}
-              >
-                <Text style={styles.dropdownItemText}>{store.name}</Text>
-                <Text style={styles.dropdownItemSub}>{store.code}</Text>
-              </TouchableOpacity>
-            ))}
+      <ScrollView
+        bounces={false}
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        style={styles.scroll}
+      >
+        <View style={styles.contentWrap}>
+          <View style={styles.logoSection}>
+            <View style={styles.logoContainer}>
+              <Image
+                source={logoImage}
+                style={[
+                  styles.logoImage,
+                  { width: logoWidth, height: logoHeight },
+                  isTablet && styles.logoImageTablet,
+                ]}
+                resizeMode="contain"
+              />
+            </View>
           </View>
-        )}
 
-        <TouchableOpacity
-          style={[styles.dropdown, styles.secondaryDropdown]}
-          onPress={() => {
-            setSalespersonDropdownOpen(!salespersonDropdownOpen);
-            setStoreDropdownOpen(false);
-          }}
-          activeOpacity={0.8}
-        >
-          <Text style={[styles.dropdownText, selectedSalesperson && styles.dropdownTextSelected]}>
-            {selectedSalesperson
-              ? `${selectedSalesperson.name} (${selectedSalesperson.employee_id})`
-              : 'Select Salesman Id or Name'}
-          </Text>
-          <ChevronDown
-            size={18}
-            color={selectedSalesperson ? Colors.text : Colors.gray500}
-            style={{ transform: [{ rotate: salespersonDropdownOpen ? '180deg' : '0deg' }] }}
-          />
-        </TouchableOpacity>
-
-        {salespersonDropdownOpen && (
-          <View style={styles.dropdownList}>
-            {salespeople.map((sp) => (
+          <View style={[
+            styles.controlsSection,
+            { width: controlsWidth, maxWidth: '100%' },
+            isTablet && styles.controlsSectionTablet,
+          ]}>
+            <View style={[styles.dropdownShell, storeDropdownOpen && styles.dropdownShellRaised]}>
               <TouchableOpacity
-                key={sp.id}
-                style={styles.dropdownItem}
+                style={styles.dropdown}
                 onPress={() => {
-                  setSelectedSalesperson(sp);
+                  setStoreDropdownOpen(!storeDropdownOpen);
                   setSalespersonDropdownOpen(false);
-                  setSelectionError('');
                 }}
+                activeOpacity={0.8}
               >
-                <Text style={styles.dropdownItemText}>{sp.name}</Text>
-                <Text style={styles.dropdownItemSub}>{sp.employee_id}</Text>
+                <Text style={[styles.dropdownText, selectedStore && styles.dropdownTextSelected]} numberOfLines={1}>
+                  {selectedStore
+                    ? `${selectedStore.name} (${selectedStore.code})`
+                    : 'Select Store'}
+                </Text>
+                <ChevronDown
+                  size={18}
+                  color={selectedStore ? Colors.text : Colors.gray500}
+                  style={{ transform: [{ rotate: storeDropdownOpen ? '180deg' : '0deg' }] }}
+                />
               </TouchableOpacity>
-            ))}
-          </View>
-        )}
 
-        {selectionError ? (
-          <View style={styles.errorBox}>
-            <Text style={styles.errorText}>{selectionError}</Text>
-          </View>
-        ) : null}
+              {storeDropdownOpen && (
+                <View style={styles.dropdownList}>
+                  {stores.map((store) => (
+                    <TouchableOpacity
+                      key={store.id}
+                      style={styles.dropdownItem}
+                      onPress={() => {
+                        setSelectedStore(store);
+                        setStoreDropdownOpen(false);
+                        setSelectionError('');
+                      }}
+                    >
+                      <Text style={styles.dropdownItemText}>
+                        {store.name?.charAt(0).toUpperCase() + store.name?.slice(1).toLowerCase()}
+                      </Text>
+                      <Text style={styles.dropdownItemSub}>{store.code}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+            </View>
 
-        <View style={styles.buttonsRow}>
-          <TouchableOpacity style={styles.btnPrimary} onPress={handleNewOrder} activeOpacity={0.85}>
-            <Text style={styles.btnPrimaryText}>New Order</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.btnSecondary} onPress={handleReturnExchange} activeOpacity={0.85}>
-            <Text style={styles.btnSecondaryText}>Return / Exchange</Text>
-          </TouchableOpacity>
+            <View style={[styles.dropdownShell, salespersonDropdownOpen && styles.dropdownShellRaised, styles.secondaryDropdown]}>
+              <TouchableOpacity
+                style={styles.dropdown}
+                onPress={() => {
+                  setSalespersonDropdownOpen(!salespersonDropdownOpen);
+                  setStoreDropdownOpen(false);
+                }}
+                activeOpacity={0.8}
+              >
+                <Text
+                  style={[
+                    styles.dropdownText,
+                    selectedSalesperson && styles.dropdownTextSelected
+                  ]}
+                  numberOfLines={1}
+                >
+                  {selectedSalesperson
+                    ? `${capitalizeWords(selectedSalesperson.name)} (${selectedSalesperson.employee_id})`
+                    : 'Select Salesman Id or Name'}
+                </Text>
+
+                <ChevronDown
+                  size={18}
+                  color={selectedSalesperson ? Colors.text : Colors.gray500}
+                  style={{ transform: [{ rotate: salespersonDropdownOpen ? '180deg' : '0deg' }] }}
+                />
+              </TouchableOpacity>
+
+              {salespersonDropdownOpen && (
+                <View style={styles.dropdownList}>
+                  {salespeople.map((sp) => (
+                    <TouchableOpacity
+                      key={sp.id}
+                      style={styles.dropdownItem}
+                      onPress={() => {
+                        setSelectedSalesperson(sp);
+                        setSalespersonDropdownOpen(false);
+                        setSelectionError('');
+                      }}
+                    >
+                      <Text style={styles.dropdownItemText}>{capitalizeWords(sp.name)}</Text>
+                      <Text style={styles.dropdownItemSub}>{sp.employee_id}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+            </View>
+
+            {selectionError ? (
+              <View style={styles.errorBox}>
+                <Text style={styles.errorText}>{selectionError}</Text>
+              </View>
+            ) : null}
+
+            <View style={[styles.buttonsRow, isTablet && styles.buttonsRowTablet]}>
+              <TouchableOpacity style={[styles.btnPrimary, styles.actionButton]} onPress={handleNewOrder} activeOpacity={0.85}>
+                <Text style={styles.btnPrimaryText}>New Order</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.btnSecondary, styles.actionButton]} onPress={handleReturnExchange} activeOpacity={0.85}>
+                <Text style={styles.btnSecondaryText}>Return / Exchange</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
-      </View>
-
-      <View style={styles.bottomIndicator}>
-        <View style={styles.indicatorBar} />
-      </View>
+      </ScrollView> 
     </ImageBackground>
   );
 }
@@ -202,9 +262,20 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.primary,
+  },
+  scroll: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+  },
+  contentWrap: {
+    flex: 1,
+    width: '100%',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: Spacing.xl,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xl,
   },
   backgroundImage: {
     width: '100%',
@@ -212,10 +283,12 @@ const styles = StyleSheet.create({
   },
   logoSection: {
     alignItems: 'center',
-    marginBottom: Spacing.xxl,
+    marginBottom: Spacing.xl,
+    width: '100%',
   },
   logoContainer: {
     alignItems: 'center',
+    width: '100%',
   },
   logoImage: {
     maxWidth: '100%',
@@ -224,12 +297,21 @@ const styles = StyleSheet.create({
     maxWidth: 320,
   },
   controlsSection: {
-    width: '100%',
-    maxWidth: 400,
+    alignSelf: 'center',
     alignItems: 'center',
+    overflow: 'visible',
+    zIndex: 2,
   },
   controlsSectionTablet: {
-    maxWidth: 480,
+    alignItems: 'stretch',
+  },
+  dropdownShell: {
+    width: '100%',
+    position: 'relative',
+    zIndex: 1,
+  },
+  dropdownShellRaised: {
+    zIndex: 30,
   },
   dropdown: {
     width: '100%',
@@ -244,6 +326,20 @@ const styles = StyleSheet.create({
   },
   secondaryDropdown: {
     marginTop: Spacing.sm,
+  },
+  dropdownList: {
+    position: 'absolute',
+    top: '100%',
+    left: 0,
+    right: 0,
+    backgroundColor: Colors.white,
+    borderRadius: Radius.md,
+    marginTop: Spacing.xs,
+    ...Shadow.md,
+    maxHeight: 220,
+    overflow: 'hidden',
+    zIndex: 40,
+    elevation: 8,
   },
   errorBox: {
     width: '100%',
@@ -262,19 +358,11 @@ const styles = StyleSheet.create({
     fontSize: FontSize.md,
     color: Colors.gray400,
     flex: 1,
+    marginRight: Spacing.sm,
   },
   dropdownTextSelected: {
     color: Colors.text,
     fontWeight: '500',
-  },
-  dropdownList: {
-    width: '100%',
-    backgroundColor: Colors.white,
-    borderRadius: Radius.md,
-    marginTop: Spacing.xs,
-    ...Shadow.md,
-    maxHeight: 220,
-    overflow: 'hidden',
   },
   dropdownItem: {
     paddingHorizontal: Spacing.md,
@@ -295,17 +383,28 @@ const styles = StyleSheet.create({
     color: Colors.gray400,
   },
   buttonsRow: {
-    flexDirection: 'row',
+    flexDirection: 'column',
     marginTop: Spacing.lg,
     gap: Spacing.md,
     width: '100%',
     justifyContent: 'center',
+    alignItems: 'stretch',
+  },
+  buttonsRowTablet: {
+    flexDirection: 'row',
+  },
+  actionButton: {
+    width: '100%',
+    minHeight: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: 1,
   },
   btnPrimary: {
     backgroundColor: Colors.accent,
     borderRadius: Radius.full,
     paddingVertical: Spacing.sm + 4,
-    paddingHorizontal: Spacing.xl,
+    paddingHorizontal: Spacing.lg,
     ...Shadow.sm,
   },
   btnPrimaryText: {
