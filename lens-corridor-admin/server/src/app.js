@@ -23,6 +23,7 @@ const configuredOrigins = (
   .filter(Boolean);
 
 const allowedOrigins = [...new Set([...defaultAllowedOrigins, ...configuredOrigins])];
+const allowAnyOrigin = allowedOrigins.includes('*');
 
 const isLanOrigin = (origin = '') => {
   try {
@@ -57,12 +58,26 @@ const isLanOrigin = (origin = '') => {
    CORS
 ========================= */
 
-app.use(cors({
-  origin: true,
-  credentials: true,
-}));
+const corsOptions = {
+  origin(origin, callback) {
+    if (!origin) {
+      return callback(null, true);
+    }
 
-app.options('*', cors());
+    if (allowAnyOrigin || allowedOrigins.includes(origin) || isLanOrigin(origin)) {
+      return callback(null, origin);
+    }
+
+    return callback(new Error(`Origin ${origin} not allowed by CORS`));
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  optionsSuccessStatus: 204,
+};
+
+app.use(cors(corsOptions));
+app.options(/.*/, cors(corsOptions));
 
 app.use(logger);
 
