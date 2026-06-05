@@ -58,17 +58,11 @@ const isLanOrigin = (origin = '') => {
 ========================= */
 
 app.use(cors({
-  origin(origin, callback) {
-    if (!origin || allowedOrigins.includes(origin) || isLanOrigin(origin)) {
-      return callback(null, true);
-    }
-
-    return callback(
-      new Error(`Origin ${origin} not allowed by CORS`)
-    );
-  },
+  origin: true,
   credentials: true,
 }));
+
+app.options('*', cors());
 
 app.use(logger);
 
