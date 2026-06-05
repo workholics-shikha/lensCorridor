@@ -116,7 +116,7 @@ app.use(
    ROUTES   
 ========================= */
 
-const userRoutes = require('./routes/userRoutes');
+const userRoutes = require('./routes/tempUser');
 const adminRoutes = require('./routes/adminRoutes');
 const masterRoutes = require('./routes/masterRoutes');
 const employeeRoutes = require('./routes/employeeRoutes');
