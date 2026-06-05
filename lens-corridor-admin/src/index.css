@@ -1,0 +1,32 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap');
+@import "../admin/styles.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+    :root {
+        --bg: #f3efe6;
+        --surface: rgba(255, 252, 245, 0.86);
+        --ink: #1f2a2c;
+        --muted: #637072;
+        --line: rgba(37, 46, 48, 0.12);
+        --accent: #1d6b63;
+        --accent-soft: #d8ece7;
+        --warning: #b56a2f;
+    }
+
+    body {
+        font-family: 'Manrope', sans-serif;
+        @apply bg-gradient-to-br from-orange-50 via-amber-50 to-yellow-100 text-ink;
+    }
+}
+
+.font-fraunces {
+    font-family: 'Fraunces', serif;
+}
+
+.eyebrow {
+    @apply text-xs font-bold uppercase tracking-widest text-muted;
+}
