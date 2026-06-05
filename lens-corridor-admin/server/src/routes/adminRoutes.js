@@ -6,7 +6,7 @@ const auth = require('../middleware/auth');
 // POST /admin/login
 router.post('/login', adminController.login);
 
-// POST /admin/logout
+// POST  /admin/logout
 router.post('/logout', adminController.logout);
 
 // GET /admin/profile (protected)
