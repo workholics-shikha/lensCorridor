@@ -113,7 +113,7 @@ app.use(
 );
 
 /* =========================
-   ROUTES
+   ROUTES   
 ========================= */
 
 const userRoutes = require('./routes/userRoutes');
