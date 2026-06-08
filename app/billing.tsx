@@ -35,7 +35,7 @@ const createFallbackOrderNumber = () => {
 
 export default function BillingScreen() {
   const { draft, updateDraft } = useOrderFlow();
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
   const [address, setAddress] = useState(draft.billingAddress);
   const [discount, setDiscount] = useState(draft.billingDiscount || '0');
   const [paymentMode, setPaymentMode] = useState<PaymentMode>(draft.paymentMode);
@@ -53,6 +53,7 @@ export default function BillingScreen() {
   const [submitting, setSubmitting] = useState(false);
 
   const isCompact = width < 760;
+  const modalCardMaxHeight = Math.min(height * 0.82, isCompact ? 520 : 620);
   const framePrice = Number(draft.price || 0);
   const lensPrice = draft.lensSelection.powerType.toLowerCase() === 'frame only' ? 0 : draft.lensSelection.lensPrice;
   const subtotal = framePrice + lensPrice;
@@ -422,11 +423,13 @@ export default function BillingScreen() {
             keyboardVerticalOffset={Platform.OS === 'ios' ? 24 : 0}
           >
             <ScrollView
+              style={styles.modalScroll}
+              contentInsetAdjustmentBehavior="always"
               contentContainerStyle={styles.modalScrollContent}
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
             >
-              <View style={styles.modalCard}>
+              <View style={[styles.modalCard, { maxHeight: modalCardMaxHeight }]}>
                 <View style={styles.modalHeader}>
                   <Image source={userIcon} style={styles.modalHeaderIcon} resizeMode="contain" />
                   <Text style={styles.modalTitle}>Customer Information</Text>
@@ -888,14 +891,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   modalAvoidingView: {
+    flex: 1,
     width: '100%',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  modalScroll: {
+    width: '100%',
+    flex: 1,
   },
   modalScrollContent: {
     flexGrow: 1,
     justifyContent: 'center',
     paddingVertical: 20,
+    paddingHorizontal: 4,
   },
   modalCard: {
     width: '100%',
@@ -906,6 +915,7 @@ const styles = StyleSheet.create({
     paddingTop: 14,
     paddingHorizontal: 12,
     paddingBottom: 12,
+    alignSelf: 'center',
     ...Shadow.sm,
   },
   modalHeader: {

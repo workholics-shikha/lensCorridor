@@ -11,7 +11,7 @@ import { FrameShape } from '@/lib/types';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '@/lib/theme';
 import { useCart } from '@/context/CartContext';
 
-const logoImage = require('@/assets/images/Group 8734.png');
+const logoImage = require('@/assets/images/Group8734.png');
 const frameShapesTitleIcon = require('@/assets/images/healthicons_eyeglasses-24px.png');
 const eyeTestTitleIcon = require('@/assets/images/ChatGPT Image Apr 9, 2026, 04_10_40 PM 2.png');
 const repairTitleIcon = require('@/assets/images/ChatGPT Image Apr 9, 2026, 03_07_39 PM 6.png');

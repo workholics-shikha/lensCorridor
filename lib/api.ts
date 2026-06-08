@@ -198,8 +198,9 @@ function getApiBaseUrl() {
     return configuredBaseUrl.replace(/\/$/, '');
   }
 
+  const isExpoDevelopmentHost = Constants.executionEnvironment === 'storeClient';
   const expoHostUri = Constants.expoConfig?.hostUri?.trim();
-  if (expoHostUri) {
+  if (isExpoDevelopmentHost && expoHostUri) {
     const host = expoHostUri.split(':')[0]?.trim();
     if (host) {
       return `http://${host}:5000`;

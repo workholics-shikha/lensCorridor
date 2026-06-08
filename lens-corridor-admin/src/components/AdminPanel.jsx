@@ -7,6 +7,8 @@ import MasterSectionPage from './admin/MasterSectionPage'
 import StoresPage from './admin/StoresPage'
 import { InfoCard, MetricCard, MiniCard, StatusBadge } from './admin/AdminUiPrimitives'
 import { buildApiUrl } from '../lib/api'
+import { buildInvoicePdf } from '../../../lib/invoicePdf'
+import invoiceLogo from '../../../assets/images/Group-8734.png'
 
 const adminBaseUrl = buildApiUrl('')
 
@@ -362,187 +364,37 @@ const buildPaginationItems = (currentPage, totalPages) => {
   return items
 }
 
-const buildOrderInvoicePdf = (order) => {
-  const PAGE_WIDTH = 595
-  const PAGE_HEIGHT = 842
-  const PAGE_MARGIN = 52
-  const CONTENT_WIDTH = PAGE_WIDTH - PAGE_MARGIN * 2
-  const content = []
-
-  const push = (line) => content.push(line)
-  const escapePdfText = (value) => String(value || '')
-    .replace(/\\/g, '\\\\')
-    .replace(/\(/g, '\\(')
-    .replace(/\)/g, '\\)')
-    .replace(/\r?\n/g, ' ')
-  const toPdfY = (top) => PAGE_HEIGHT - top
-  const estimateTextWidth = (text, size) => String(text || '').length * size * 0.5
-  const drawText = (x, top, size, text, bold = false) => {
-    push(`BT /${bold ? 'F2' : 'F1'} ${size} Tf 1 0 0 1 ${x} ${toPdfY(top)} Tm (${escapePdfText(text)}) Tj ET`)
-  }
-  const drawRightText = (right, top, size, text, bold = false) => {
-    const width = estimateTextWidth(text, size)
-    drawText(right - width, top, size, text, bold)
-  }
-  const drawCenteredText = (left, top, width, size, text, bold = false) => {
-    const textWidth = estimateTextWidth(text, size)
-    drawText(left + (width - textWidth) / 2, top, size, text, bold)
-  }
-  const drawLine = (x1, top1, x2, top2) => {
-    push(`${x1} ${toPdfY(top1)} m ${x2} ${toPdfY(top2)} l S`)
-  }
-  const drawRect = (x, top, width, height, fill = false) => {
-    push(`${x} ${PAGE_HEIGHT - top - height} ${width} ${height} re ${fill ? 'B' : 'S'}`)
-  }
-  const setStrokeGray = (gray) => push(`${gray} G`)
-  const setFillGray = (gray) => push(`${gray} g`)
-  const drawSection = (top, title, bodyHeight) => {
-    const totalHeight = 30 + bodyHeight
-    setStrokeGray(0.82)
-    drawRect(PAGE_MARGIN, top, CONTENT_WIDTH, totalHeight)
-    setFillGray(0.97)
-    drawRect(PAGE_MARGIN, top, CONTENT_WIDTH, 30, true)
-    setFillGray(0)
-    setStrokeGray(0.82)
-    drawLine(PAGE_MARGIN, top + 30, PAGE_MARGIN + CONTENT_WIDTH, top + 30)
-    drawText(PAGE_MARGIN + 12, top + 19, 12, title, true)
-    return {
-      left: PAGE_MARGIN + 14,
-      right: PAGE_MARGIN + CONTENT_WIDTH - 14,
-      top: top + 30,
-    }
-  }
-  const wrapText = (text, maxCharsPerLine) => {
-    const words = String(text || '').split(/\s+/).filter(Boolean)
-    const lines = []
-    let current = ''
-    words.forEach((word) => {
-      const candidate = current ? `${current} ${word}` : word
-      if (candidate.length > maxCharsPerLine && current) {
-        lines.push(current)
-        current = word
-        return
-      }
-      current = candidate
-    })
-    if (current) {
-      lines.push(current)
-    }
-    return lines.slice(0, 3)
-  }
-
+const buildOrderInvoicePdf = async (order) => {
   const framePrice = Number(order?.frame?.price ?? 0)
   const lensPrice = Number(order?.lensSelection?.lensPrice ?? 0)
   const discount = Number(order?.billing?.discount ?? 0)
   const totalPayable = Number(order?.billing?.totalPayable ?? 0)
   const paidAmount = Number(order?.billing?.paidAmount ?? totalPayable)
   const remainingAmount = Number(order?.billing?.remainingAmount ?? 0)
-  const currency = (value) => `Rs. ${Number(value || 0).toLocaleString('en-IN')}`
-  const rows = [
-    ['Frame', currency(framePrice)],
-    ['Lens', currency(lensPrice)],
-    ['Subtotal', currency(framePrice + lensPrice)],
-    ['Discount', `- ${currency(discount)}`],
-    ['Total Amount', currency(totalPayable)],
-    ['Paid Now', currency(paidAmount)],
-    ['Remaining Amount', currency(remainingAmount)],
-  ]
-
-  push('0.8 w')
-  setStrokeGray(0.25)
-  setFillGray(0)
-
-  drawText(PAGE_MARGIN, 58, 28, 'Lens Corridor', true)
-  drawRightText(PAGE_MARGIN + CONTENT_WIDTH, 52, 18, 'INVOICE', true)
-  drawRightText(PAGE_MARGIN + CONTENT_WIDTH, 74, 10.5, `Order ID: ${order?.orderNumber || '-'}`)
-  drawRightText(PAGE_MARGIN + CONTENT_WIDTH, 90, 10.5, `Date: ${order?.invoiceDate || formatOrderDate(order?.createdAt)}`)
-  drawLine(PAGE_MARGIN, 112, PAGE_MARGIN + CONTENT_WIDTH, 112)
-
-  const customerSection = drawSection(136, 'Customer Details', 88)
-  drawText(customerSection.left, customerSection.top + 18, 11, order?.customer?.name || 'Customer', true)
-  drawText(customerSection.left, customerSection.top + 38, 10, order?.customer?.phone || 'Phone not added')
-  drawText(customerSection.left, customerSection.top + 61, 10, 'Address:', true)
-  wrapText(order?.customer?.billingAddress || 'Address not added', 52).forEach((line, index) => {
-    drawText(customerSection.left, customerSection.top + 78 + index * 14, 9.5, line)
+  return buildInvoicePdf({
+    orderId: order?.orderNumber || '-',
+    invoiceDate: order?.invoiceDate || formatOrderDate(order?.createdAt),
+    customerName: order?.customer?.name || 'Customer',
+    phone: order?.customer?.phone || 'Phone not added',
+    address: order?.customer?.billingAddress || 'Address not added',
+    framePrice,
+    lensPrice,
+    discount,
+    totalPayable,
+    paidAmount,
+    remainingAmount,
+    lensType: order?.lensSelection?.lensCategory || order?.lensSelection?.powerType || 'Frame Only',
+    paymentMode: order?.billing?.paymentMode || '-',
+    logoUri: invoiceLogo,
   })
-
-  const orderBodyHeight = 62 + 28 + rows.length * 24 + 12
-  const orderSection = drawSection(252, 'Order Details', orderBodyHeight)
-  drawText(orderSection.left, orderSection.top + 18, 10.5, `Lens Type: ${order?.lensSelection?.lensCategory || order?.lensSelection?.powerType || 'Frame Only'}`)
-  drawText(orderSection.left, orderSection.top + 36, 10.5, 'Quantity: 1')
-
-  const tableTop = orderSection.top + 56
-  const tableLeft = orderSection.left
-  const tableWidth = CONTENT_WIDTH - 28
-  const priceColumnWidth = 134
-  const rowHeight = 24
-  const tableHeight = rowHeight * (rows.length + 1)
-
-  setStrokeGray(0.78)
-  drawRect(tableLeft, tableTop, tableWidth, tableHeight)
-  setFillGray(0.965)
-  drawRect(tableLeft, tableTop, tableWidth, rowHeight, true)
-  setFillGray(0)
-  setStrokeGray(0.78)
-  drawLine(tableLeft + tableWidth - priceColumnWidth, tableTop, tableLeft + tableWidth - priceColumnWidth, tableTop + tableHeight)
-
-  for (let index = 1; index <= rows.length; index += 1) {
-    const y = tableTop + index * rowHeight
-    drawLine(tableLeft, y, tableLeft + tableWidth, y)
-  }
-
-  drawText(tableLeft + 10, tableTop + 16, 10, 'Description', true)
-  drawRightText(tableLeft + tableWidth - 10, tableTop + 16, 10, 'Price', true)
-
-  rows.forEach(([label, value], index) => {
-    const rowTop = tableTop + rowHeight * (index + 1)
-    const isEmphasis = label === 'Subtotal' || label === 'Total Amount'
-    drawText(tableLeft + 10, rowTop + 16, 9.8, label, isEmphasis)
-    drawRightText(tableLeft + tableWidth - 10, rowTop + 16, 9.8, value, isEmphasis)
-  })
-
-  const paymentSectionTop = 252 + 30 + orderBodyHeight + 20
-  const paymentSection = drawSection(paymentSectionTop, 'Payment Info', 34)
-  drawText(paymentSection.left, paymentSection.top + 22, 10.5, `Payment Mode: ${order?.billing?.paymentMode || '-'}`)
-
-  drawCenteredText(PAGE_MARGIN, paymentSectionTop + 92, CONTENT_WIDTH, 10, 'Thank you for choosing Lens Corridor')
-  drawCenteredText(PAGE_MARGIN, paymentSectionTop + 108, CONTENT_WIDTH, 10, 'Support: support@lenscorridor.com')
-
-  const contentStream = content.join('\n')
-  const objects = [
-    '1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj',
-    '2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj',
-    `3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 ${PAGE_WIDTH} ${PAGE_HEIGHT}] /Resources << /Font << /F1 4 0 R /F2 5 0 R >> >> /Contents 6 0 R >> endobj`,
-    '4 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj',
-    '5 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >> endobj',
-    `6 0 obj << /Length ${contentStream.length} >> stream\n${contentStream}\nendstream endobj`,
-  ]
-
-  let pdf = '%PDF-1.4\n'
-  const offsets = [0]
-
-  objects.forEach((object) => {
-    offsets.push(pdf.length)
-    pdf += `${object}\n`
-  })
-
-  const xrefOffset = pdf.length
-  pdf += `xref\n0 ${objects.length + 1}\n`
-  pdf += '0000000000 65535 f \n'
-  offsets.slice(1).forEach((offset) => {
-    pdf += `${offset.toString().padStart(10, '0')} 00000 n \n`
-  })
-  pdf += `trailer << /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`
-
-  return new Uint8Array([...pdf].map((char) => char.charCodeAt(0)))
 }
 
-const downloadOrderInvoice = (order) => {
+const downloadOrderInvoice = async (order) => {
   if (!order || typeof window === 'undefined') {
     return
   }
 
-  const pdfBytes = buildOrderInvoicePdf(order)
+  const pdfBytes = await buildOrderInvoicePdf(order)
   const blob = new Blob([pdfBytes], { type: 'application/pdf' })
   const url = window.URL.createObjectURL(blob)
   const anchor = document.createElement('a')

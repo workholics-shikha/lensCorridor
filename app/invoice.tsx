@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { Image, Platform, ScrollView, Share, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
+import { Alert, Image, Platform, ScrollView, Share, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import { CreditCard, MapPin, ShoppingBag, UserRound, Wallet, MessageCircleMore } from 'lucide-react-native';
 import { useOrderFlow } from '@/context/OrderFlowContext';
 import { buildInvoicePdf } from '@/lib/invoicePdf';
@@ -51,23 +51,24 @@ export default function InvoiceScreen() {
   };
 
   const handleDownload = async () => {
+    const pdfBytes = await buildInvoicePdf({
+      orderId: resolvedOrderId,
+      invoiceDate: resolvedInvoiceDate,
+      customerName,
+      phone,
+      address,
+      framePrice,
+      lensPrice,
+      discount,
+      totalPayable,
+      paidAmount,
+      remainingAmount,
+      lensType,
+      paymentMode: draft.paymentMode,
+      logoUri: Platform.OS === 'web' ? getAssetUri(brandLogo) : undefined,
+    });
+
     if (Platform.OS === 'web' && globalThis.document) {
-      const pdfBytes = await buildInvoicePdf({
-        orderId: resolvedOrderId,
-        invoiceDate: resolvedInvoiceDate,
-        customerName,
-        phone,
-        address,
-        framePrice,
-        lensPrice,
-        discount,
-        totalPayable,
-        paidAmount,
-        remainingAmount,
-        lensType,
-        paymentMode: draft.paymentMode,
-        logoUri: getAssetUri(brandLogo),
-      });
       const blob = new Blob([pdfBytes], { type: 'application/pdf' });
       const url = URL.createObjectURL(blob);
       const anchor = globalThis.document.createElement('a');
@@ -78,7 +79,15 @@ export default function InvoiceScreen() {
       return;
     }
 
-    await handleShare();
+    try {
+      await Share.share({
+        title: `${resolvedOrderId || 'invoice'}.pdf`,
+        message: `Invoice ${resolvedOrderId || ''}`.trim(),
+        url: `data:application/pdf;base64,${bytesToBase64(pdfBytes)}`,
+      });
+    } catch {
+      Alert.alert('Download unavailable', 'We could not generate the PDF file on this device.');
+    }
   };
 
   return (
@@ -360,6 +369,25 @@ function getAssetUri(asset: unknown): string | undefined {
   }
 
   return undefined;
+}
+
+function bytesToBase64(bytes: Uint8Array) {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  let result = '';
+
+  for (let index = 0; index < bytes.length; index += 3) {
+    const first = bytes[index] ?? 0;
+    const second = bytes[index + 1] ?? 0;
+    const third = bytes[index + 2] ?? 0;
+    const chunk = (first << 16) | (second << 8) | third;
+
+    result += chars[(chunk >> 18) & 63];
+    result += chars[(chunk >> 12) & 63];
+    result += index + 1 < bytes.length ? chars[(chunk >> 6) & 63] : '=';
+    result += index + 2 < bytes.length ? chars[chunk & 63] : '=';
+  }
+
+  return result;
 }
 
 function FrameOnlyArt() {
