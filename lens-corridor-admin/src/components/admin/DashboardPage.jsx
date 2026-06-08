@@ -32,8 +32,13 @@ const DashboardPage = ({
     </div>
 
     <div className="metric-grid">
-      {dashboardMetrics.map((metric) => (
-        <MetricCard hint={metric.hint} key={metric.label} label={metric.label} value={metric.value} />
+      {dashboardMetrics.map((metric, index) => (
+        <MetricCard
+          hint={metric.hint}
+          key={`${metric.label}-${index}`}
+          label={metric.label}
+          value={metric.value}
+        />
       ))}
     </div>
 
@@ -60,13 +65,18 @@ const DashboardPage = ({
         <div className="chart-area">
           <div className="chart-caption">{salesCaption}</div>
           <div className="chart-bars" style={{ gridTemplateColumns: `repeat(${salesData.values.length}, 1fr)` }}>
-            {salesData.values.map((value) => (
-              <span key={`${salesRange}-${value}`} style={{ height: `${value}%` }} />
+            {salesData.values.map((value, index) => (
+              <span
+                key={`${salesRange}-${value}-${index}`}
+                style={{ height: `${value}%` }}
+              />
             ))}
           </div>
           <div className="chart-labels" style={{ gridTemplateColumns: `repeat(${salesData.labels.length}, 1fr)` }}>
-            {salesData.labels.map((label) => (
-              <span key={label}>{label}</span>
+            {salesData.labels.map((label, index) => (
+              <span key={`${label}-${index}`}>
+                {label}
+              </span>
             ))}
           </div>
         </div>
@@ -126,12 +136,13 @@ const DashboardPage = ({
           </div>
         </div>
         <div className="task-list">
-          {operationalQueue.map((item) => (
-            <div className="task-item" key={item.title}>
+          {operationalQueue.map((item, index) => (
+            <div className="task-item" key={`${item.title}-${index}`}>
               <strong>{item.title}</strong>
               <small>{item.meta}</small>
             </div>
           ))}
+
         </div>
       </section>
 
@@ -143,8 +154,9 @@ const DashboardPage = ({
           </div>
         </div>
         <div className="mini-grid">
-          {productInsights.map((item) => (
-            <MiniCard key={item.label} label={item.label} value={item.value} />
+          {productInsights.map((item, index) => (
+            <MiniCard
+              key={`${item.label}-${index}`} label={item.label} value={item.value} />
           ))}
         </div>
       </section>

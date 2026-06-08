@@ -1498,14 +1498,16 @@ const AdminPanel = ({ user, onLogout }) => {
   const activateMasterSection = (sectionKey) => {
     const routePath = destinationRouteMap[sectionKey]
     setMasterSection(sectionKey)
+    setActiveScreen('masters')
+    setMastersOpen(true)
+    setSidebarOpen(false)
 
     if (routePath) {
-      navigate(routePath)
+      if (routePath !== location.pathname) {
+        navigate(routePath)
+      }
       return
     }
-
-    setActiveScreen('masters')
-    setSidebarOpen(false)
   }
 
   const openLensCategoryEditor = (masterId) => {
@@ -1877,15 +1879,13 @@ const AdminPanel = ({ user, onLogout }) => {
                 <button
                   className={`nav-item ${activeScreen === item.key ? 'active' : ''}`}
                   onClick={() => {
-                    // Normal menu behavior: toggle submenu instead of forcing a master section.
-                    setMastersOpen((open) => {
-                      const nextOpen = !open
-                      if (nextOpen) {
-                        // If submenu was closed, open it and show the current/default masters section.
-                        activateMasterSection(masterSection || 'lens-category')
-                      }
-                      return nextOpen
-                    })
+                    // Keep side effects out of the state updater to avoid render-time router updates.
+                    if (mastersOpen) {
+                      setMastersOpen(false)
+                      return
+                    }
+
+                    activateMasterSection(masterSection || 'lens-category')
                   }}
 
                   type="button"

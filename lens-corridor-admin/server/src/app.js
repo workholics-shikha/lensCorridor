@@ -6,12 +6,16 @@ const path = require('path');
 const logger = require('./middleware/logger');
 
 const defaultAllowedOrigins = [
-  'http://192.168.29.202:3000',
+  'http://localhost:3000',
   'http://127.0.0.1:3000',
-  'http://192.168.29.202:5173',
+  'http://192.168.29.202:3000',
+  'http://localhost:5173',
   'http://127.0.0.1:5173',
+  'http://192.168.29.202:5173',
   'https://lenscorridor.onrender.com',
 ];
+
+const normalizeOrigin = (origin = '') => origin.trim().replace(/\/+$/, '');
 
 const configuredOrigins = (
   process.env.CLIENT_URLS ||
@@ -19,10 +23,13 @@ const configuredOrigins = (
   ''
 )
   .split(',')
-  .map((origin) => origin.trim())
+  .map(normalizeOrigin)
   .filter(Boolean);
 
-const allowedOrigins = [...new Set([...defaultAllowedOrigins, ...configuredOrigins])];
+const allowedOrigins = [...new Set([
+  ...defaultAllowedOrigins.map(normalizeOrigin),
+  ...configuredOrigins,
+])];
 const allowAnyOrigin = allowedOrigins.includes('*');
 
 const isLanOrigin = (origin = '') => {
@@ -64,11 +71,13 @@ const corsOptions = {
       return callback(null, true);
     }
 
-    if (allowAnyOrigin || allowedOrigins.includes(origin) || isLanOrigin(origin)) {
-      return callback(null, origin);
+    const normalizedOrigin = normalizeOrigin(origin);
+
+    if (allowAnyOrigin || allowedOrigins.includes(normalizedOrigin) || isLanOrigin(normalizedOrigin)) {
+      return callback(null, true);
     }
 
-    return callback(new Error(`Origin ${origin} not allowed by CORS`));
+    return callback(new Error(`Origin ${normalizedOrigin} not allowed by CORS`));
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
@@ -147,7 +156,7 @@ app.use('/api/employees', employeeRoutes);
 app.use('/api/stores', storeRoutes);
 app.use('/api/salesmen', salesmanRoutes);
 app.use('/api/frame-shapes', frameShapeRoutes);
-app.use('/api/eye-tests', eyeTestRoutes); 
+app.use('/api/eye-tests', eyeTestRoutes);
 app.use('/api/power-types', powerTypeRoutes);
 app.use('/api/lens-categories', lensCategoryRoutes);
 app.use('/api/order-placement', orderPlacementRoutes);

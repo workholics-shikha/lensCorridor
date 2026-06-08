@@ -141,7 +141,7 @@ const AppRoutes = () => {
           </ProtectedRoute>
         )}
       />
- 
+
       <Route
         path="/masters/eyepower"
         element={(
