@@ -5,7 +5,7 @@ const { listStores, createStore, deleteStore } = require('../controllers/storeCo
 
 const router = express.Router();
 
-router.get('/', auth, listStores);
+router.get('/', listStores);
 router.post('/', auth, createStore);
 router.delete('/:id', auth, deleteStore);
 

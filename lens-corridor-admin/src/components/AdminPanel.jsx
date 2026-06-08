@@ -1338,7 +1338,6 @@ const AdminPanel = ({ user, onLogout }) => {
             signal: controller.signal,
           }),
           fetch(`${adminBaseUrl}/api/stores`, {
-            headers: { Authorization: `Bearer ${token}` },
             signal: controller.signal,
           }),
         ])
@@ -1772,13 +1771,7 @@ const AdminPanel = ({ user, onLogout }) => {
   }
 
   const refreshStores = async () => {
-    const token = localStorage.getItem('adminToken')
-    if (!token) {
-      return
-    }
-
     const response = await fetch(`${adminBaseUrl}/api/stores`, {
-      headers: { Authorization: `Bearer ${token}` },
     })
     const data = await response.json().catch(() => [])
 
