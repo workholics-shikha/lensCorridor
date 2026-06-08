@@ -248,11 +248,26 @@ const updateOrderPlacementBilling = async (req, res) => {
 
 const listOrderPlacements = async (req, res) => {
   try {
+    const searchQuery = String(req.query.search ?? '').trim();
     const phoneQuery = String(req.query.phone ?? '').replace(/\D/g, '').slice(-10);
     const orderNumberQuery = String(req.query.orderNumber ?? '').trim();
     const storeIdQuery = String(req.query.storeId ?? '').trim();
     const limit = Number(req.query.limit ?? 0);
     const filter = {};
+    const normalizedSearchPhone = searchQuery.replace(/\D/g, '').slice(-10);
+
+    if (searchQuery) {
+      const searchConditions = [
+        { 'customer.name': { $regex: searchQuery, $options: 'i' } },
+        { orderNumber: { $regex: searchQuery, $options: 'i' } },
+      ];
+
+      if (normalizedSearchPhone) {
+        searchConditions.push({ 'customer.phone': { $regex: normalizedSearchPhone } });
+      }
+
+      filter.$or = searchConditions;
+    }
 
     if (phoneQuery) {
       filter['customer.phone'] = { $regex: phoneQuery };

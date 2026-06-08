@@ -53,7 +53,9 @@ export default function BillingScreen() {
   const [submitting, setSubmitting] = useState(false);
 
   const isCompact = width < 760;
-  const modalCardMaxHeight = Math.min(height * 0.82, isCompact ? 520 : 620);
+  const isTablet = width >= 768;
+  const modalCardWidth = Math.min(width - (isTablet ? 96 : 32), isTablet ? 560 : 380);
+  const modalCardMaxHeight = Math.min(height * (isTablet ? 0.8 : 0.86), isTablet ? 680 : 560);
   const framePrice = Number(draft.price || 0);
   const lensPrice = draft.lensSelection.powerType.toLowerCase() === 'frame only' ? 0 : draft.lensSelection.lensPrice;
   const subtotal = framePrice + lensPrice;
@@ -414,93 +416,106 @@ export default function BillingScreen() {
         visible={detailsOpen}
         transparent
         animationType="fade"
+        statusBarTranslucent
         onRequestClose={() => setDetailsOpen(false)}
       >
         <View style={styles.modalOverlay}>
           <KeyboardAvoidingView
             style={styles.modalAvoidingView}
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            keyboardVerticalOffset={Platform.OS === 'ios' ? 24 : 0}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'position'}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 28 : 12}
           >
             <ScrollView
               style={styles.modalScroll}
               contentInsetAdjustmentBehavior="always"
               contentContainerStyle={styles.modalScrollContent}
               keyboardShouldPersistTaps="handled"
+              keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
               showsVerticalScrollIndicator={false}
             >
-              <View style={[styles.modalCard, { maxHeight: modalCardMaxHeight }]}>
+              <View style={[styles.modalCard, { width: modalCardWidth, maxHeight: modalCardMaxHeight }]}>
                 <View style={styles.modalHeader}>
                   <Image source={userIcon} style={styles.modalHeaderIcon} resizeMode="contain" />
                   <Text style={styles.modalTitle}>Customer Information</Text>
                 </View>
-
-                <TextInput
-                  value={customerName}
-                  onChangeText={(value) => {
-                    setCustomerName(formatPersonName(value));
-                    if (detailsErrors.name) {
-                      setDetailsErrors((current) => ({ ...current, name: undefined }));
-                    }
-                  }}
-                  placeholder="Name"
-                  placeholderTextColor="#9095A0"
-                  style={[styles.modalInput, detailsErrors.name && styles.modalInputError]}
-                />
-                {detailsErrors.name ? <Text style={styles.modalErrorText}>{detailsErrors.name}</Text> : null}
-
-                <TextInput
-                  value={customerPhone}
-                  onChangeText={(value) => {
-                    setCustomerPhone(value.replace(/[^0-9]/g, ''));
-                    if (detailsErrors.phone) {
-                      setDetailsErrors((current) => ({ ...current, phone: undefined }));
-                    }
-                  }}
-                  placeholder="Mobile Number"
-                  placeholderTextColor="#9095A0"
-                  keyboardType="phone-pad"
-                  style={[styles.modalInput, detailsErrors.phone && styles.modalInputError]}
-                />
-                {detailsErrors.phone ? <Text style={styles.modalErrorText}>{detailsErrors.phone}</Text> : null}
-
-                <TextInput
-                  value={customerAddress}
-                  onChangeText={(value) => {
-                    setCustomerAddress(value);
-                    if (detailsErrors.address) {
-                      setDetailsErrors((current) => ({ ...current, address: undefined }));
-                    }
-                  }}
-                  placeholder="Address"
-                  placeholderTextColor="#9095A0"
-                  multiline
-                  textAlignVertical="top"
-                  style={[styles.modalInput, styles.modalTextarea, detailsErrors.address && styles.modalInputError]}
-                />
-                {detailsErrors.address ? <Text style={styles.modalErrorText}>{detailsErrors.address}</Text> : null}
-
-                <TouchableOpacity
-                  style={styles.modalSaveButton}
-                  activeOpacity={0.88}
-                  onPress={() => {
-                    if (!validateCustomerFields()) {
-                      return;
-                    }
-
-                    const savedAddress = customerAddress.trim();
-                    setAddress(savedAddress);
-                    setCustomerName(formatPersonName(customerName));
-                    updateDraft({
-                      customerName: formatPersonName(customerName),
-                      phone: customerPhone.trim(),
-                      billingAddress: savedAddress,
-                    });
-                    setDetailsOpen(false);
-                  }}
+                <ScrollView
+                  style={styles.modalFormScroll}
+                  contentContainerStyle={styles.modalFormContent}
+                  keyboardShouldPersistTaps="handled"
+                  showsVerticalScrollIndicator={false}
                 >
-                  <Text style={styles.modalSaveText}>Save</Text>
-                </TouchableOpacity>
+                  <TextInput
+                    value={customerName}
+                    onChangeText={(value) => {
+                      setCustomerName(formatPersonName(value));
+                      if (detailsErrors.name) {
+                        setDetailsErrors((current) => ({ ...current, name: undefined }));
+                      }
+                    }}
+                    placeholder="Name"
+                    placeholderTextColor="#9095A0"
+                    style={[styles.modalInput, detailsErrors.name && styles.modalInputError]}
+                  />
+                  {detailsErrors.name ? <Text style={styles.modalErrorText}>{detailsErrors.name}</Text> : null}
+
+                  <TextInput
+                    value={customerPhone}
+                    onChangeText={(value) => {
+                      setCustomerPhone(value.replace(/[^0-9]/g, ''));
+                      if (detailsErrors.phone) {
+                        setDetailsErrors((current) => ({ ...current, phone: undefined }));
+                      }
+                    }}
+                    placeholder="Mobile Number"
+                    placeholderTextColor="#9095A0"
+                    keyboardType="phone-pad"
+                    style={[styles.modalInput, detailsErrors.phone && styles.modalInputError]}
+                  />
+                  {detailsErrors.phone ? <Text style={styles.modalErrorText}>{detailsErrors.phone}</Text> : null}
+
+                  <TextInput
+                    value={customerAddress}
+                    onChangeText={(value) => {
+                      setCustomerAddress(value);
+                      if (detailsErrors.address) {
+                        setDetailsErrors((current) => ({ ...current, address: undefined }));
+                      }
+                    }}
+                    placeholder="Address"
+                    placeholderTextColor="#9095A0"
+                    multiline
+                    textAlignVertical="top"
+                    style={[
+                      styles.modalInput,
+                      styles.modalTextarea,
+                      isTablet && styles.modalTextareaTablet,
+                      detailsErrors.address && styles.modalInputError,
+                    ]}
+                  />
+                  {detailsErrors.address ? <Text style={styles.modalErrorText}>{detailsErrors.address}</Text> : null}
+
+                  <TouchableOpacity
+                    style={styles.modalSaveButton}
+                    activeOpacity={0.88}
+                    onPress={() => {
+                      if (!validateCustomerFields()) {
+                        return;
+                      }
+
+                      const savedAddress = customerAddress.trim();
+                      setAddress(savedAddress);
+                      setCustomerName(formatPersonName(customerName));
+                      updateDraft({
+                        customerName: formatPersonName(customerName),
+                        phone: customerPhone.trim(),
+                        billingAddress: savedAddress,
+                      });
+                      setDetailsOpen(false);
+                    }}
+                  >
+                    <Text style={styles.modalSaveText}>Save</Text>
+                  </TouchableOpacity>
+                </ScrollView>
               </View>
             </ScrollView>
           </KeyboardAvoidingView>
@@ -888,7 +903,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.28)',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 20,
   },
   modalAvoidingView: {
     flex: 1,
@@ -903,20 +919,23 @@ const styles = StyleSheet.create({
   modalScrollContent: {
     flexGrow: 1,
     justifyContent: 'center',
-    paddingVertical: 20,
+    paddingVertical: 12,
     paddingHorizontal: 4,
   },
   modalCard: {
-    width: '100%',
-    maxWidth: 340,
-    minWidth: 240,
     backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    paddingTop: 14,
-    paddingHorizontal: 12,
-    paddingBottom: 12,
+    borderRadius: 22,
+    paddingTop: 18,
+    paddingHorizontal: 16,
+    paddingBottom: 16,
     alignSelf: 'center',
     ...Shadow.sm,
+  },
+  modalFormScroll: {
+    flexGrow: 0,
+  },
+  modalFormContent: {
+    paddingBottom: 4,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -948,8 +967,12 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   modalTextarea: {
-    minHeight: 98,
+    minHeight: 120,
     paddingTop: 10,
+    paddingBottom: 10,
+  },
+  modalTextareaTablet: {
+    minHeight: 156,
   },
   modalInputError: {
     borderColor: '#E5484D',

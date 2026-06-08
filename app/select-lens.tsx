@@ -77,10 +77,15 @@ export default function SelectLensScreen() {
       return;
     }
 
-    if (
-      normalizedName === 'reading power'
-      || normalizedName === 'progressive bifocals'
-    ) {
+    if (normalizedName === 'reading power') {
+      router.push({
+        pathname: '/prescription',
+        params: { mode: 'order-flow', nextPath: '/billing' },
+      });
+      return;
+    }
+
+    if (normalizedName === 'progressive bifocals') {
       router.push({
         pathname: '/prescription',
         params: { mode: 'order-flow', nextPath: '/lens-details' },

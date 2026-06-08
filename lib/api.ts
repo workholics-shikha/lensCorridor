@@ -546,13 +546,19 @@ export async function createOrderPlacement(payload: OrderPlacementPayload): Prom
 }
 
 export async function fetchOrderPlacements(input?: {
+  search?: string;
   phone?: string;
   orderNumber?: string;
   limit?: number;
 }): Promise<OrderPlacementRecord[]> {
   const url = new URL(`${getApiBaseUrl()}/api/order-placement`);
+  const normalizedSearch = input?.search?.trim();
   const normalizedPhone = input?.phone?.replace(/\D/g, '').slice(-10);
   const normalizedOrderNumber = input?.orderNumber?.trim();
+
+  if (normalizedSearch) {
+    url.searchParams.set('search', normalizedSearch);
+  }
 
   if (normalizedPhone) {
     url.searchParams.set('phone', normalizedPhone);

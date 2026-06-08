@@ -121,8 +121,11 @@ export default function CheckoutScreen() {
   }, [draft.frameImages]);
 
   useEffect(() => {
-    const normalizedPhone = customerSearch.replace(/\D/g, '').slice(-10);
-    if (normalizedPhone.length < 3) {
+    const trimmedQuery = customerSearch.trim();
+    const normalizedPhone = trimmedQuery.replace(/\D/g, '').slice(-10);
+    const isPhoneQuery = /^\d+$/.test(trimmedQuery.replace(/\s+/g, '')) && normalizedPhone.length > 0;
+
+    if ((!isPhoneQuery && trimmedQuery.length < 2) || (isPhoneQuery && normalizedPhone.length < 3)) {
       setMatchedCustomer(null);
       setCustomerSuggestions([]);
       setSearchingCustomer(false);
@@ -132,14 +135,22 @@ export default function CheckoutScreen() {
     let active = true;
     const timer = setTimeout(() => {
       setSearchingCustomer(true);
-      fetchOrderPlacements({ phone: normalizedPhone, limit: 6 })
+      fetchOrderPlacements({
+        search: trimmedQuery,
+        phone: isPhoneQuery ? normalizedPhone : undefined,
+        limit: 6,
+      })
         .then((items) => {
           if (!active) {
             return;
           }
 
           setCustomerSuggestions(items);
-          const exactMatch = items.find((item) => item.customer.phone.replace(/\D/g, '').slice(-10) === normalizedPhone);
+          const exactMatch = items.find((item) => (
+            isPhoneQuery
+              ? item.customer.phone.replace(/\D/g, '').slice(-10) === normalizedPhone
+              : item.customer.name.trim().toLowerCase() === trimmedQuery.toLowerCase()
+          ));
           setMatchedCustomer(exactMatch ?? null);
         })
         .catch(() => {
@@ -313,7 +324,7 @@ export default function CheckoutScreen() {
         <View style={[styles.content, { maxWidth: containerWidth }]}>
           <View style={styles.fieldCard}>
             <SectionLabel
-              title="Search customer mobile number"
+              title="Search customer by name or mobile number"
               icon={<SearchCustomerGlyph />}
             />
             <View style={styles.inputShell}>
@@ -325,14 +336,14 @@ export default function CheckoutScreen() {
                   setError('');
                 }}
                 style={styles.textInput}
-                placeholder="Search customer mobile number"
+                placeholder="Search customer name or mobile number"
                 placeholderTextColor="#A5A7AE"
-                keyboardType="phone-pad"
+                keyboardType="default"
               />
               <Search size={18} color="#C0C2CA" strokeWidth={2} />
             </View>
 
-            {(searchingCustomer || customerSuggestions.length > 0) && customerSearch.replace(/\D/g, '').slice(-10).length >= 3 ? (
+            {(searchingCustomer || customerSuggestions.length > 0) && customerSearch.trim().length >= 2 ? (
               <View style={styles.customerDropdown}>
                 {searchingCustomer ? (
                   <Text style={styles.customerDropdownHint}>Searching customer...</Text>
@@ -715,13 +726,14 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   inputShell: {
-    minHeight: 34,
+    minHeight: 42,
     backgroundColor: '#F7F7F8',
     borderRadius: 10,
     paddingHorizontal: 12,
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 2,
+    width: '100%',
   },
   customerDropdown: {
     marginTop: 8,
@@ -781,9 +793,11 @@ const styles = StyleSheet.create({
   },
   textInput: {
     flex: 1,
-    height: 34,
+    minHeight: 42,
     fontSize: 12.5,
     color: '#1E2028',
+    minWidth: 0,
+    paddingRight: 10,
   },
   frameRow: {
     gap: 10,

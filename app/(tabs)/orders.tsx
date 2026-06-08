@@ -58,16 +58,24 @@ export default function OrdersScreen() {
   }, []);
 
   useEffect(() => {
-    const normalizedPhone = searchValue.replace(/\D/g, '').slice(-10);
-    if (normalizedPhone.length < 3) {
+    const trimmedQuery = searchValue.trim();
+    const normalizedPhone = trimmedQuery.replace(/\D/g, '').slice(-10);
+    const isPhoneQuery = /^\d+$/.test(trimmedQuery.replace(/\s+/g, '')) && normalizedPhone.length > 0;
+
+    if ((!isPhoneQuery && trimmedQuery.length < 2) || (isPhoneQuery && normalizedPhone.length < 3)) {
       setSuggestions([]);
+      setSearching(false);
       return;
     }
 
     let active = true;
     const timer = setTimeout(() => {
       setSearching(true);
-      fetchOrderPlacements({ phone: normalizedPhone, limit: 6 })
+      fetchOrderPlacements({
+        search: trimmedQuery,
+        phone: isPhoneQuery ? normalizedPhone : undefined,
+        limit: 6,
+      })
         .then((items) => {
           if (active) {
             setSuggestions(items);
@@ -92,14 +100,23 @@ export default function OrdersScreen() {
   }, [searchValue]);
 
   const visibleOrders = useMemo(() => {
+    const trimmedQuery = searchValue.trim().toLowerCase();
     const normalizedPhone = searchValue.replace(/\D/g, '').slice(-10);
-    if (normalizedPhone.length < 3) {
+    const isPhoneQuery = /^\d+$/.test(searchValue.trim().replace(/\s+/g, '')) && normalizedPhone.length > 0;
+
+    if ((!isPhoneQuery && trimmedQuery.length < 2) || (isPhoneQuery && normalizedPhone.length < 3)) {
       return orders;
     }
 
     const suggestionIds = new Set(suggestions.map((item) => item.id));
     return orders.filter((item) => (
-      item.customer.phone.replace(/\D/g, '').includes(normalizedPhone) || suggestionIds.has(item.id)
+      suggestionIds.has(item.id)
+      || (isPhoneQuery
+        ? item.customer.phone.replace(/\D/g, '').includes(normalizedPhone)
+        : (
+          item.customer.name.toLowerCase().includes(trimmedQuery)
+          || item.orderNumber.toLowerCase().includes(trimmedQuery)
+        ))
     ));
   }, [orders, searchValue, suggestions]);
 
@@ -170,14 +187,14 @@ export default function OrdersScreen() {
             <TextInput
               value={searchValue}
               onChangeText={setSearchValue}
-              placeholder="Enter customer mobile number"
+              placeholder="Search by customer name or mobile number"
               placeholderTextColor="#A0A5B1"
-              keyboardType="phone-pad"
+              keyboardType="default"
               style={styles.searchInput}
             />
           </View>
 
-          {(suggestions.length > 0 || searching) && searchValue.replace(/\D/g, '').slice(-10).length >= 3 ? (
+          {(suggestions.length > 0 || searching) && searchValue.trim().length >= 2 ? (
             <View style={styles.dropdown}>
               {searching ? (
                 <Text style={styles.dropdownHint}>Searching...</Text>
@@ -188,7 +205,7 @@ export default function OrdersScreen() {
                     style={styles.dropdownItem}
                     activeOpacity={0.86}
                     onPress={() => {
-                      setSearchValue(item.customer.phone);
+                      setSearchValue(item.customer.name || item.customer.phone);
                       setSuggestions([]);
                     }}
                   >
@@ -312,14 +329,14 @@ function OrderHistoryCard({
           <Text style={styles.productSub}>
             Frame + {order.lensSelection.lensCategory || order.lensSelection.powerType || 'Lens'}
           </Text>
-          <Text style={styles.productPrice}>Rs {order.billing.totalPayable}</Text>
+          <Text style={styles.productPrice}>Rs. {order.billing.totalPayable}</Text>
         </View>
       </View>
 
       <View style={styles.footerRow}>
         <FooterMeta label="Order ID:" value={order.orderNumber} />
         <FooterMeta label="Order Date:" value={orderDate} centered />
-        <FooterMeta label="Total Price:" value={`Rs${order.billing.totalPayable}`} right />
+        <FooterMeta label="Total Price:" value={`Rs. ${order.billing.totalPayable}`} right />
       </View>
     </TouchableOpacity>
   );
@@ -389,7 +406,7 @@ const styles = StyleSheet.create({
     color: '#252A33',
   },
   searchWrap: {
-    height: 32,
+    minHeight: 42,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#E1E5EE',
@@ -398,12 +415,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 10,
     marginBottom: 12,
+    width: '100%',
   },
   searchInput: {
     flex: 1,
     marginLeft: 8,
-    fontSize: 12,
+    fontSize: 13,
     color: '#1F2430',
+    minWidth: 0,
+    paddingVertical: 10,
   },
   dropdown: {
     position: 'absolute',

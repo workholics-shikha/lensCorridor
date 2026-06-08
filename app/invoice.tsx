@@ -1,6 +1,8 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { Alert, Image, Platform, ScrollView, Share, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import { CreditCard, MapPin, ShoppingBag, UserRound, Wallet, MessageCircleMore } from 'lucide-react-native';
+import * as Sharing from 'expo-sharing';
+import * as FileSystem from 'expo-file-system/legacy';
 import { useOrderFlow } from '@/context/OrderFlowContext';
 import { buildInvoicePdf } from '@/lib/invoicePdf';
 import { getOrderAmounts } from '@/lib/orderPricing';
@@ -42,31 +44,69 @@ export default function InvoiceScreen() {
     paymentMode: draft.paymentMode,
   });
 
+  const buildPdfBytes = () => buildInvoicePdf({
+    orderId: resolvedOrderId,
+    invoiceDate: resolvedInvoiceDate,
+    customerName,
+    phone,
+    address,
+    framePrice,
+    lensPrice,
+    discount,
+    totalPayable,
+    paidAmount,
+    remainingAmount,
+    lensType,
+    paymentMode: draft.paymentMode,
+    logoUri: Platform.OS === 'web' ? getAssetUri(brandLogo) : undefined,
+  });
+
+  const shareInvoicePdfFile = async () => {
+    const pdfBytes = await buildPdfBytes();
+    const fileName = `${resolvedOrderId || 'invoice'}.pdf`;
+    const fileUri = `${FileSystem.cacheDirectory || FileSystem.documentDirectory}${fileName}`;
+
+    if (!fileUri) {
+      throw new Error('No writable directory available for invoice sharing.');
+    }
+
+    await FileSystem.writeAsStringAsync(fileUri, bytesToBase64(pdfBytes), {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+
+    const canShare = await Sharing.isAvailableAsync();
+    if (!canShare) {
+      throw new Error('Sharing is not available on this device.');
+    }
+
+    await Sharing.shareAsync(fileUri, {
+      mimeType: 'application/pdf',
+      UTI: 'com.adobe.pdf',
+      dialogTitle: 'Share Invoice PDF',
+    });
+
+    return fileUri;
+  };
+
   const handleShare = async () => {
+    if (Platform.OS === 'web') {
+      try {
+        await Share.share({
+          message: invoiceText,
+        });
+      } catch {}
+      return;
+    }
+
     try {
-      await Share.share({
-        message: invoiceText,
-      });
-    } catch {}
+      await shareInvoicePdfFile();
+    } catch {
+      Alert.alert('Share unavailable', 'We could not share the PDF invoice on this device.');
+    }
   };
 
   const handleDownload = async () => {
-    const pdfBytes = await buildInvoicePdf({
-      orderId: resolvedOrderId,
-      invoiceDate: resolvedInvoiceDate,
-      customerName,
-      phone,
-      address,
-      framePrice,
-      lensPrice,
-      discount,
-      totalPayable,
-      paidAmount,
-      remainingAmount,
-      lensType,
-      paymentMode: draft.paymentMode,
-      logoUri: Platform.OS === 'web' ? getAssetUri(brandLogo) : undefined,
-    });
+    const pdfBytes = await buildPdfBytes();
 
     if (Platform.OS === 'web' && globalThis.document) {
       const blob = new Blob([pdfBytes], { type: 'application/pdf' });
@@ -80,13 +120,9 @@ export default function InvoiceScreen() {
     }
 
     try {
-      await Share.share({
-        title: `${resolvedOrderId || 'invoice'}.pdf`,
-        message: `Invoice ${resolvedOrderId || ''}`.trim(),
-        url: `data:application/pdf;base64,${bytesToBase64(pdfBytes)}`,
-      });
+      await shareInvoicePdfFile();
     } catch {
-      Alert.alert('Download unavailable', 'We could not generate the PDF file on this device.');
+      Alert.alert('Download unavailable', 'We could not share the PDF invoice on this device.');
     }
   };
 
