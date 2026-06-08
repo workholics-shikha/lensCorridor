@@ -38,11 +38,17 @@ export default function SplashScreen() {
 
   useEffect(() => {
     fetchStores().then(setStores);
-    fetchSalespeople().then(setSalespeople);
   }, []);
 
   useEffect(() => {
-    fetchSalespeople(selectedStore?.id).then((items) => {
+    if (!selectedStore?.id) {
+      setSalespeople([]);
+      setSelectedSalesperson(null);
+      setSalespersonDropdownOpen(false);
+      return;
+    }
+
+    fetchSalespeople(selectedStore.id).then((items) => {
       setSalespeople(items);
       setSelectedSalesperson(null);
     });
@@ -187,6 +193,11 @@ export default function SplashScreen() {
               <TouchableOpacity
                 style={styles.dropdown}
                 onPress={() => {
+                  if (!selectedStore) {
+                    setSelectionError('Please select a store first.');
+                    setSalespersonDropdownOpen(false);
+                    return;
+                  }
                   setSalespersonDropdownOpen(!salespersonDropdownOpen);
                   setStoreDropdownOpen(false);
                 }}
@@ -201,7 +212,7 @@ export default function SplashScreen() {
                 >
                   {selectedSalesperson
                     ? `${capitalizeWords(selectedSalesperson.name)} (${selectedSalesperson.employee_id})`
-                    : 'Select Salesman Id or Name'}
+                    : (selectedStore ? 'Select Salesman Id or Name' : 'Select Store First')}
                 </Text>
 
                 <ChevronDown
