@@ -2,7 +2,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { Check, X } from 'lucide-react-native';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
-const brandImage = require('@/assets/images/Group-8734.png');
+const brandImage = require('@/assets/images/blueLogo.png');
 
 export default function OrderSuccessScreen() {
   const { orderId, invoiceDate } = useLocalSearchParams<{

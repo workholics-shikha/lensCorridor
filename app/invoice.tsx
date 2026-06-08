@@ -9,7 +9,7 @@ import { getOrderAmounts } from '@/lib/orderPricing';
 import { formatPersonName } from '@/lib/textFormat';
 import { Shadow } from '@/lib/theme';
 
-const brandLogo = require('@/assets/images/Group-8734.png');
+const brandLogo = require('@/assets/images/blueLogo.png');
 
 export default function InvoiceScreen() {
   const { draft, resetDraft } = useOrderFlow();
