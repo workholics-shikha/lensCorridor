@@ -7,7 +7,7 @@ import MasterSectionPage from './admin/MasterSectionPage'
 import StoresPage from './admin/StoresPage'
 import { InfoCard, MetricCard, MiniCard, StatusBadge } from './admin/AdminUiPrimitives'
 import { buildApiUrl } from '../lib/api'
-import { buildInvoicePdf } from '../../../lib/invoicePdf'
+import { buildInvoicePdf } from '../lib/invoicePdf'
 import invoiceLogo from '../../../assets/images/Group-8734.png'
 
 const adminBaseUrl = buildApiUrl('')
