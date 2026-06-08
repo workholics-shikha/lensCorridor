@@ -1,5 +1,4 @@
 import Constants from 'expo-constants';
-import { Platform } from 'react-native';
 import { getCategories, getFrameShapes, getSalespeople } from './localStore';
 import { Category, FrameShape, Salesperson } from './types';
 
@@ -207,11 +206,7 @@ function getApiBaseUrl() {
     }
   }
 
-  if (Platform.OS === 'android') {
-    return 'http://10.0.2.2:5000';
-  }
-
-  return 'http://192.168.29.202:5000';
+  return 'https://lenscorridor-api.onrender.com';
 }
 
 function resolveApiAssetUrl(path?: string) {
