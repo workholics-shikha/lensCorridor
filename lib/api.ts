@@ -193,18 +193,20 @@ export interface OrderPlacementRecord extends OrderPlacementResponse {
 }
 
 function getApiBaseUrl() {
-  const configuredBaseUrl = process.env.EXPO_PUBLIC_API_BASE_URL?.trim();
+  const configuredBaseUrl =
+    process.env.EXPO_PUBLIC_API_BASE_URL?.trim();
+
   if (configuredBaseUrl) {
     return configuredBaseUrl.replace(/\/$/, '');
   }
 
-  const isExpoDevelopmentHost = Constants.executionEnvironment === 'storeClient';
+  const isExpoDevelopmentHost =
+    Constants.executionEnvironment === 'storeClient';
+
   const expoHostUri = Constants.expoConfig?.hostUri?.trim();
+
   if (isExpoDevelopmentHost && expoHostUri) {
-    const host = expoHostUri.split(':')[0]?.trim();
-    if (host) {
-      return `http://${host}:5000`;
-    }
+    return 'https://lenscorridor-api.onrender.com';
   }
 
   return 'https://lenscorridor-api.onrender.com';
@@ -486,17 +488,19 @@ export async function fetchLensCategories(powerTypeId?: string): Promise<LensCat
       throw new Error(`Lens categories API returned ${response.status}`);
     }
 
-    const payload = (await response.json()) as { data?: Array<{
-      id?: string;
-      _id?: string;
-      categoryName?: string;
-      displayLabel?: string;
-      description?: string;
-      linkedPricingBand?: string;
-      usageAndMapping?: string;
-      priority?: number;
-      powertype_id?: Array<{ id?: string; _id?: string } | string>;
-    }> };
+    const payload = (await response.json()) as {
+      data?: Array<{
+        id?: string;
+        _id?: string;
+        categoryName?: string;
+        displayLabel?: string;
+        description?: string;
+        linkedPricingBand?: string;
+        usageAndMapping?: string;
+        priority?: number;
+        powertype_id?: Array<{ id?: string; _id?: string } | string>;
+      }>
+    };
 
     return (payload.data ?? [])
       .filter((item) => item.categoryName)
