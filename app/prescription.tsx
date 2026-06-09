@@ -38,7 +38,11 @@ export default function PrescriptionScreen() {
   const { width } = useWindowDimensions();
   const isCompact = width < 760;
   const isOrderFlow = mode === 'order-flow';
-  const resolvedNextPath = nextPath === '/billing' ? '/billing' : '/lens-details';
+  const resolvedNextPath = (
+    nextPath === '/billing'
+    || nextPath === '/lens-details'
+    || nextPath === '/return-exchange-exchange'
+  ) ? nextPath : '/lens-details';
   const [samePower, setSamePower] = useState(false);
   const [hasCylindricalPower, setHasCylindricalPower] = useState(false);
   const [selector, setSelector] = useState<SelectorState>({ open: false, eye: 'right', field: 'sph' });

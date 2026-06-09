@@ -23,6 +23,7 @@ import {
   X,
 } from 'lucide-react-native';
 import { fetchOrderPlacements, type OrderPlacementRecord } from '@/lib/api';
+import { buildDraftFromOrder } from '@/lib/orderFlow';
 import { Shadow } from '@/lib/theme';
 import { useOrderFlow } from '@/context/OrderFlowContext';
 
@@ -51,55 +52,14 @@ export default function CheckoutScreen() {
   const [framePreviews, setFramePreviews] = useState<FramePreviewItem[]>(draft.frameImages);
 
   const applyOrderHistory = (order: OrderPlacementRecord) => {
-    const nextFrames = Array.isArray(order.frame.images) && order.frame.images.length
-      ? order.frame.images.map((item, index) => ({
-        id: item.id || `history-frame-${index}`,
-        image: item.image,
-        shape: item.shape,
-      }))
-      : framePreviews;
+    const nextDraft = buildDraftFromOrder(order, draft);
 
     setCustomerSearch(order.customer.phone || '');
     setMatchedCustomer(order);
     setCustomerSuggestions([]);
-    setPrice(String(order.frame.price || order.billing.totalPayable || ''));
-    setFramePreviews(nextFrames);
-
-    updateDraft({
-      phone: order.customer.phone || '',
-      customerName: order.customer.name || '',
-      billingAddress: order.customer.billingAddress || '',
-      price: String(order.frame.price || order.billing.totalPayable || ''),
-      billingDiscount: String(order.billing.discount ?? 0),
-      partialPaymentEnabled: Boolean(order.billing.partialPaymentEnabled),
-      partialPaymentAmount: order.billing.partialPaymentEnabled
-        ? String(order.billing.paidAmount ?? '')
-        : '',
-      paymentMode: order.billing.paymentMode,
-      selectedShape: order.frame.selectedShape || draft.selectedShape,
-      frameImages: nextFrames,
-      lensSelection: {
-        lensType: order.lensSelection.lensType || draft.lensSelection.lensType,
-        lensCategory: order.lensSelection.lensCategory || draft.lensSelection.lensCategory,
-        lensCategoryId: order.lensSelection.lensCategoryId || draft.lensSelection.lensCategoryId,
-        lensPrice: Number(order.lensSelection.lensPrice ?? draft.lensSelection.lensPrice),
-        coating: order.lensSelection.coating || draft.lensSelection.coating,
-        powerType: order.lensSelection.powerType || draft.lensSelection.powerType,
-        powerTypeId: order.lensSelection.powerTypeId || draft.lensSelection.powerTypeId,
-        image: order.lensSelection.image || draft.lensSelection.image,
-      },
-      lensDetails: Array.isArray(order.lensDetails) && order.lensDetails.length
-        ? order.lensDetails.map((item, index) => ({
-          id: item.id || `history-lens-${index}`,
-          label: item.label || 'Distance Vision',
-          eye: item.eye,
-          sph: item.sph || '',
-          cyl: item.cyl || '',
-          axis: item.axis || '',
-          add: item.add || '',
-        }))
-        : draft.lensDetails,
-    });
+    setPrice(nextDraft.price);
+    setFramePreviews(nextDraft.frameImages);
+    updateDraft(nextDraft);
   };
 
   const handleBack = () => {

@@ -101,7 +101,7 @@ export default function SplashScreen() {
       },
     });
 
-    router.push('/(tabs)');
+    router.push('/return-exchange-search');
   };
 
   if (loading) {

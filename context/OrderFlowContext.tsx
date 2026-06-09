@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useMemo, useState } from 'react';
 
-type LensSelection = {
+export type LensSelection = {
   lensType: string;
   lensCategory: string;
   lensCategoryId: string;
@@ -11,7 +11,7 @@ type LensSelection = {
   image: string;
 };
 
-type LensDetail = {
+export type LensDetail = {
   id: string;
   label: string;
   eye: 'left' | 'right';
@@ -21,25 +21,25 @@ type LensDetail = {
   add: string;
 };
 
-type FrameImage = {
+export type FrameImage = {
   id: string;
   image?: string;
   shape?: string;
 };
 
-type SelectedStore = {
+export type SelectedStore = {
   id: string;
   name: string;
   code: string;
 };
 
-type SelectedSalesperson = {
+export type SelectedSalesperson = {
   id: string;
   name: string;
   employeeId: string;
 };
 
-type OrderDraft = {
+export type OrderDraft = {
   phone: string;
   customerName: string;
   price: string;

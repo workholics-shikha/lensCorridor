@@ -11,11 +11,14 @@ import {
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft, FileText, Phone } from 'lucide-react-native';
+import { useOrderFlow } from '@/context/OrderFlowContext';
 import { fetchOrderPlacementById, type OrderPlacementRecord } from '@/lib/api';
+import { buildDraftFromOrder } from '@/lib/orderFlow';
 import { Colors, Shadow } from '@/lib/theme';
 
 export default function OrderDetailsScreen() {
   const { orderId } = useLocalSearchParams<{ orderId?: string }>();
+  const { draft, updateDraft } = useOrderFlow();
   const [order, setOrder] = useState<OrderPlacementRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -93,6 +96,10 @@ export default function OrderDetailsScreen() {
 
   const frameImage = order.frame.images.find((item) => item.image)?.image;
   const orderDate = new Date(order.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  const handleReorder = () => {
+    updateDraft(buildDraftFromOrder(order, draft));
+    router.push('/billing');
+  };
 
   return (
     <View style={styles.container}>
@@ -186,7 +193,7 @@ export default function OrderDetailsScreen() {
         <TouchableOpacity
           style={styles.reorderButton}
           activeOpacity={0.88}
-          onPress={() => router.replace('/(tabs)')}
+          onPress={handleReorder}
         >
           <Text style={styles.reorderButtonText}>Reorder</Text>
         </TouchableOpacity>
