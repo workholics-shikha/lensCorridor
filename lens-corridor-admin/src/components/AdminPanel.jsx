@@ -572,6 +572,9 @@ const AdminPanel = ({ user, onLogout }) => {
   const [appOrders, setAppOrders] = useState([])
   const [appOrdersLoading, setAppOrdersLoading] = useState(false)
   const [appOrdersError, setAppOrdersError] = useState('')
+  const [returnRequests, setReturnRequests] = useState([])
+  const [returnRequestsLoading, setReturnRequestsLoading] = useState(false)
+  const [returnRequestsError, setReturnRequestsError] = useState('')
   const [selectedAppOrderId, setSelectedAppOrderId] = useState('')
   const [orderStoreFilter, setOrderStoreFilter] = useState('')
   const [orderIdSearch, setOrderIdSearch] = useState('')
@@ -665,6 +668,32 @@ const AdminPanel = ({ user, onLogout }) => {
     () => stores.find((store) => store.id === orderStoreFilter) || null,
     [stores, orderStoreFilter]
   )
+  const returnSummary = useMemo(() => {
+    const statusCounts = returnRequests.reduce((summary, request) => {
+      const normalizedStatus = String(request?.status || 'Requested').toLowerCase()
+
+      if (normalizedStatus === 'requested') {
+        summary.requested += 1
+      } else if (normalizedStatus === 'approved') {
+        summary.approved += 1
+      } else if (normalizedStatus === 'completed') {
+        summary.completed += 1
+      } else {
+        summary.rejected += 1
+      }
+
+      summary.totalRefundAmount += Number(request?.totalRefundAmount ?? 0)
+      return summary
+    }, {
+      requested: 0,
+      approved: 0,
+      completed: 0,
+      rejected: 0,
+      totalRefundAmount: 0,
+    })
+
+    return statusCounts
+  }, [returnRequests])
   const dashboardOrders = useMemo(() => (
     appOrders.filter((order) => Boolean(parseDateValue(order.createdAt)))
   ), [appOrders])
@@ -1308,6 +1337,42 @@ const AdminPanel = ({ user, onLogout }) => {
     }
 
     fetchOrders()
+
+    return () => controller.abort()
+  }, [])
+
+  useEffect(() => {
+    const controller = new AbortController()
+
+    const fetchReturns = async () => {
+      setReturnRequestsLoading(true)
+      setReturnRequestsError('')
+
+      try {
+        const response = await fetch(`${adminBaseUrl}/api/returns`, {
+          signal: controller.signal,
+        })
+
+        const data = await response.json().catch(() => null)
+
+        if (!response.ok) {
+          throw new Error(data?.message || 'Failed to fetch returns')
+        }
+
+        setReturnRequests(Array.isArray(data?.data) ? data.data : [])
+      } catch (error) {
+        if (error.name === 'AbortError') {
+          return
+        }
+
+        setReturnRequests([])
+        setReturnRequestsError(error.message || 'Failed to fetch returns')
+      } finally {
+        setReturnRequestsLoading(false)
+      }
+    }
+
+    fetchReturns()
 
     return () => controller.abort()
   }, [])
@@ -2896,45 +2961,72 @@ const AdminPanel = ({ user, onLogout }) => {
                   <div className="panel-head">
                     <div>
                       <p className="eyebrow">Return / refund management</p>
-                      <h4>Approval workflow and analytics</h4>
+                      <h4>Return order list</h4>
                     </div>
                   </div>
                   <div className="orders-table-shell">
-                    <table className="orders-table listing-table listing-table--three">
+                    <table className="orders-table listing-table listing-table--five">
                       <thead>
                         <tr>
                           <th>Request</th>
+                          <th>Order</th>
+                          <th>Customer / Store</th>
                           <th>Reason</th>
-                          <th>Status</th>
+                          <th>Refund / Status</th>
                         </tr>
                       </thead>
                       <tbody>
-                        <tr>
-                          <td>
-                            <strong className="table-cell-primary">RET-510</strong>
-                            <small className="table-cell-secondary">Return request</small>
-                          </td>
-                          <td>
-                            <strong className="table-cell-primary">Power discomfort</strong>
-                            <small className="table-cell-secondary">Customer reported adaptation issue</small>
-                          </td>
-                          <td>
-                            <StatusBadge tone="warning">Manager review</StatusBadge>
-                          </td>
-                        </tr>
-                        <tr>
-                          <td>
-                            <strong className="table-cell-primary">REF-221</strong>
-                            <small className="table-cell-secondary">Refund request</small>
-                          </td>
-                          <td>
-                            <strong className="table-cell-primary">Frame defect</strong>
-                            <small className="table-cell-secondary">Quality issue logged after delivery</small>
-                          </td>
-                          <td>
-                            <StatusBadge tone="neutral">Finance approval</StatusBadge>
-                          </td>
-                        </tr>
+                        {returnRequestsLoading ? (
+                          <tr>
+                            <td colSpan="5">
+                              <strong className="table-cell-primary">Loading return requests...</strong>
+                            </td>
+                          </tr>
+                        ) : null}
+                        {!returnRequestsLoading && returnRequestsError ? (
+                          <tr>
+                            <td colSpan="4">
+                              <strong className="table-cell-primary">{returnRequestsError}</strong>
+                              <small className="table-cell-secondary">We could not load return orders right now.</small>
+                            </td>
+                            <td><StatusBadge tone="warning">Error</StatusBadge></td>
+                          </tr>
+                        ) : null}
+                        {!returnRequestsLoading && !returnRequestsError && returnRequests.length === 0 ? (
+                          <tr>
+                            <td colSpan="4">
+                              <strong className="table-cell-primary">No return orders yet</strong>
+                              <small className="table-cell-secondary">Return requests will appear here once they are created.</small>
+                            </td>
+                            <td><StatusBadge tone="neutral">Empty</StatusBadge></td>
+                          </tr>
+                        ) : null}
+                        {!returnRequestsLoading && !returnRequestsError && returnRequests.map((request) => (
+                          <tr className="orders-data-row" key={request.id}>
+                            <td>
+                              <strong className="table-cell-primary">{request.id.slice(-8).toUpperCase()}</strong>
+                              <small className="table-cell-secondary">{formatOrderDate(request.createdAt)}</small>
+                            </td>
+                            <td>
+                              <strong className="table-cell-primary">{request.orderNumber || '-'}</strong>
+                              <small className="table-cell-secondary">{request.itemCount} item{request.itemCount === 1 ? '' : 's'}</small>
+                            </td>
+                            <td>
+                              <strong className="table-cell-primary">{request.customerName || 'Customer'}</strong>
+                              <small className="table-cell-secondary">{request.storeName || 'Store not assigned'}</small>
+                            </td>
+                            <td>
+                              <strong className="table-cell-primary">{request.reason || '-'}</strong>
+                              <small className="table-cell-secondary">{request.customerPhone || 'Phone not available'}</small>
+                            </td>
+                            <td>
+                              <strong className="table-cell-primary">{formatCurrency(request.totalRefundAmount)}</strong>
+                              <small className="table-cell-secondary">
+                                <StatusBadge tone={getStatusTone(request.status)}>{request.status}</StatusBadge>
+                              </small>
+                            </td>
+                          </tr>
+                        ))}
                       </tbody>
                     </table>
                   </div>
@@ -2942,12 +3034,22 @@ const AdminPanel = ({ user, onLogout }) => {
 
                 <section className="panel detail-panel">
                   <p className="eyebrow">Return analytics</p>
-                  <h4>Top reasons this month</h4>
+                  <h4>Current request snapshot</h4>
                   <div className="mini-grid">
-                    <MiniCard label="Power mismatch" value="38%" />
-                    <MiniCard label="Fit issue" value="24%" />
-                    <MiniCard label="Frame defect" value="18%" />
-                    <MiniCard label="Late delivery" value="11%" />
+                    <MiniCard label="Requested" value={String(returnSummary.requested)} />
+                    <MiniCard label="Approved" value={String(returnSummary.approved)} />
+                    <MiniCard label="Completed" value={String(returnSummary.completed)} />
+                    <MiniCard label="Rejected" value={String(returnSummary.rejected)} />
+                  </div>
+                  <div className="task-list" style={{ marginTop: '18px' }}>
+                    <div className="task-item">
+                      <strong>Total refund value</strong>
+                      <small>{formatCurrency(returnSummary.totalRefundAmount)}</small>
+                    </div>
+                    <div className="task-item">
+                      <strong>Total requests</strong>
+                      <small>{returnRequests.length} return order{returnRequests.length === 1 ? '' : 's'}</small>
+                    </div>
                   </div>
                 </section>
               </div>

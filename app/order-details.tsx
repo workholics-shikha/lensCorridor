@@ -96,6 +96,7 @@ export default function OrderDetailsScreen() {
 
   const frameImage = order.frame.images.find((item) => item.image)?.image;
   const orderDate = new Date(order.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  const totalPayable = order.billing.totalPayable.toLocaleString('en-IN');
   const handleReorder = () => {
     updateDraft(buildDraftFromOrder(order, draft));
     router.push('/billing');
@@ -136,13 +137,20 @@ export default function OrderDetailsScreen() {
               <Text style={styles.productSubtitle}>
                 Frame + {order.lensSelection.lensCategory || order.lensSelection.powerType || 'Lens'}
               </Text>
-              <Text style={styles.productPrice}>Rs{order.billing.totalPayable}</Text>
+              <View style={styles.currencyRow}>
+                <Text style={styles.productPrice}>Rs.</Text>
+                <Text style={[styles.productPrice, styles.currencyAmount]}>{totalPayable}</Text>
+              </View>
             </View>
 
             <View style={styles.metaColumn}>
               <Text style={styles.metaText}>Order ID: {order.orderNumber}</Text>
               <Text style={styles.metaText}>Order Date: {orderDate}</Text>
-              <Text style={styles.metaText}>Total Price: Rs{order.billing.totalPayable}</Text>
+              <View style={styles.metaPriceRow}>
+                <Text style={styles.metaText}>Total Price:</Text>
+                <Text style={[styles.metaText, styles.metaPriceValue]}>Rs.</Text>
+                <Text style={[styles.metaText, styles.currencyAmount]}>{totalPayable}</Text>
+              </View>
             </View>
           </View>
 
@@ -316,10 +324,17 @@ const styles = StyleSheet.create({
     color: '#7F8695',
   },
   productPrice: {
-    marginTop: 6,
     fontSize: 16,
     fontWeight: '700',
     color: Colors.primary,
+  },
+  currencyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 6,
+  },
+  currencyAmount: {
+    marginLeft: 4,
   },
   metaColumn: {
     alignItems: 'flex-end',
@@ -328,6 +343,13 @@ const styles = StyleSheet.create({
     fontSize: 10.5,
     color: '#737B8D',
     marginBottom: 4,
+  },
+  metaPriceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  metaPriceValue: {
+    marginLeft: 4,
   },
   detailPanel: {
     borderWidth: 1,

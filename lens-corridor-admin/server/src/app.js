@@ -147,6 +147,7 @@ const powerTypeRoutes = require('./routes/powerTypeRoutes');
 const lensCategoryRoutes = require('./routes/lensCategoryRoutes');
 const orderPlacementRoutes = require('./routes/orderPlacementRoutes');
 const customerRoutes = require('./routes/customerRoutes');
+const returnRoutes = require('./routes/returnRoutes');
 
 
 app.use('/api/users', userRoutes);
@@ -161,6 +162,7 @@ app.use('/api/power-types', powerTypeRoutes);
 app.use('/api/lens-categories', lensCategoryRoutes);
 app.use('/api/order-placement', orderPlacementRoutes);
 app.use('/api/customers', customerRoutes);
+app.use('/api/returns', returnRoutes);
 
 /* =========================
    HEALTH CHECK
