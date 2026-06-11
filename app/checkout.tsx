@@ -50,6 +50,11 @@ export default function CheckoutScreen() {
   const [price, setPrice] = useState(draft.price);
   const [error, setError] = useState('');
   const [framePreviews, setFramePreviews] = useState<FramePreviewItem[]>(draft.frameImages);
+  const customerSearchDigits = customerSearch.replace(/\D/g, '').slice(-10);
+  const isNumericCustomerSearch = /^\d+$/.test(customerSearch.trim().replace(/\s+/g, ''));
+  const customerSearchValidationMessage = customerSearch.trim() && isNumericCustomerSearch && customerSearchDigits.length < 10
+    ? 'Mobile number must be 10 digits.'
+    : '';
 
   const applyOrderHistory = (order: OrderPlacementRecord) => {
     const nextDraft = buildDraftFromOrder(order, draft);
@@ -284,24 +289,36 @@ export default function CheckoutScreen() {
         <View style={[styles.content, { maxWidth: containerWidth }]}>
           <View style={styles.fieldCard}>
             <SectionLabel
-              title="Search customer by name or mobile number"
+              title="Enter or Search Customer"
               icon={<SearchCustomerGlyph />}
             />
             <View style={styles.inputShell}>
               <TextInput
                 value={customerSearch}
                 onChangeText={(value) => {
-                  setCustomerSearch(value);
+                  const trimmedValue = value.trim();
+                  const digitsOnlyValue = value.replace(/\D/g, '');
+                  const shouldTreatAsPhoneInput = trimmedValue.length > 0 && /^\d+$/.test(trimmedValue);
+
+                  setCustomerSearch(
+                    shouldTreatAsPhoneInput
+                      ? digitsOnlyValue.slice(0, 10)
+                      : value
+                  );
                   setMatchedCustomer(null);
                   setError('');
                 }}
                 style={styles.textInput}
-                placeholder="Search customer name or mobile number"
+                placeholder="Enter customer name or 10-digit mobile number"
                 placeholderTextColor="#A5A7AE"
                 keyboardType="default"
               />
               <Search size={18} color="#C0C2CA" strokeWidth={2} />
             </View>
+
+            {customerSearchValidationMessage ? (
+              <Text style={styles.inlineValidationText}>{customerSearchValidationMessage}</Text>
+            ) : null}
 
             {(searchingCustomer || customerSuggestions.length > 0) && customerSearch.trim().length >= 2 ? (
               <View style={styles.customerDropdown}>
@@ -758,6 +775,12 @@ const styles = StyleSheet.create({
     color: '#1E2028',
     minWidth: 0,
     paddingRight: 10,
+  },
+  inlineValidationText: {
+    marginTop: 8,
+    fontSize: 11.5,
+    color: '#B42318',
+    fontWeight: '500',
   },
   frameRow: {
     gap: 10,

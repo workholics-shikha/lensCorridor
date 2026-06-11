@@ -7,28 +7,34 @@ const DashboardPage = ({
   setSalesRange,
   salesRanges,
   dashboardHero,
+  dashboardRevenueCards,
   dashboardMetrics,
   storePerformance,
   operationalQueue,
   productInsights,
 }) => (
   <>
-    <div className="hero-panel">
-      <div>
-        <p className="eyebrow">Operations snapshot</p>
-        <h3>Revenue, service queue, and store health at a glance</h3>
-        <p className="muted">Designed for fast tablet review during store rounds, morning huddles, and owner-level monitoring.</p>
+    <div className="hero-panel dashboard-hero-panel">
+      <div className="dashboard-hero-copy">
+        <p className="eyebrow">Revenue overview</p>
+        <h3>Track revenue performance across today, weekly, and monthly windows</h3>
+        <p className="muted">Designed for quick owner review, morning huddles, and easy daily follow-up with store teams.</p>
       </div>
-      <div className="hero-stats">
-        <div>
-          <span>Revenue Today</span>
-          <strong>{dashboardHero.revenueToday}</strong>
-        </div>
-        <div>
-          <span>Pending Orders</span>
-          <strong>{dashboardHero.pendingOrders}</strong>
-        </div>
+      <div className="dashboard-hero-highlight">
+        <span>Pending Orders</span>
+        <strong>{dashboardHero.pendingOrders}</strong>
+        <small>Orders that still need billing, fulfillment, or follow-up action.</small>
       </div>
+    </div>
+
+    <div className="dashboard-revenue-grid">
+      {dashboardRevenueCards.map((card) => (
+        <article className="dashboard-revenue-card" key={card.label}>
+          <span>{card.label}</span>
+          <strong>{card.value}</strong>
+          <small>{card.hint}</small>
+        </article>
+      ))}
     </div>
 
     <div className="metric-grid">
@@ -64,6 +70,16 @@ const DashboardPage = ({
         </div>
         <div className="chart-area">
           <div className="chart-caption">{salesCaption}</div>
+          <div className="dashboard-chart-summary">
+            {salesData.labels.map((label, index) => (
+              <div className="dashboard-chart-summary__item" key={`${label}-${index}`}>
+                <span>{label}</span>
+                <strong>
+                  Rs. {Number(salesData.totals?.[index] ?? 0).toLocaleString('en-IN')}
+                </strong>
+              </div>
+            ))}
+          </div>
           <div className="chart-bars" style={{ gridTemplateColumns: `repeat(${salesData.values.length}, 1fr)` }}>
             {salesData.values.map((value, index) => (
               <span

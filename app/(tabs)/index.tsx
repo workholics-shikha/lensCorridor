@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Menu, ShoppingCart } from 'lucide-react-native';
+import { ArrowLeft, ShoppingCart } from 'lucide-react-native';
 import { fetchFrameShapes } from '@/lib/api';
 import { FrameShape } from '@/lib/types';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '@/lib/theme';
@@ -76,6 +76,15 @@ export default function HomeScreen() {
     fetchFrameShapes().then(setFrameShapes);
   }, []);
 
+  const handleBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+
+    router.replace('/');
+  };
+
   const handleShapeSelect = (slug: string) => {
     setSelectedShape(slug);
     router.push({ pathname: '/checkout', params: { shape: slug } });
@@ -101,9 +110,13 @@ export default function HomeScreen() {
         >
           <HeaderPrintPattern />
           <View style={styles.headerRow}>
-            <TouchableOpacity style={styles.headerIconButton} activeOpacity={0.8}>
+            {/* <TouchableOpacity style={styles.headerIconButton} activeOpacity={0.8}>
               <Menu size={20} color={Colors.white} />
-            </TouchableOpacity>
+            </TouchableOpacity> */}
+
+            <TouchableOpacity style={styles.backButton} onPress={handleBack} activeOpacity={0.85}>
+            <ArrowLeft size={21} color="#1C1D21" />
+          </TouchableOpacity>
 
             <View style={styles.brandRow}>
               <Image
@@ -150,12 +163,15 @@ export default function HomeScreen() {
         >
           <SectionTitle title="Select Frame Shapes" iconSource={frameShapesTitleIcon} />
           {isTabletLandscape ? (
-            <View
-              style={[
-                styles.shapeGrid,
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={[
+                styles.shapesRow,
+                styles.shapesRowTablet,
                 {
                   paddingHorizontal: metrics.horizontalPadding,
-                  marginBottom: metrics.sectionGap + 2,
+                  paddingBottom: metrics.sectionGap + 2,
                 },
               ]}
             >
@@ -203,7 +219,7 @@ export default function HomeScreen() {
                   </TouchableOpacity>
                 );
               })}
-            </View>
+            </ScrollView>
           ) : (
             <ScrollView
               horizontal
@@ -429,7 +445,7 @@ const styles = StyleSheet.create({
     paddingVertical: 0,
   },
   headerPrint: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   headerRow: {
     flexDirection: 'row',
@@ -510,6 +526,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  backButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.white,
+  },
   brandRow: {
     flex: 1,
     alignItems: 'flex-start',
@@ -587,6 +611,9 @@ const styles = StyleSheet.create({
   },
   shapesRow: {
     gap: 6,
+  },
+  shapesRowTablet: {
+    gap: 10,
   },
   shapeGrid: {
     flexDirection: 'row',

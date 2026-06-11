@@ -17,6 +17,7 @@ const screenTitles = {
   masters: 'Master Management',
   stores: 'Store Management',
   'add-store': 'Add Store',
+  'edit-store': 'Edit Store',
   employees: 'Employee Management',
   'create-employee': 'Create Employee',
   customers: 'Customer Management',
@@ -225,6 +226,19 @@ const createStoreForm = () => ({
   email: '',
   managerName: '',
   status: 'Active',
+})
+
+const buildStoreFormFromStore = (store) => ({
+  storeName: store?.name || '',
+  storeCode: store?.code || '',
+  street: store?.address?.street || '',
+  city: store?.address?.city || '',
+  state: store?.address?.state || '',
+  pincode: store?.address?.pincode || '',
+  phone: store?.phone || '',
+  email: store?.email || '',
+  managerName: store?.managerName || '',
+  status: store?.status || 'Active',
 })
 
 const getStatusTone = (status = '') => {
@@ -589,6 +603,14 @@ const AdminPanel = ({ user, onLogout }) => {
   const [customerSearch, setCustomerSearch] = useState('')
   const [selectedCustomerId, setSelectedCustomerId] = useState('')
 
+  useEffect(() => {
+    if (!currentStore) {
+      return
+    }
+
+    setStoreForm(buildStoreFormFromStore(currentStore))
+  }, [currentStore?.id])
+
   const screenTitle = activeScreen === 'masters'
     ? (isLensCategoryEditorOpen ? 'Lens Category Update' : `${currentMaster.label} Management`)
     : (screenTitles[activeScreen] || 'Admin Panel')
@@ -753,6 +775,18 @@ const AdminPanel = ({ user, onLogout }) => {
       pendingOrders: String(dashboardOrders.filter((order) => order.status === 'Pending').length),
     }
   }, [dashboardOrders])
+  const monthlyRevenue = useMemo(() => {
+    const today = new Date()
+    const monthStart = startOfDay(new Date(today.getFullYear(), today.getMonth(), 1))
+    const monthEnd = endOfDay(new Date(today.getFullYear(), today.getMonth() + 1, 0))
+    return dashboardOrders.reduce((sum, order) => {
+      const createdAt = parseDateValue(order.createdAt)
+      if (!createdAt || createdAt < monthStart || createdAt > monthEnd) {
+        return sum
+      }
+      return sum + Number(order.billing?.totalPayable ?? 0)
+    }, 0)
+  }, [dashboardOrders])
   const dashboardMetrics = useMemo(() => {
     const paidOrders = dashboardOrders.filter((order) => Number(order.billing?.remainingAmount ?? 0) <= 0).length
     const partialOrders = dashboardOrders.filter((order) => Number(order.billing?.remainingAmount ?? 0) > 0).length
@@ -783,6 +817,28 @@ const AdminPanel = ({ user, onLogout }) => {
       },
     ]
   }, [dashboardOrders, todayOrderCount, yesterdayOrderCount, topStoreSnapshot, weeklyRevenue])
+  const dashboardRevenueCards = useMemo(() => {
+    const todayRevenueValue = dashboardHero.revenueToday
+    const weeklyAverage = todayOrderCount > 0 ? Math.round(weeklyRevenue / Math.max(7, todayOrderCount)) : Math.round(weeklyRevenue / 7)
+
+    return [
+      {
+        label: 'Today Revenue',
+        value: todayRevenueValue,
+        hint: `${todayOrderCount} order${todayOrderCount === 1 ? '' : 's'} billed today`,
+      },
+      {
+        label: 'Weekly Revenue',
+        value: formatCurrency(weeklyRevenue),
+        hint: `Approx daily pace ${formatCurrency(weeklyAverage)}`,
+      },
+      {
+        label: 'Monthly Revenue',
+        value: formatCurrency(monthlyRevenue),
+        hint: topStoreSnapshot ? `Best performing store: ${topStoreSnapshot.name}` : 'Waiting for store activity',
+      },
+    ]
+  }, [dashboardHero.revenueToday, monthlyRevenue, todayOrderCount, topStoreSnapshot, weeklyRevenue])
   const salesDataByRange = useMemo(() => {
     const today = new Date()
     const weeklyDates = [...Array(7)].map((_, index) => {
@@ -825,11 +881,13 @@ const AdminPanel = ({ user, onLogout }) => {
       weekly: {
         caption: 'Showing the last 7 days of billed order value.',
         labels: weeklyLabels,
+        totals: weeklyTotals,
         values: normalizeValues(weeklyTotals),
       },
       monthly: {
         caption: 'Showing this month grouped into week buckets.',
         labels: monthlyLabels,
+        totals: monthlyTotals,
         values: normalizeValues(monthlyTotals),
       },
     }
@@ -1708,6 +1766,23 @@ const AdminPanel = ({ user, onLogout }) => {
     }
   }
 
+  const resetStoreEditForm = () => {
+    if (!currentStore) {
+      return
+    }
+
+    setStoreForm(buildStoreFormFromStore(currentStore))
+    setStoreMessage('')
+  }
+
+  const openStoreEditor = (storeId) => {
+    if (storeId) {
+      setSelectedStoreId(storeId)
+    }
+
+    activateScreen('edit-store')
+  }
+
   const handleStoreFieldChange = (field, value) => {
     setStoreForm((current) => ({
       ...current,
@@ -1742,6 +1817,42 @@ const AdminPanel = ({ user, onLogout }) => {
       activateScreen('stores')
     } catch (error) {
       setStoreMessage(error.message || 'Failed to create store')
+    } finally {
+      setStoreSaving(false)
+    }
+  }
+
+  const handleStoreUpdate = async () => {
+    if (!currentStore?.id) {
+      setStoreMessage('Select a store before updating it')
+      return
+    }
+
+    setStoreSaving(true)
+    setStoreMessage('')
+
+    const token = localStorage.getItem('adminToken')
+
+    try {
+      const response = await fetch(`${adminBaseUrl}/api/stores/${currentStore.id}`, {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(storeForm),
+      })
+
+      const data = await response.json().catch(() => ({}))
+
+      assertAuthorizedResponse(response, data, 'Failed to update store')
+
+      await refreshStores()
+      setSelectedStoreId(data.id)
+      setStoreForm(buildStoreFormFromStore(data))
+      setStoreMessage('Store updated successfully')
+    } catch (error) {
+      setStoreMessage(error.message || 'Failed to update store')
     } finally {
       setStoreSaving(false)
     }
@@ -1868,12 +1979,12 @@ const AdminPanel = ({ user, onLogout }) => {
                 </div>
               </div>
               <div className="topbar-actions">
-                <div className="pill">All Stores</div>
+                {/* <div className="pill">All Stores</div> */}
                 <div className="profile-chip">
                   <span className="avatar">{initials}</span>
                   <div>
                     <strong>{adminName}</strong>
-                    <small>{profileMeta}</small>
+                    {/* <small>{profileMeta}</small> */}
                   </div>
                 </div>
               </div>
@@ -1883,6 +1994,7 @@ const AdminPanel = ({ user, onLogout }) => {
               <DashboardPage
                 dashboardHero={dashboardHero}
                 dashboardMetrics={dashboardMetrics}
+                dashboardRevenueCards={dashboardRevenueCards}
                 operationalQueue={operationalQueue}
                 productInsights={productInsights}
                 salesCaption={salesCaption}
@@ -1924,6 +2036,7 @@ const AdminPanel = ({ user, onLogout }) => {
                 activateScreen={activateScreen}
                 currentStore={currentStore}
                 handleStoreDelete={handleStoreDelete}
+                openStoreEditor={openStoreEditor}
                 resetStoreForm={resetStoreForm}
                 selectedStoreId={selectedStoreId}
                 setSelectedStoreId={setSelectedStoreId}
@@ -3051,6 +3164,124 @@ const AdminPanel = ({ user, onLogout }) => {
                       <small>{returnRequests.length} return order{returnRequests.length === 1 ? '' : 's'}</small>
                     </div>
                   </div>
+                </section>
+              </div>
+            </Screen>
+
+            <Screen active={activeScreen === 'edit-store'} id="edit-store">
+              <div className="section-grid">
+                <section className="panel detail-panel compact-lens-editor">
+                  <div className="panel-head">
+                    <div>
+                      <p className="eyebrow">Store update</p>
+                      <h4>{currentStore ? `Edit ${currentStore.name}` : 'Edit Store'}</h4>
+                    </div>
+                    <div className="filter-pills">
+                      <button className="ghost-btn" onClick={() => activateScreen('stores')} type="button">Back To Stores</button>
+                      <button className="ghost-btn" onClick={resetStoreEditForm} type="button">Reset Changes</button>
+                      <button className="primary-btn soft-btn" disabled={storeSaving || !currentStore} onClick={handleStoreUpdate} type="button">
+                        {storeSaving ? 'Saving...' : 'Save Updates'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {storeMessage ? (
+                    <div className="task-item" style={{ marginBottom: '14px' }}>
+                      <strong>Store status</strong>
+                      <small>{storeMessage}</small>
+                    </div>
+                  ) : null}
+
+                  {currentStore ? (
+                    <>
+                      <div className="info-grid compact-info-grid lens-editor-summary" style={{ marginBottom: '18px' }}>
+                        <InfoCard label="Status" value={currentStore.status || '-'} />
+                        <InfoCard label="Reference" value={currentStore.code || '-'} />
+                        <InfoCard label="Manager" value={currentStore.managerName || '-'} />
+                        <InfoCard label="Primary Contact" value={currentStore.phone || '-'} />
+                      </div>
+
+                      <div className="form-wire lens-category-wire lens-editor-layout">
+                        <section className="lens-editor-card">
+                          <div className="lens-editor-card-head">
+                            <div>
+                              <p className="eyebrow">Core Details</p>
+                              <h5>Store identity and operating status</h5>
+                            </div>
+                          </div>
+                          <div className="field split compact-field-split">
+                            <div className="field compact-field">
+                              <label>Store Name</label>
+                              <input className="input filled" onChange={(event) => handleStoreFieldChange('storeName', event.target.value)} type="text" value={storeForm.storeName} />
+                            </div>
+                            <div className="field compact-field">
+                              <label>Store Code</label>
+                              <input className="input filled" onChange={(event) => handleStoreFieldChange('storeCode', event.target.value.toUpperCase())} type="text" value={storeForm.storeCode} />
+                            </div>
+                          </div>
+                          <div className="field split compact-field-split">
+                            <div className="field compact-field">
+                              <label>Store Manager</label>
+                              <input className="input filled" onChange={(event) => handleStoreFieldChange('managerName', event.target.value)} type="text" value={storeForm.managerName} />
+                            </div>
+                            <div className="field compact-field">
+                              <label>Status</label>
+                              <select className="input filled" onChange={(event) => handleStoreFieldChange('status', event.target.value)} value={storeForm.status}>
+                                <option value="Active">Active</option>
+                                <option value="Inactive">Inactive</option>
+                              </select>
+                            </div>
+                          </div>
+                        </section>
+
+                        <section className="lens-editor-card">
+                          <div className="lens-editor-card-head">
+                            <div>
+                              <p className="eyebrow">Contact</p>
+                              <h5>Phone, email, and address information</h5>
+                            </div>
+                          </div>
+                          <div className="field split compact-field-split">
+                            <div className="field compact-field">
+                              <label>Primary Contact Number</label>
+                              <input className="input filled" onChange={(event) => handleStoreFieldChange('phone', event.target.value)} type="text" value={storeForm.phone} />
+                            </div>
+                            <div className="field compact-field">
+                              <label>Store Email</label>
+                              <input className="input filled" onChange={(event) => handleStoreFieldChange('email', event.target.value)} type="email" value={storeForm.email} />
+                            </div>
+                          </div>
+                          <div className="field compact-field">
+                            <label>Street Address</label>
+                            <textarea
+                              className="input filled compact-textarea"
+                              onChange={(event) => handleStoreFieldChange('street', event.target.value)}
+                              value={storeForm.street}
+                            />
+                          </div>
+                          <div className="field split compact-field-split compact-meta-grid">
+                            <div className="field compact-field">
+                              <label>City</label>
+                              <input className="input filled" onChange={(event) => handleStoreFieldChange('city', event.target.value)} type="text" value={storeForm.city} />
+                            </div>
+                            <div className="field compact-field">
+                              <label>State</label>
+                              <input className="input filled" onChange={(event) => handleStoreFieldChange('state', event.target.value)} type="text" value={storeForm.state} />
+                            </div>
+                            <div className="field compact-field">
+                              <label>Pincode</label>
+                              <input className="input filled" onChange={(event) => handleStoreFieldChange('pincode', event.target.value)} type="text" value={storeForm.pincode} />
+                            </div>
+                          </div>
+                        </section>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="task-item">
+                      <strong>No store selected</strong>
+                      <small>Choose a store from the list before opening the update page.</small>
+                    </div>
+                  )}
                 </section>
               </div>
             </Screen>

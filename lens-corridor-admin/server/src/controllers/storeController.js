@@ -71,6 +71,57 @@ const createStore = async (req, res) => {
   }
 };
 
+const updateStore = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const {
+      storeName,
+      storeCode,
+      street,
+      city,
+      state,
+      pincode,
+      phone,
+      email,
+      managerName,
+      status,
+    } = req.body;
+
+    if (!storeName || !storeCode) {
+      return res.status(400).json({ error: 'Store name and store code are required' });
+    }
+
+    const store = await Store.findById(id);
+
+    if (!store) {
+      return res.status(404).json({ error: 'Store not found' });
+    }
+
+    store.storeName = storeName.trim();
+    store.storeCode = storeCode.trim().toUpperCase();
+    store.address = {
+      street: street?.trim() || '',
+      city: city?.trim() || '',
+      state: state?.trim() || '',
+      pincode: pincode?.trim() || '',
+    };
+    store.phone = phone?.trim() || '';
+    store.email = email?.trim().toLowerCase() || '';
+    store.managerName = managerName?.trim() || '';
+    store.status = status || 'Active';
+
+    await store.save();
+
+    res.json(sanitizeStore(store));
+  } catch (error) {
+    if (error?.code === 11000) {
+      return res.status(409).json({ error: 'Store code already exists' });
+    }
+
+    res.status(500).json({ error: 'Failed to update store' });
+  }
+};
+
 const deleteStore = async (req, res) => {
   try {
     const { id } = req.params;
@@ -86,4 +137,4 @@ const deleteStore = async (req, res) => {
   }
 };
 
-module.exports = { listStores, createStore, deleteStore };
+module.exports = { listStores, createStore, updateStore, deleteStore };

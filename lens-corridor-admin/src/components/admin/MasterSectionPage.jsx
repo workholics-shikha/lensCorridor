@@ -5,6 +5,28 @@ import { buildApiUrl } from '../../lib/api'
 
 const adminBaseUrl = buildApiUrl('')
 
+const buildPaginationItems = (currentPage, totalPages) => {
+  if (totalPages <= 1) {
+    return [1]
+  }
+
+  const pages = new Set([1, totalPages, currentPage, currentPage - 1, currentPage + 1])
+  const normalizedPages = [...pages]
+    .filter((page) => page >= 1 && page <= totalPages)
+    .sort((a, b) => a - b)
+
+  const items = []
+  normalizedPages.forEach((page, index) => {
+    const previousPage = normalizedPages[index - 1]
+    if (previousPage && page - previousPage > 1) {
+      items.push(`ellipsis-${previousPage}-${page}`)
+    }
+    items.push(page)
+  })
+
+  return items
+}
+
 const MasterSectionPage = ({
   closeLensCategoryEditor,
   currentMaster,
@@ -62,6 +84,11 @@ const MasterSectionPage = ({
       .slice(start, start + itemsPerPage)
       .map((item, index) => ({ item, absoluteIndex: start + index }))
   }, [isLensCategoryMaster, normalizedMasterItems, page])
+
+  const paginationItems = useMemo(
+    () => buildPaginationItems(page, totalPages),
+    [page, totalPages]
+  )
 
   useEffect(() => {
     if (!isLensCategoryMaster) {
@@ -424,21 +451,42 @@ const MasterSectionPage = ({
             </table>
           </div>
           {normalizedMasterItems.length > itemsPerPage ? (
-            <div style={{ alignItems: 'center', display: 'flex', gap: '10px', justifyContent: 'space-between', marginTop: '14px' }}>
-              <small style={{ color: '#667085' }}>
-                Page {page} of {totalPages}
-              </small>
-              <div style={{ display: 'flex', gap: '8px' }}>
+            <div className="pagination-shell pagination-shell--masters">
+              <div className="pagination-summary">
+                <strong>
+                  Showing {(page - 1) * itemsPerPage + 1}
+                  {' '}-{' '}
+                  {Math.min(page * itemsPerPage, normalizedMasterItems.length)}
+                </strong>
+                <small>of {normalizedMasterItems.length} records</small>
+              </div>
+              <div className="pagination-controls">
                 <button
-                  className="soft-btn"
+                  className="pagination-nav"
                   type="button"
                   onClick={() => setPage((current) => Math.max(1, current - 1))}
                   disabled={page === 1}
                 >
                   Previous
                 </button>
+                <div className="pagination-track">
+                  {paginationItems.map((item) => (
+                    typeof item === 'string' ? (
+                      <span className="pagination-ellipsis" key={item}>...</span>
+                    ) : (
+                      <button
+                        className={`pagination-chip ${item === page ? 'active' : ''}`}
+                        key={item}
+                        onClick={() => setPage(item)}
+                        type="button"
+                      >
+                        {item}
+                      </button>
+                    )
+                  ))}
+                </div>
                 <button
-                  className="soft-btn"
+                  className="pagination-nav pagination-nav--next"
                   type="button"
                   onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
                   disabled={page === totalPages}
