@@ -298,7 +298,10 @@ export default function CheckoutScreen() {
                 onChangeText={(value) => {
                   const trimmedValue = value.trim();
                   const digitsOnlyValue = value.replace(/\D/g, '');
-                  const shouldTreatAsPhoneInput = trimmedValue.length > 0 && /^\d+$/.test(trimmedValue);
+                  const currentInputLooksNumeric = /^\d+$/.test(customerSearch.trim());
+                  const shouldTreatAsPhoneInput =
+                    digitsOnlyValue.length > 0
+                    && (currentInputLooksNumeric || /^\d/.test(trimmedValue));
 
                   setCustomerSearch(
                     shouldTreatAsPhoneInput

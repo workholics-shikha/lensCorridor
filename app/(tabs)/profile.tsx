@@ -35,8 +35,10 @@ export default function ProfileScreen() {
   const handleSave = async () => {
     if (!user) return;
     setSaving(true);
-    const updated = await updateProfile(user.id, { full_name: fullName, phone });
+    const normalizedPhone = phone.replace(/[^0-9]/g, '').slice(0, 10);
+    const updated = await updateProfile(user.id, { full_name: fullName, phone: normalizedPhone });
     setProfile(updated);
+    setPhone(normalizedPhone);
     setSaving(false);
     setEditing(false);
   };
@@ -104,7 +106,14 @@ export default function ProfileScreen() {
             <Text style={styles.label}>Phone Number</Text>
             <View style={styles.inputRow}>
               <Phone size={16} color={Colors.gray400} />
-              <TextInput style={styles.input} value={phone} onChangeText={setPhone} placeholder="+91 98765 43210" placeholderTextColor={Colors.gray400} keyboardType="phone-pad" />
+              <TextInput
+                style={styles.input}
+                value={phone}
+                onChangeText={(value) => setPhone(value.replace(/[^0-9]/g, '').slice(0, 10))}
+                placeholder="9876543210"
+                placeholderTextColor={Colors.gray400}
+                keyboardType="phone-pad"
+              />
             </View>
           </View>
           <TouchableOpacity style={[styles.saveBtn, saving && { opacity: 0.65 }]} onPress={handleSave} disabled={saving}>

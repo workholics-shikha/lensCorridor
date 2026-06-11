@@ -461,7 +461,7 @@ export default function BillingScreen() {
                   <TextInput
                     value={customerPhone}
                     onChangeText={(value) => {
-                      setCustomerPhone(value.replace(/[^0-9]/g, ''));
+                      setCustomerPhone(value.replace(/[^0-9]/g, '').slice(0, 10));
                       if (detailsErrors.phone) {
                         setDetailsErrors((current) => ({ ...current, phone: undefined }));
                       }
