@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  TextInput, Platform, Dimensions, Image,
+  TextInput, Platform, Image, useWindowDimensions,
   KeyboardAvoidingView,
 } from 'react-native';
 import { router } from 'expo-router';
@@ -11,10 +11,9 @@ import { Colors, Spacing, Radius, FontSize, Shadow } from '@/lib/theme';
 import { useAuth } from '@/context/AuthContext';
 import { Profile } from '@/lib/types';
 
-const { width } = Dimensions.get('window');
-const isTablet = width >= 768;
-
 export default function ProfileScreen() {
+  const { width } = useWindowDimensions();
+  const isTablet = width >= 768;
   const { user, signOut } = useAuth();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [editing, setEditing] = useState(false);
@@ -72,78 +71,80 @@ export default function ProfileScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, isTablet && styles.scrollContentTablet]}
       >
-      {/* Header */}
-      <View style={styles.profileHeader}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>
-            {(profile?.full_name || user.email || 'U').charAt(0).toUpperCase()}
-          </Text>
-        </View>
-        <View style={styles.profileInfo}>
-          <Text style={styles.profileName}>{profile?.full_name || 'User'}</Text>
-          <Text style={styles.profileEmail}>{user.email}</Text>
-          {profile?.phone && <Text style={styles.profilePhone}>{profile.phone}</Text>}
-        </View>
-        <TouchableOpacity style={styles.editBtn} onPress={() => setEditing(!editing)}>
-          <Text style={styles.editBtnText}>{editing ? 'Cancel' : 'Edit'}</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Edit Form */}
-      {editing && (
-        <View style={styles.editForm}>
-          <Text style={styles.editTitle}>Edit Profile</Text>
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Full Name</Text>
-            <View style={styles.inputRow}>
-              <User size={16} color={Colors.gray400} />
-              <TextInput style={styles.input} value={fullName} onChangeText={setFullName} placeholder="Your full name" placeholderTextColor={Colors.gray400} />
+        <View style={[styles.content, isTablet && styles.contentTablet]}>
+          {/* Header */}
+          <View style={styles.profileHeader}>
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>
+                {(profile?.full_name || user.email || 'U').charAt(0).toUpperCase()}
+              </Text>
             </View>
-          </View>
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Phone Number</Text>
-            <View style={styles.inputRow}>
-              <Phone size={16} color={Colors.gray400} />
-              <TextInput
-                style={styles.input}
-                value={phone}
-                onChangeText={(value) => setPhone(value.replace(/[^0-9]/g, '').slice(0, 10))}
-                placeholder="9876543210"
-                placeholderTextColor={Colors.gray400}
-                keyboardType="phone-pad"
-              />
+            <View style={styles.profileInfo}>
+              <Text style={styles.profileName}>{profile?.full_name || 'User'}</Text>
+              <Text style={styles.profileEmail}>{user.email}</Text>
+              {profile?.phone && <Text style={styles.profilePhone}>{profile.phone}</Text>}
             </View>
+            <TouchableOpacity style={styles.editBtn} onPress={() => setEditing(!editing)}>
+              <Text style={styles.editBtnText}>{editing ? 'Cancel' : 'Edit'}</Text>
+            </TouchableOpacity>
           </View>
-          <TouchableOpacity style={[styles.saveBtn, saving && { opacity: 0.65 }]} onPress={handleSave} disabled={saving}>
-            <Text style={styles.saveBtnText}>{saving ? 'Saving...' : 'Save Changes'}</Text>
-          </TouchableOpacity>
+
+          {/* Edit Form */}
+          {editing && (
+            <View style={styles.editForm}>
+              <Text style={styles.editTitle}>Edit Profile</Text>
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Full Name</Text>
+                <View style={styles.inputRow}>
+                  <User size={16} color={Colors.gray400} />
+                  <TextInput style={styles.input} value={fullName} onChangeText={setFullName} placeholder="Your full name" placeholderTextColor={Colors.gray400} />
+                </View>
+              </View>
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Phone Number</Text>
+                <View style={styles.inputRow}>
+                  <Phone size={16} color={Colors.gray400} />
+                  <TextInput
+                    style={styles.input}
+                    value={phone}
+                    onChangeText={(value) => setPhone(value.replace(/[^0-9]/g, '').slice(0, 10))}
+                    placeholder="9876543210"
+                    placeholderTextColor={Colors.gray400}
+                    keyboardType="phone-pad"
+                  />
+                </View>
+              </View>
+              <TouchableOpacity style={[styles.saveBtn, saving && { opacity: 0.65 }]} onPress={handleSave} disabled={saving}>
+                <Text style={styles.saveBtnText}>{saving ? 'Saving...' : 'Save Changes'}</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* Quick Actions */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>My Account</Text>
+            <MenuItem icon={<FileText size={18} color={Colors.primary} />} label="My Orders" onPress={() => router.push('/(tabs)/orders')} />
+            <MenuItem icon={<Shield size={18} color={Colors.primary} />} label="Prescriptions" onPress={() => router.push('/prescription')} />
+            <MenuItem icon={<Star size={18} color={Colors.primary} />} label="Wishlist" onPress={() => router.push('/(tabs)/wishlist')} />
+          </View>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Support</Text>
+            <MenuItem icon={<Bell size={18} color={Colors.gray500} />} label="Notifications" onPress={() => {}} />
+            <MenuItem icon={<HelpCircle size={18} color={Colors.gray500} />} label="Help & Support" onPress={() => {}} />
+          </View>
+
+          <View style={styles.section}>
+            <TouchableOpacity style={styles.signOutBtn} onPress={handleSignOut}>
+              <LogOut size={18} color={Colors.error} />
+              <Text style={styles.signOutText}>Sign Out</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={{ height: Spacing.xxl }} />
         </View>
-      )}
-
-      {/* Quick Actions */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>My Account</Text>
-        <MenuItem icon={<FileText size={18} color={Colors.primary} />} label="My Orders" onPress={() => router.push('/(tabs)/orders')} />
-        <MenuItem icon={<Shield size={18} color={Colors.primary} />} label="Prescriptions" onPress={() => router.push('/prescription')} />
-        <MenuItem icon={<Star size={18} color={Colors.primary} />} label="Wishlist" onPress={() => router.push('/(tabs)/wishlist')} />
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Support</Text>
-        <MenuItem icon={<Bell size={18} color={Colors.gray500} />} label="Notifications" onPress={() => {}} />
-        <MenuItem icon={<HelpCircle size={18} color={Colors.gray500} />} label="Help & Support" onPress={() => {}} />
-      </View>
-
-      <View style={styles.section}>
-        <TouchableOpacity style={styles.signOutBtn} onPress={handleSignOut}>
-          <LogOut size={18} color={Colors.error} />
-          <Text style={styles.signOutText}>Sign Out</Text>
-        </TouchableOpacity>
-      </View>
-
-      <View style={{ height: Spacing.xxl }} />
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -168,6 +169,9 @@ const menuStyles = StyleSheet.create({
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   scrollContent: { flexGrow: 1, paddingBottom: Spacing.xl },
+  scrollContentTablet: { alignItems: 'center' },
+  content: { width: '100%' },
+  contentTablet: { width: '100%', maxWidth: 860 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.background, padding: Spacing.xl },
   profileHeader: {
     flexDirection: 'row', alignItems: 'center',

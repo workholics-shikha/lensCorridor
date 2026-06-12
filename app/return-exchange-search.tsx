@@ -138,115 +138,126 @@ export default function ReturnExchangeSearchScreen() {
         <Text style={styles.headerTitle}>Return & Exchange</Text>
       </View>
 
-      <View style={[styles.body, isTablet && styles.bodyTablet]}>
-        <View style={[styles.panel, styles.searchPanel, isTablet && styles.searchPanelTablet]}>
-          <View style={styles.panelHeader}>
-            <FileSearch size={16} color={Colors.primary} />
-            <Text style={styles.panelTitle}>Search Existing Orders</Text>
-          </View>
-          <Text style={styles.helperText}>Find by mobile number, invoice number, or order ID.</Text>
+      <ScrollView
+        contentContainerStyle={styles.bodyScrollContent}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+      >
+        <View style={[styles.body, isTablet && styles.bodyTablet]}>
+          <View style={[styles.panel, styles.searchPanel, isTablet && styles.searchPanelTablet]}>
+            <View style={styles.panelHeader}>
+              <FileSearch size={16} color={Colors.primary} />
+              <Text style={styles.panelTitle}>Search Existing Orders</Text>
+            </View>
+            <Text style={styles.helperText}>Find by mobile number, invoice number, or order ID.</Text>
 
-          <View style={styles.searchBox}>
-            <Search size={16} color="#9CA3AF" />
-            <TextInput
-              value={query}
-              onChangeText={setQuery}
-              placeholder="Enter mobile, invoice no, or order ID"
-              placeholderTextColor="#A3A7B3"
-              style={styles.searchInput}
-            />
-          </View>
+            <View style={styles.searchBox}>
+              <Search size={16} color="#9CA3AF" />
+              <TextInput
+                value={query}
+                onChangeText={setQuery}
+                placeholder="Enter mobile, invoice no, or order ID"
+                placeholderTextColor="#A3A7B3"
+                style={styles.searchInput}
+              />
+            </View>
 
-          {searching ? <Text style={styles.searchingText}>Searching orders...</Text> : null}
-          {error ? <Text style={styles.errorText}>{error}</Text> : null}
+            {searching ? <Text style={styles.searchingText}>Searching orders...</Text> : null}
+            {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
-          <ScrollView style={styles.resultsScroll} showsVerticalScrollIndicator={false}>
-            {visibleOrders.length ? visibleOrders.map((order) => {
-              const frameImage = order.frame.images.find((item) => item.image)?.image;
-              const active = selectedOrder?.id === order.id;
+            <ScrollView
+              style={styles.resultsScroll}
+              showsVerticalScrollIndicator={false}
+              nestedScrollEnabled
+            >
+              {visibleOrders.length ? visibleOrders.map((order) => {
+                const frameImage = order.frame.images.find((item) => item.image)?.image;
+                const active = selectedOrder?.id === order.id;
 
-              return (
-                <TouchableOpacity
-                  key={order.id}
-                  style={[styles.orderCard, active && styles.orderCardActive]}
-                  activeOpacity={0.9}
-                  onPress={() => handleSelectOrder(order)}
-                >
-                  <View style={styles.orderCardTop}>
-                    <View style={styles.orderImageWrap}>
-                      {frameImage ? (
-                        <Image source={{ uri: frameImage }} resizeMode="contain" style={styles.orderImage} />
-                      ) : (
-                        <View style={styles.imageFallback} />
-                      )}
-                    </View>
-
-                    <View style={styles.orderBody}>
-                      <Text style={styles.orderCustomer}>{order.customer.name || 'Customer'}</Text>
-                      <View style={styles.metaPhoneRow}>
-                        <Phone size={11} color={Colors.primary} />
-                        <Text style={styles.metaPhoneText}>{order.customer.phone}</Text>
+                return (
+                  <TouchableOpacity
+                    key={order.id}
+                    style={[styles.orderCard, active && styles.orderCardActive]}
+                    activeOpacity={0.9}
+                    onPress={() => handleSelectOrder(order)}
+                  >
+                    <View style={styles.orderCardTop}>
+                      <View style={styles.orderImageWrap}>
+                        {frameImage ? (
+                          <Image source={{ uri: frameImage }} resizeMode="contain" style={styles.orderImage} />
+                        ) : (
+                          <View style={styles.imageFallback} />
+                        )}
                       </View>
-                      <Text style={styles.metaLine}>Invoice: {order.orderNumber}</Text>
-                      <Text style={styles.metaLine}>Order ID: {order.id}</Text>
+
+                      <View style={styles.orderBody}>
+                        <Text style={styles.orderCustomer}>{order.customer.name || 'Customer'}</Text>
+                        <View style={styles.metaPhoneRow}>
+                          <Phone size={11} color={Colors.primary} />
+                          <Text style={styles.metaPhoneText}>{order.customer.phone}</Text>
+                        </View>
+                        <Text style={styles.metaLine}>Invoice: {order.orderNumber}</Text>
+                        <Text style={styles.metaLine}>Order ID: {order.id}</Text>
+                      </View>
                     </View>
-                  </View>
+                  </TouchableOpacity>
+                );
+              }) : (
+                <View style={styles.emptyState}>
+                  <Text style={styles.emptyTitle}>No matching orders found</Text>
+                  <Text style={styles.emptyText}>Try a mobile number, invoice number, or order ID.</Text>
+                </View>
+              )}
+            </ScrollView>
+          </View>
+
+          <View style={[styles.panel, styles.detailPanel, isTablet && styles.detailPanelTablet]}>
+            <View style={styles.panelHeader}>
+              <RefreshCcw size={16} color={Colors.primary} />
+              <Text style={styles.panelTitle}>Selected Order</Text>
+            </View>
+
+            {selectedOrder ? (
+              <>
+                <View style={styles.selectedCard}>
+                  <Text style={styles.selectedName}>{selectedOrder.customer.name || 'Customer'}</Text>
+                  <Text style={styles.selectedMeta}>Mobile: {selectedOrder.customer.phone}</Text>
+                  <Text style={styles.selectedMeta}>Invoice: {selectedOrder.orderNumber}</Text>
+                  <Text style={styles.selectedMeta}>Order ID: {selectedOrder.id}</Text>
+                  <Text style={styles.selectedMeta}>
+                    Product: Frame + {selectedOrder.lensSelection.lensCategory || selectedOrder.lensSelection.powerType || 'Lens'}
+                  </Text>
+                  <Text style={styles.selectedAmount}>Order Value: Rs. {selectedOrder.billing.totalPayable}</Text>
+                </View>
+
+                <Text style={styles.choiceLabel}>Choose the next action</Text>
+                <TouchableOpacity
+                  style={[styles.actionButton, styles.returnButton]}
+                  activeOpacity={0.88}
+                  onPress={() => handleStart('return')}
+                >
+                  <Text style={styles.actionButtonText}>Start Return</Text>
                 </TouchableOpacity>
-              );
-            }) : (
-              <View style={styles.emptyState}>
-                <Text style={styles.emptyTitle}>No matching orders found</Text>
-                <Text style={styles.emptyText}>Try a mobile number, invoice number, or order ID.</Text>
+                <TouchableOpacity
+                  style={[styles.actionButton, styles.exchangeButton]}
+                  activeOpacity={0.88}
+                  onPress={() => handleStart('exchange')}
+                >
+                  <Text style={[styles.actionButtonText, styles.exchangeButtonText]}>Start Exchange</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <View style={styles.placeholderCard}>
+                <Text style={styles.placeholderTitle}>Select an order to continue</Text>
+                <Text style={styles.placeholderText}>
+                  Order details and Return / Exchange actions will appear here.
+                </Text>
               </View>
             )}
-          </ScrollView>
-        </View>
-
-        <View style={[styles.panel, styles.detailPanel, isTablet && styles.detailPanelTablet]}>
-          <View style={styles.panelHeader}>
-            <RefreshCcw size={16} color={Colors.primary} />
-            <Text style={styles.panelTitle}>Selected Order</Text>
           </View>
-
-          {selectedOrder ? (
-            <>
-              <View style={styles.selectedCard}>
-                <Text style={styles.selectedName}>{selectedOrder.customer.name || 'Customer'}</Text>
-                <Text style={styles.selectedMeta}>Mobile: {selectedOrder.customer.phone}</Text>
-                <Text style={styles.selectedMeta}>Invoice: {selectedOrder.orderNumber}</Text>
-                <Text style={styles.selectedMeta}>Order ID: {selectedOrder.id}</Text>
-                <Text style={styles.selectedMeta}>
-                  Product: Frame + {selectedOrder.lensSelection.lensCategory || selectedOrder.lensSelection.powerType || 'Lens'}
-                </Text>
-                <Text style={styles.selectedAmount}>Order Value: Rs. {selectedOrder.billing.totalPayable}</Text>
-              </View>
-
-              <Text style={styles.choiceLabel}>Choose the next action</Text>
-              <TouchableOpacity
-                style={[styles.actionButton, styles.returnButton]}
-                activeOpacity={0.88}
-                onPress={() => handleStart('return')}
-              >
-                <Text style={styles.actionButtonText}>Start Return</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.actionButton, styles.exchangeButton]}
-                activeOpacity={0.88}
-                onPress={() => handleStart('exchange')}
-              >
-                <Text style={[styles.actionButtonText, styles.exchangeButtonText]}>Start Exchange</Text>
-              </TouchableOpacity>
-            </>
-          ) : (
-            <View style={styles.placeholderCard}>
-              <Text style={styles.placeholderTitle}>Select an order to continue</Text>
-              <Text style={styles.placeholderText}>
-                Order details and Return / Exchange actions will appear here.
-              </Text>
-            </View>
-          )}
         </View>
-      </View>
+      </ScrollView>
     </View>
   );
 }
@@ -285,9 +296,12 @@ const styles = StyleSheet.create({
     color: '#1F2430',
   },
   body: {
-    flex: 1,
     padding: 16,
     gap: 16,
+  },
+  bodyScrollContent: {
+    flexGrow: 1,
+    paddingBottom: 28,
   },
   bodyTablet: {
     flexDirection: 'row',
@@ -358,6 +372,7 @@ const styles = StyleSheet.create({
   },
   resultsScroll: {
     marginTop: 14,
+    maxHeight: 560,
   },
   orderCard: {
     borderWidth: 1,

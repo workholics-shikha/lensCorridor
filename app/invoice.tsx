@@ -1,9 +1,11 @@
+import { useEffect, useMemo, useState } from 'react';
 import { router, useLocalSearchParams } from 'expo-router';
-import { Alert, Image, Platform, ScrollView, Share, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
+import { ActivityIndicator, Alert, Image, Linking, Platform, ScrollView, Share, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import { CreditCard, MapPin, ShoppingBag, UserRound, Wallet, MessageCircleMore } from 'lucide-react-native';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
 import { useOrderFlow } from '@/context/OrderFlowContext';
+import { fetchOrderPlacementById, fetchOrderPlacements, type OrderPlacementRecord } from '@/lib/api';
 import { buildInvoicePdf } from '@/lib/invoicePdf';
 import { getOrderAmounts } from '@/lib/orderPricing';
 import { formatPersonName } from '@/lib/textFormat';
@@ -14,19 +16,120 @@ const brandLogo = require('@/assets/images/blueLogo.png');
 export default function InvoiceScreen() {
   const { draft, resetDraft } = useOrderFlow();
   const { width } = useWindowDimensions();
-  const { orderId, invoiceDate } = useLocalSearchParams<{
+  const { orderId, invoiceDate, recordId } = useLocalSearchParams<{
     orderId?: string;
     invoiceDate?: string;
+    recordId?: string;
   }>();
-  const { framePrice, lensPrice, discount, totalPayable, paidAmount, remainingAmount } = getOrderAmounts(draft);
-  const primaryFrame = getPreferredFrameImage(draft.frameImages);
-  const resolvedOrderId = orderId || '-';
-  const resolvedInvoiceDate = invoiceDate || new Date().toLocaleDateString('en-GB');
-  const customerName = formatPersonName(draft.customerName || 'Customer Name');
-  const phone = draft.phone || 'Phone not added';
-  const address = draft.billingAddress || 'Address not added';
-  const lensType = draft.lensSelection.lensCategory || draft.lensSelection.powerType || 'Frame Only';
+  const [orderRecord, setOrderRecord] = useState<OrderPlacementRecord | null>(null);
+  const [loadingOrder, setLoadingOrder] = useState(Boolean(recordId || orderId));
+  const [orderError, setOrderError] = useState('');
   const isCompact = width < 760;
+
+  useEffect(() => {
+    let active = true;
+
+    if (!recordId && !orderId) {
+      setLoadingOrder(false);
+      return () => {
+        active = false;
+      };
+    }
+
+    const loadOrder = async () => {
+      try {
+        let matchedOrder: OrderPlacementRecord | null = null;
+
+        if (recordId) {
+          matchedOrder = await fetchOrderPlacementById(recordId);
+        } else if (orderId) {
+          const matches = await fetchOrderPlacements({ orderNumber: orderId, limit: 1 });
+          matchedOrder = matches[0] ?? null;
+        }
+
+        if (!active) {
+          return;
+        }
+
+        setOrderRecord(matchedOrder);
+        setOrderError(matchedOrder ? '' : 'Invoice details are not available right now.');
+      } catch {
+        if (!active) {
+          return;
+        }
+
+        setOrderRecord(null);
+        setOrderError('Invoice details are not available right now.');
+      } finally {
+        if (active) {
+          setLoadingOrder(false);
+        }
+      }
+    };
+
+    loadOrder();
+
+    return () => {
+      active = false;
+    };
+  }, [orderId, recordId]);
+
+  const invoiceSource = useMemo(() => {
+    if (orderRecord) {
+      return {
+        orderId: orderRecord.orderNumber || orderId || '-',
+        invoiceDate: orderRecord.invoiceDate || invoiceDate || new Date().toLocaleDateString('en-GB'),
+        customerName: formatPersonName(orderRecord.customer.name || 'Customer Name'),
+        phone: orderRecord.customer.phone || 'Phone not added',
+        address: orderRecord.customer.billingAddress || 'Address not added',
+        framePrice: orderRecord.frame.price || 0,
+        lensPrice: orderRecord.lensSelection.powerType.toLowerCase() === 'frame only' ? 0 : orderRecord.lensSelection.lensPrice,
+        discount: orderRecord.billing.discount || 0,
+        totalPayable: orderRecord.billing.totalPayable || 0,
+        paidAmount: orderRecord.billing.paidAmount ?? orderRecord.billing.totalPayable ?? 0,
+        remainingAmount: orderRecord.billing.remainingAmount ?? 0,
+        lensType: orderRecord.lensSelection.lensCategory || orderRecord.lensSelection.powerType || 'Frame Only',
+        paymentMode: orderRecord.billing.paymentMode,
+        frameImages: orderRecord.frame.images,
+        selectedShape: orderRecord.frame.selectedShape || 'Frame',
+      };
+    }
+
+    const { framePrice, lensPrice, discount, totalPayable, paidAmount, remainingAmount } = getOrderAmounts(draft);
+
+    return {
+      orderId: orderId || '-',
+      invoiceDate: invoiceDate || new Date().toLocaleDateString('en-GB'),
+      customerName: formatPersonName(draft.customerName || 'Customer Name'),
+      phone: draft.phone || 'Phone not added',
+      address: draft.billingAddress || 'Address not added',
+      framePrice,
+      lensPrice,
+      discount,
+      totalPayable,
+      paidAmount,
+      remainingAmount,
+      lensType: draft.lensSelection.lensCategory || draft.lensSelection.powerType || 'Frame Only',
+      paymentMode: draft.paymentMode,
+      frameImages: draft.frameImages,
+      selectedShape: draft.selectedShape || 'Frame',
+    };
+  }, [draft, invoiceDate, orderId, orderRecord]);
+
+  const primaryFrame = getPreferredFrameImage(invoiceSource.frameImages);
+  const resolvedOrderId = invoiceSource.orderId;
+  const resolvedInvoiceDate = invoiceSource.invoiceDate;
+  const customerName = invoiceSource.customerName;
+  const phone = invoiceSource.phone;
+  const address = invoiceSource.address;
+  const lensType = invoiceSource.lensType;
+  const framePrice = invoiceSource.framePrice;
+  const lensPrice = invoiceSource.lensPrice;
+  const discount = invoiceSource.discount;
+  const totalPayable = invoiceSource.totalPayable;
+  const paidAmount = invoiceSource.paidAmount;
+  const remainingAmount = invoiceSource.remainingAmount;
+  const paymentMode = invoiceSource.paymentMode;
 
   const invoiceText = buildInvoiceText({
     orderId: resolvedOrderId,
@@ -41,8 +144,21 @@ export default function InvoiceScreen() {
     paidAmount,
     remainingAmount,
     lensType,
-    paymentMode: draft.paymentMode,
+    paymentMode,
   });
+  const whatsappMessage = buildWhatsappMessage({
+    orderId: resolvedOrderId,
+    invoiceDate: resolvedInvoiceDate,
+    customerName,
+    phone,
+    address,
+    totalPayable,
+    paidAmount,
+    remainingAmount,
+    lensType,
+    paymentMode,
+  });
+  const customerWhatsappNumber = normalizeWhatsappNumber(phone);
 
   const buildPdfBytes = () => buildInvoicePdf({
     orderId: resolvedOrderId,
@@ -57,7 +173,7 @@ export default function InvoiceScreen() {
     paidAmount,
     remainingAmount,
     lensType,
-    paymentMode: draft.paymentMode,
+    paymentMode,
     logoUri: Platform.OS === 'web' ? getAssetUri(brandLogo) : undefined,
   });
 
@@ -89,7 +205,22 @@ export default function InvoiceScreen() {
   };
 
   const handleShare = async () => {
+    const encodedMessage = encodeURIComponent(whatsappMessage);
+    const whatsappAppUrl = customerWhatsappNumber
+      ? `whatsapp://send?phone=${customerWhatsappNumber}&text=${encodedMessage}`
+      : `whatsapp://send?text=${encodedMessage}`;
+    const whatsappWebUrl = customerWhatsappNumber
+      ? `https://wa.me/${customerWhatsappNumber}?text=${encodedMessage}`
+      : `https://wa.me/?text=${encodedMessage}`;
+
     if (Platform.OS === 'web') {
+      try {
+        if (globalThis.open) {
+          globalThis.open(whatsappWebUrl, '_blank', 'noopener,noreferrer');
+          return;
+        }
+      } catch {}
+
       try {
         await Share.share({
           message: invoiceText,
@@ -99,9 +230,15 @@ export default function InvoiceScreen() {
     }
 
     try {
-      await shareInvoicePdfFile();
+      const canOpenWhatsapp = await Linking.canOpenURL(whatsappAppUrl);
+      if (!canOpenWhatsapp) {
+        Alert.alert('WhatsApp not installed', 'Please install WhatsApp to share this invoice.');
+        return;
+      }
+
+      await Linking.openURL(whatsappAppUrl);
     } catch {
-      Alert.alert('Share unavailable', 'We could not share the PDF invoice on this device.');
+      Alert.alert('WhatsApp unavailable', 'We could not open WhatsApp on this device.');
     }
   };
 
@@ -125,6 +262,22 @@ export default function InvoiceScreen() {
       Alert.alert('Download unavailable', 'We could not share the PDF invoice on this device.');
     }
   };
+
+  if (loadingOrder) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color="#0D6CF5" />
+      </View>
+    );
+  }
+
+  if (orderError && !orderRecord && !draft.customerName && !draft.frameImages.length) {
+    return (
+      <View style={styles.center}>
+        <Text style={styles.errorText}>{orderError}</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.screen}>
@@ -163,7 +316,7 @@ export default function InvoiceScreen() {
         <Section title="Order Details" icon={<ShoppingBag size={15} color="#0D6CF5" strokeWidth={2.2} />}>
           <View style={[styles.orderHeader, isCompact && styles.orderHeaderCompact]}>
             <View style={[styles.orderTextWrap, isCompact && styles.orderTextWrapCompact]}>
-              <MetaPair label="Frame Shape" value={draft.selectedShape || 'Frame'} />
+              <MetaPair label="Frame Shape" value={invoiceSource.selectedShape} />
               <MetaPair label="Lens Type" value={lensType} />
               <MetaPair label="Quantity" value="1" />
             </View>
@@ -194,7 +347,7 @@ export default function InvoiceScreen() {
             <Text style={styles.paymentModeLabel}>Payment Mode</Text>
             <View style={styles.paymentBadge}>
               <Wallet size={13} color="#0D6CF5" strokeWidth={2.2} />
-              <Text style={styles.paymentBadgeText}>{draft.paymentMode}</Text>
+              <Text style={styles.paymentBadgeText}>{paymentMode}</Text>
             </View>
           </View>
         </Section>
@@ -312,6 +465,76 @@ function buildInvoiceText({
     '',
     'Support: support@lenscorridor.com',
   ].join('\n');
+}
+
+function buildWhatsappMessage({
+  orderId,
+  invoiceDate,
+  customerName,
+  phone,
+  address,
+  totalPayable,
+  paidAmount,
+  remainingAmount,
+  lensType,
+  paymentMode,
+}: {
+  orderId: string;
+  invoiceDate: string;
+  customerName: string;
+  phone: string;
+  address: string;
+  totalPayable: number;
+  paidAmount: number;
+  remainingAmount: number;
+  lensType: string;
+  paymentMode: string;
+}) {
+  return [
+    'Hello from Lens Corridor,',
+    '',
+    'Please find your invoice summary below:',
+    `Order ID: ${orderId}`,
+    `Invoice Date: ${invoiceDate}`,
+    '',
+    'Customer Details',
+    `Name: ${customerName}`,
+    `Mobile: ${phone}`,
+    `Address: ${address}`,
+    '',
+    'Order Summary',
+    `Lens Type: ${lensType}`,
+    `Total Amount: Rs. ${totalPayable.toLocaleString('en-IN')}`,
+    `Paid Amount: Rs. ${paidAmount.toLocaleString('en-IN')}`,
+    `Balance Amount: Rs. ${remainingAmount.toLocaleString('en-IN')}`,
+    `Payment Mode: ${paymentMode}`,
+    '',
+    'For any support, contact support@lenscorridor.com',
+    '',
+    'Thank you for choosing Lens Corridor.',
+  ].join('\n');
+}
+
+function normalizeWhatsappNumber(phone: string) {
+  const digits = phone.replace(/\D/g, '');
+
+  if (!digits) {
+    return '';
+  }
+
+  if (digits.length === 10) {
+    return `91${digits}`;
+  }
+
+  if (digits.length === 12 && digits.startsWith('91')) {
+    return digits;
+  }
+
+  if (digits.length > 10) {
+    return `91${digits.slice(-10)}`;
+  }
+
+  return '';
 }
 
 function InfoRow({ label, strong = false }: { label: string; strong?: boolean }) {
@@ -442,6 +665,18 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: '#EEF2F8',
+  },
+  center: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#EEF2F8',
+    padding: 24,
+  },
+  errorText: {
+    fontSize: 14,
+    color: '#B42318',
+    textAlign: 'center',
   },
   scroll: {
     flex: 1,

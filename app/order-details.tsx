@@ -187,6 +187,7 @@ export default function OrderDetailsScreen() {
               onPress={() => router.push({
                 pathname: '/invoice',
                 params: {
+                  recordId: order.id,
                   orderId: order.orderNumber,
                   invoiceDate: order.invoiceDate,
                 },
