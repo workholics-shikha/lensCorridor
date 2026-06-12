@@ -1,8 +1,9 @@
 const express = require('express');
-const { listReturns } = require('../controllers/returnController');
+const { createReturn, listReturns } = require('../controllers/returnController');
 
 const router = express.Router();
 
 router.get('/', listReturns);
+router.post('/', createReturn);
 
 module.exports = router;

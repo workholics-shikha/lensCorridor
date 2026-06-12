@@ -36,7 +36,14 @@ const routeScreenMap = {
   '/masters/frame-shapes': { screen: 'masters', masterSection: 'frame-shapes' },
   '/masters/power-type': { screen: 'masters', masterSection: 'power-type' },
   '/stores': { screen: 'stores' },
-
+  '/stores/new': { screen: 'add-store' },
+  '/employees': { screen: 'employees' },
+  '/employees/create': { screen: 'create-employee' },
+  '/customers': { screen: 'customers' },
+  '/orders': { screen: 'orders' },
+  '/payments': { screen: 'cash' },
+  '/returns': { screen: 'returns' },
+  '/reports': { screen: 'reports' },
 }
 
 const getRouteState = (pathname = '') => {
@@ -53,12 +60,44 @@ const getRouteState = (pathname = '') => {
     }
   }
 
+  const employeeEditMatch = pathname.match(/^\/employees\/edit\/([^/]+)$/)
+  if (employeeEditMatch) {
+    return {
+      screen: 'create-employee',
+      employeeId: decodeURIComponent(employeeEditMatch[1]),
+    }
+  }
+
+  const storeEditMatch = pathname.match(/^\/stores\/edit\/([^/]+)$/)
+  if (storeEditMatch) {
+    return {
+      screen: 'edit-store',
+      storeId: decodeURIComponent(storeEditMatch[1]),
+    }
+  }
+
+  const orderDetailsMatch = pathname.match(/^\/orders\/([^/]+)$/)
+  if (orderDetailsMatch) {
+    return {
+      screen: 'order-details',
+      orderId: decodeURIComponent(orderDetailsMatch[1]),
+    }
+  }
+
   return null
 }
 
 const destinationRouteMap = {
   dashboard: '/dashboard',
   stores: '/stores',
+  'add-store': '/stores/new',
+  employees: '/employees',
+  'create-employee': '/employees/create',
+  customers: '/customers',
+  orders: '/orders',
+  cash: '/payments',
+  returns: '/returns',
+  reports: '/reports',
   'lens-category': '/masters/lens-category',
   'lens-type': '/masters/lens-type',
   eyepower: '/masters/eyepower',
@@ -67,6 +106,9 @@ const destinationRouteMap = {
 }
 
 const buildLensCategoryEditRoute = (masterId) => `/masters/lens-category/edit/${encodeURIComponent(masterId)}`
+const buildEmployeeEditRoute = (employeeId) => `/employees/edit/${encodeURIComponent(employeeId)}`
+const buildStoreEditRoute = (storeId) => `/stores/edit/${encodeURIComponent(storeId)}`
+const buildOrderDetailsRoute = (orderId) => `/orders/${encodeURIComponent(orderId)}`
 
 const toInputDate = (value) => {
   const year = value.getFullYear()
@@ -195,6 +237,7 @@ const navConfig = [
   { key: 'orders', label: 'Orders', icon: 'OR' },
   { key: 'cash', label: 'Payments', icon: 'CA' },
   { key: 'returns', label: 'Returns', icon: 'RT' },
+  { key: 'reports', label: 'Reports', icon: 'RP' },
 ]
 
 const Screen = ({ active, id, children }) => (
@@ -473,6 +516,7 @@ const summarizeMasterItem = (section, item) => {
       title: item.categoryName,
       subtitle: item.usageAndMapping || item.description || item.linkedPricingBand || '-',
       meta: item.displayLabel || item.internalCode || '-',
+      usageAndMapping: item.usageAndMapping || '',
       code: item.internalCode || '-',
       status: item.status || 'Active',
       detailValues: [
@@ -661,8 +705,12 @@ const AdminPanel = ({ user, onLogout }) => {
     [safeOrderPage, orderPageCount]
   )
   const selectedAppOrder = useMemo(
-    () => filteredAppOrders.find((item) => item.id === selectedAppOrderId) || filteredAppOrders[0] || null,
-    [filteredAppOrders, selectedAppOrderId]
+    () => filteredAppOrders.find((item) => item.id === selectedAppOrderId)
+      || appOrders.find((item) => item.id === selectedAppOrderId)
+      || filteredAppOrders[0]
+      || appOrders[0]
+      || null,
+    [appOrders, filteredAppOrders, selectedAppOrderId]
   )
   const filteredCustomers = useMemo(() => {
     const search = customerSearch.trim().toLowerCase()
@@ -704,7 +752,7 @@ const AdminPanel = ({ user, onLogout }) => {
         summary.rejected += 1
       }
 
-      summary.totalRefundAmount += Number(request?.totalRefundAmount ?? 0)
+      summary.totalRefundAmount += Number(request?.settlementAmount ?? request?.totalRefundAmount ?? 0)
       return summary
     }, {
       requested: 0,
@@ -1081,7 +1129,7 @@ const AdminPanel = ({ user, onLogout }) => {
 
     window.addEventListener('resize', handleResize)
     return () => window.removeEventListener('resize', handleResize)
-  }, [])
+  }, [routeState])
 
   useEffect(() => {
     if (!routeState) {
@@ -1097,6 +1145,55 @@ const AdminPanel = ({ user, onLogout }) => {
     }
     setSidebarOpen(false)
   }, [routeState])
+
+  useEffect(() => {
+    if (routeState?.screen !== 'create-employee' || !routeState.employeeId) {
+      return
+    }
+
+    const employee = employees.find((item) => item.id === routeState.employeeId)
+    if (!employee) {
+      return
+    }
+
+    setEmployeeMode('edit')
+    setEmployeeForm({
+      id: employee.id,
+      salesmanId: employee.salesmanId || '',
+      name: employee.name || '',
+      email: employee.email || '',
+      phone: employee.phone || '',
+      role: employee.role || 'Salesman',
+      store: employee.store?.id || '',
+      password: '',
+      status: employee.status || 'Active',
+    })
+  }, [employees, routeState])
+
+  useEffect(() => {
+    if (routeState?.screen !== 'edit-store' || !routeState.storeId) {
+      return
+    }
+
+    const store = stores.find((item) => item.id === routeState.storeId)
+    if (!store) {
+      return
+    }
+
+    setSelectedStoreId(store.id)
+    setStoreForm(buildStoreFormFromStore(store))
+    setStoreMessage('')
+  }, [routeState, stores])
+
+  useEffect(() => {
+    if (routeState?.screen !== 'order-details' || !routeState.orderId) {
+      return
+    }
+
+    if (appOrders.some((item) => item.id === routeState.orderId)) {
+      setSelectedAppOrderId(routeState.orderId)
+    }
+  }, [appOrders, routeState])
 
   useEffect(() => {
     if (!isLensCategoryEditorOpen || !normalizedMasterItems.length) {
@@ -1380,7 +1477,9 @@ const AdminPanel = ({ user, onLogout }) => {
         const payload = Array.isArray(data?.data) ? data.data : []
         setAppOrders(payload)
         setSelectedAppOrderId((current) => (
-          payload.some((item) => item.id === current) ? current : (payload[0]?.id || '')
+          routeState?.screen === 'order-details' && routeState.orderId && payload.some((item) => item.id === routeState.orderId)
+            ? routeState.orderId
+            : (payload.some((item) => item.id === current) ? current : (payload[0]?.id || ''))
         ))
       } catch (error) {
         if (error.name === 'AbortError') {
@@ -1447,9 +1546,11 @@ const AdminPanel = ({ user, onLogout }) => {
 
   useEffect(() => {
     setSelectedAppOrderId((current) => (
-      filteredAppOrders.some((item) => item.id === current) ? current : (filteredAppOrders[0]?.id || '')
+      routeState?.screen === 'order-details' && routeState.orderId && appOrders.some((item) => item.id === routeState.orderId)
+        ? routeState.orderId
+        : (filteredAppOrders.some((item) => item.id === current) ? current : (filteredAppOrders[0]?.id || ''))
     ))
-  }, [filteredAppOrders])
+  }, [appOrders, filteredAppOrders, routeState])
 
   const activateScreen = (screen) => {
     const routePath = destinationRouteMap[screen]
@@ -1503,11 +1604,22 @@ const AdminPanel = ({ user, onLogout }) => {
   }
 
   const openOrderDetails = (order) => {
+    if (!order?.id) {
+      return
+    }
+
     setSelectedAppOrderId(order.id)
     setPaymentCollectionAmount('')
     setPaymentCollectionMessage('')
-    setActiveScreen('order-details')
+    navigate(buildOrderDetailsRoute(order.id))
     setSidebarOpen(false)
+  }
+
+  const clearOrderFilters = () => {
+    setOrderIdSearch('')
+    setOrderPhoneSearch('')
+    setOrderStoreFilter('')
+    setOrderPage(1)
   }
 
   const handleOrderStatusUpdate = async (order, status) => {
@@ -1641,7 +1753,8 @@ const AdminPanel = ({ user, onLogout }) => {
       password: '',
       status: employee.status || 'Active',
     })
-    activateScreen('create-employee')
+    navigate(buildEmployeeEditRoute(employee.id))
+    setSidebarOpen(false)
   }
 
   const handleEmployeeFieldChange = (field, value) => {
@@ -1776,11 +1889,13 @@ const AdminPanel = ({ user, onLogout }) => {
   }
 
   const openStoreEditor = (storeId) => {
-    if (storeId) {
-      setSelectedStoreId(storeId)
+    if (!storeId) {
+      return
     }
 
-    activateScreen('edit-store')
+    setSelectedStoreId(storeId)
+    navigate(buildStoreEditRoute(storeId))
+    setSidebarOpen(false)
   }
 
   const handleStoreFieldChange = (field, value) => {
@@ -2486,9 +2601,9 @@ const AdminPanel = ({ user, onLogout }) => {
                       {selectedOrderStore ? <span className="pill">{selectedOrderStore.name}</span> : null}
                     </div>
                   </div>
-                  <div className="filter-group" style={{ marginBottom: 16 }}>
-                    <label className="date-pill">
-                      <span>Order ID</span>
+                  <div className="order-filter-bar" style={{ marginBottom: 16 }}>
+                    <label className="order-filter-control">
+                      <span className="order-filter-label">Order ID</span>
                       <input
                         onChange={(event) => setOrderIdSearch(event.target.value)}
                         placeholder="Search order ID"
@@ -2496,8 +2611,8 @@ const AdminPanel = ({ user, onLogout }) => {
                         value={orderIdSearch}
                       />
                     </label>
-                    <label className="date-pill">
-                      <span>Number</span>
+                    <label className="order-filter-control">
+                      <span className="order-filter-label">Mobile Number</span>
                       <input
                         onChange={(event) => setOrderPhoneSearch(event.target.value.replace(/\D/g, ''))}
                         placeholder="Search mobile"
@@ -2505,10 +2620,9 @@ const AdminPanel = ({ user, onLogout }) => {
                         value={orderPhoneSearch}
                       />
                     </label>
-                    <label className="date-pill">
-                      <span>Store By</span>
+                    <label className="order-filter-control">
+                      <span className="order-filter-label">Store</span>
                       <select
-                        className="input filled"
                         onChange={(event) => setOrderStoreFilter(event.target.value)}
                         value={orderStoreFilter}
                       >
@@ -2520,6 +2634,13 @@ const AdminPanel = ({ user, onLogout }) => {
                         ))}
                       </select>
                     </label>
+                    <button
+                      className="ghost-btn order-filter-clear"
+                      onClick={clearOrderFilters}
+                      type="button"
+                    >
+                      Clear Search
+                    </button>
                   </div>
                   <div className="orders-table-shell">
                     <table className="orders-table orders-table--orders-list">
@@ -3073,8 +3194,8 @@ const AdminPanel = ({ user, onLogout }) => {
                 <section className="panel">
                   <div className="panel-head">
                     <div>
-                      <p className="eyebrow">Return / refund management</p>
-                      <h4>Return order list</h4>
+                      <p className="eyebrow">Return / exchange management</p>
+                      <h4>Return and exchange requests</h4>
                     </div>
                   </div>
                   <div className="orders-table-shell">
@@ -3085,7 +3206,7 @@ const AdminPanel = ({ user, onLogout }) => {
                           <th>Order</th>
                           <th>Customer / Store</th>
                           <th>Reason</th>
-                          <th>Refund / Status</th>
+                          <th>Settlement / Status</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -3108,8 +3229,8 @@ const AdminPanel = ({ user, onLogout }) => {
                         {!returnRequestsLoading && !returnRequestsError && returnRequests.length === 0 ? (
                           <tr>
                             <td colSpan="4">
-                              <strong className="table-cell-primary">No return orders yet</strong>
-                              <small className="table-cell-secondary">Return requests will appear here once they are created.</small>
+                              <strong className="table-cell-primary">No return or exchange requests yet</strong>
+                              <small className="table-cell-secondary">Requests will appear here once they are created from the app.</small>
                             </td>
                             <td><StatusBadge tone="neutral">Empty</StatusBadge></td>
                           </tr>
@@ -3126,14 +3247,18 @@ const AdminPanel = ({ user, onLogout }) => {
                             </td>
                             <td>
                               <strong className="table-cell-primary">{request.customerName || 'Customer'}</strong>
-                              <small className="table-cell-secondary">{request.storeName || 'Store not assigned'}</small>
+                              <small className="table-cell-secondary">
+                                {`${request.type === 'exchange' ? 'Exchange' : 'Return'} | ${request.storeName || 'Store not assigned'}`}
+                              </small>
                             </td>
                             <td>
                               <strong className="table-cell-primary">{request.reason || '-'}</strong>
                               <small className="table-cell-secondary">{request.customerPhone || 'Phone not available'}</small>
                             </td>
                             <td>
-                              <strong className="table-cell-primary">{formatCurrency(request.totalRefundAmount)}</strong>
+                              <strong className="table-cell-primary">
+                                {`${request.settlementType === 'collect' ? 'Collect' : request.settlementType === 'refund' ? 'Refund' : 'Even'} | ${formatCurrency(request.settlementAmount ?? request.totalRefundAmount)}`}
+                              </strong>
                               <small className="table-cell-secondary">
                                 <StatusBadge tone={getStatusTone(request.status)}>{request.status}</StatusBadge>
                               </small>
@@ -3146,7 +3271,7 @@ const AdminPanel = ({ user, onLogout }) => {
                 </section>
 
                 <section className="panel detail-panel">
-                  <p className="eyebrow">Return analytics</p>
+                  <p className="eyebrow">Request analytics</p>
                   <h4>Current request snapshot</h4>
                   <div className="mini-grid">
                     <MiniCard label="Requested" value={String(returnSummary.requested)} />
@@ -3156,12 +3281,12 @@ const AdminPanel = ({ user, onLogout }) => {
                   </div>
                   <div className="task-list" style={{ marginTop: '18px' }}>
                     <div className="task-item">
-                      <strong>Total refund value</strong>
+                      <strong>Total settlement value</strong>
                       <small>{formatCurrency(returnSummary.totalRefundAmount)}</small>
                     </div>
                     <div className="task-item">
                       <strong>Total requests</strong>
-                      <small>{returnRequests.length} return order{returnRequests.length === 1 ? '' : 's'}</small>
+                      <small>{returnRequests.length} request{returnRequests.length === 1 ? '' : 's'}</small>
                     </div>
                   </div>
                 </section>

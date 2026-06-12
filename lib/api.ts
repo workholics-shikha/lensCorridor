@@ -1,6 +1,7 @@
 import Constants from 'expo-constants';
 import { getCategories, getFrameShapes, getSalespeople } from './localStore';
 import { Category, FrameShape, Salesperson } from './types';
+import type { ReturnExchangeRecord, ReturnExchangeType, ReturnExchangeItemScope, RefundType } from './returnExchange';
 
 export interface StoreOption {
   id: string;
@@ -190,6 +191,33 @@ export interface OrderPlacementRecord extends OrderPlacementResponse {
   };
   status: string;
   updatedAt: string;
+}
+
+export interface ReturnExchangePayload {
+  type: ReturnExchangeType;
+  orderId: string;
+  customerName: string;
+  customerPhone: string;
+  itemScope: ReturnExchangeItemScope;
+  reason: string;
+  remarks: string;
+  refundType?: RefundType;
+  originalAmount: number;
+  revisedAmount: number;
+  settlementAmount: number;
+  settlementType: 'refund' | 'collect' | 'even';
+  originalOrderSnapshot?: OrderPlacementRecord;
+  replacementDraft?: unknown;
+  store?: {
+    id: string;
+    name: string;
+    code: string;
+  } | null;
+  salesperson?: {
+    id: string;
+    name: string;
+    employeeId: string;
+  } | null;
 }
 
 function getApiBaseUrl() {
@@ -594,6 +622,24 @@ export async function fetchOrderPlacementById(id: string): Promise<OrderPlacemen
   const result = (await response.json()) as { data?: OrderPlacementRecord };
   if (!result.data) {
     throw new Error('Order placement details API returned an invalid payload');
+  }
+
+  return result.data;
+}
+
+export async function createReturnExchangeRequest(payload: ReturnExchangePayload): Promise<ReturnExchangeRecord> {
+  const response = await fetch(`${getApiBaseUrl()}/api/returns`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const result = (await response.json().catch(() => null)) as { data?: ReturnExchangeRecord; message?: string } | null;
+
+  if (!response.ok || !result?.data) {
+    throw new Error(result?.message || `Return API returned ${response.status}`);
   }
 
   return result.data;

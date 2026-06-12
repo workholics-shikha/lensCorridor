@@ -5,6 +5,27 @@ import AdminPanel from './components/AdminPanel'
 import Login from './components/Login'
 import { buildApiUrl } from './lib/api'
 
+const protectedAdminPaths = [
+  '/dashboard',
+  '/masters/lens-category',
+  '/masters/lens-category/edit/:masterId',
+  '/masters/eyepower',
+  '/masters/frame-shapes',
+  '/masters/power-type',
+  '/stores',
+  '/stores/new',
+  '/stores/edit/:storeId',
+  '/employees',
+  '/employees/create',
+  '/employees/edit/:employeeId',
+  '/customers',
+  '/orders',
+  '/orders/:orderId',
+  '/payments',
+  '/returns',
+  '/reports',
+]
+
 const ProtectedRoute = ({ authChecking, isLoggedIn, children }) => {
   if (authChecking) {
     return null
@@ -103,6 +124,12 @@ const AppRoutes = () => {
     navigate('/login', { replace: true })
   }
 
+  const protectedAdminPanel = (
+    <ProtectedRoute authChecking={authChecking} isLoggedIn={isLoggedIn}>
+      <AdminPanel onLogout={handleLogout} user={adminUser} />
+    </ProtectedRoute>
+  )
+
   return (
     <Routes>
       <Route
@@ -115,71 +142,9 @@ const AppRoutes = () => {
         element={authChecking ? null : <Navigate to={isLoggedIn ? '/dashboard' : '/login'} replace />}
       />
 
-      <Route
-        path="/dashboard"
-        element={(
-          <ProtectedRoute authChecking={authChecking} isLoggedIn={isLoggedIn}>
-            <AdminPanel onLogout={handleLogout} user={adminUser} />
-          </ProtectedRoute>
-        )}
-      />
-
-      <Route
-        path="/masters/lens-category"
-        element={(
-          <ProtectedRoute authChecking={authChecking} isLoggedIn={isLoggedIn}>
-            <AdminPanel onLogout={handleLogout} user={adminUser} />
-          </ProtectedRoute>
-        )}
-      />
-
-      <Route
-        path="/masters/lens-category/edit/:masterId"
-        element={(
-          <ProtectedRoute authChecking={authChecking} isLoggedIn={isLoggedIn}>
-            <AdminPanel onLogout={handleLogout} user={adminUser} />
-          </ProtectedRoute>
-        )}
-      />
-
-      <Route
-        path="/masters/eyepower"
-        element={(
-          <ProtectedRoute authChecking={authChecking} isLoggedIn={isLoggedIn}>
-            <AdminPanel onLogout={handleLogout} user={adminUser} />
-          </ProtectedRoute>
-        )}
-      />
-
-      <Route
-        path="/masters/frame-shapes"
-        element={(
-          <ProtectedRoute authChecking={authChecking} isLoggedIn={isLoggedIn}>
-            <AdminPanel onLogout={handleLogout} user={adminUser} />
-          </ProtectedRoute>
-        )}
-      />
-
-      <Route
-        path="/masters/power-type"
-        element={(
-          <ProtectedRoute authChecking={authChecking} isLoggedIn={isLoggedIn}>
-            <AdminPanel onLogout={handleLogout} user={adminUser} />
-          </ProtectedRoute>
-        )}
-      />
-
-      <Route
-        path="/stores"
-        element={(
-          <ProtectedRoute authChecking={authChecking} isLoggedIn={isLoggedIn}>
-            <AdminPanel onLogout={handleLogout} user={adminUser} />
-          </ProtectedRoute>
-        )}
-      />
-
-
-
+      {protectedAdminPaths.map((path) => (
+        <Route key={path} path={path} element={protectedAdminPanel} />
+      ))}
 
       <Route
         path="*"

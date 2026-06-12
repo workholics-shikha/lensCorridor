@@ -524,6 +524,64 @@ canvas {
   flex-wrap: wrap;
 }
 
+.order-filter-bar {
+  display: grid;
+  grid-template-columns: minmax(190px, 1fr) minmax(190px, 1fr) minmax(220px, 1.1fr) auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.order-filter-control {
+  display: grid;
+  gap: 6px;
+  min-height: 76px;
+  padding: 12px 14px 10px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-subtle);
+}
+
+.order-filter-label {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.order-filter-control input,
+.order-filter-control select {
+  width: 100%;
+  min-width: 0;
+  min-height: 38px;
+  border: 1px solid rgba(26, 111, 212, 0.14);
+  border-radius: 12px;
+  background: rgba(247, 250, 255, 0.96);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  padding: 0 12px;
+  outline: none;
+}
+
+.order-filter-control input::placeholder {
+  color: #96a0ae;
+}
+
+.order-filter-control input:focus,
+.order-filter-control select:focus {
+  border-color: rgba(26, 111, 212, 0.32);
+  box-shadow: 0 0 0 4px rgba(26, 111, 212, 0.08);
+  background: #fff;
+}
+
+.order-filter-clear {
+  min-height: 44px;
+  padding-inline: 16px;
+  align-self: end;
+}
+
 .hero-panel {
   display: flex;
   justify-content: space-between;
@@ -1549,19 +1607,19 @@ canvas {
 
 .compact-lens-editor .panel-head {
   align-items: flex-start;
-  margin-bottom: 26px;
-  gap: 18px;
+  margin-bottom: 16px;
+  gap: 12px;
 }
 
 .compact-info-grid {
   grid-template-columns: repeat(4, minmax(180px, 1fr));
-  gap: 18px;
+  gap: 12px;
 }
 
 .compact-lens-editor .info-card,
 .compact-lens-editor .mini-card {
-  padding: 20px 22px;
-  border-radius: 18px;
+  padding: 14px 16px;
+  border-radius: 14px;
   background:
     radial-gradient(circle at top left, rgba(26, 111, 212, 0.06), transparent 34%),
     rgba(255, 255, 255, 0.92);
@@ -1569,37 +1627,38 @@ canvas {
 
 .compact-lens-editor .info-card strong,
 .compact-lens-editor .mini-card strong {
-  font-size: 20px;
+  font-size: 17px;
   line-height: 1.25;
 }
 
 .compact-lens-editor .info-card span,
 .compact-lens-editor .mini-card span {
-  margin-bottom: 8px;
+  margin-bottom: 4px;
 }
 
 .compact-field {
-  gap: 10px;
+  gap: 6px;
 }
 
 .compact-field .input {
-  min-height: 48px;
-  height: 48px;
-  border-radius: 16px;
-  padding-inline: 14px;
+  min-height: 40px;
+  height: 40px;
+  border-radius: 12px;
+  padding-inline: 12px;
   background: rgba(255, 255, 255, 0.92);
   border: 1px solid rgba(26, 111, 212, 0.12);
+  font-size: 13px;
 }
 
 .compact-field .compact-textarea {
-  min-height: 136px;
+  min-height: 94px;
   height: auto;
-  padding-block: 12px;
+  padding-block: 10px;
   resize: vertical;
 }
 
 .compact-field-split {
-  gap: 20px;
+  gap: 14px;
 }
 
 .compact-meta-grid {
@@ -1615,19 +1674,19 @@ canvas {
 .compact-powertype-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
+  gap: 10px;
 }
 
 .compact-powertype-pill {
   align-items: center;
   background: rgba(255,255,255,0.92);
   border: 1px solid rgba(31, 42, 44, 0.09);
-  border-radius: 18px;
+  border-radius: 14px;
   cursor: pointer;
   display: flex;
-  gap: 12px;
-  min-height: 60px;
-  padding: 16px 18px;
+  gap: 10px;
+  min-height: 48px;
+  padding: 10px 12px;
   box-shadow: 0 8px 18px rgba(20, 86, 168, 0.04);
   transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, background 0.2s ease;
 }
@@ -1653,9 +1712,9 @@ canvas {
 
 .compact-powertype-pill span {
   color: #1f2a2c;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
-  line-height: 1.45;
+  line-height: 1.3;
 }
 
 .compact-powertype-pill span small {
@@ -1664,18 +1723,18 @@ canvas {
 }
 
 .lens-editor-summary {
-  margin-top: 4px;
+  margin-top: 0;
 }
 
 .lens-editor-layout {
-  gap: 28px;
+  gap: 16px;
 }
 
 .lens-editor-card {
   display: grid;
-  gap: 22px;
-  padding: 28px;
-  border-radius: 24px;
+  gap: 14px;
+  padding: 18px;
+  border-radius: 18px;
   border: 1px solid rgba(26, 111, 212, 0.12);
   background:
     radial-gradient(circle at top left, rgba(26, 111, 212, 0.08), transparent 36%),
@@ -1687,20 +1746,20 @@ canvas {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
-  padding-bottom: 14px;
+  gap: 10px;
+  padding-bottom: 10px;
   border-bottom: 1px solid rgba(26, 111, 212, 0.08);
 }
 
 .lens-editor-card-head .eyebrow {
-  margin-bottom: 8px;
+  margin-bottom: 4px;
 }
 
 .lens-editor-card-head h5 {
   margin: 0;
   color: var(--ink);
   font-family: "Fraunces", serif;
-  font-size: 22px;
+  font-size: 18px;
   font-weight: 600;
   line-height: 1.2;
 }
@@ -1710,24 +1769,25 @@ canvas {
 }
 
 .lens-editor-description-row > .field:last-child .compact-textarea {
-  min-height: 148px;
+  min-height: 110px;
 }
 
 .compact-lens-editor .field label {
-  font-size: 12px;
+  font-size: 11px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 
 .compact-lens-editor .filter-pills {
-  gap: 10px;
+  gap: 8px;
 }
 
 .compact-lens-editor .ghost-btn,
 .compact-lens-editor .primary-btn {
-  min-height: 46px;
-  padding-inline: 18px;
+  min-height: 40px;
+  padding-inline: 14px;
   border-radius: 999px;
+  font-size: 12px;
 }
 
 @media (max-width: 1100px) {
@@ -1750,35 +1810,35 @@ canvas {
   }
 
   .compact-lens-editor .panel-head {
-    margin-bottom: 18px;
+    margin-bottom: 14px;
   }
 
   .compact-lens-editor .info-card,
   .compact-lens-editor .mini-card {
-    padding: 16px 18px;
+    padding: 12px 14px;
   }
 
   .lens-editor-layout {
-    gap: 18px;
+    gap: 14px;
   }
 
   .lens-editor-card {
-    padding: 20px;
-    gap: 18px;
-    border-radius: 20px;
+    padding: 16px;
+    gap: 14px;
+    border-radius: 16px;
   }
 
   .lens-editor-card-head h5 {
-    font-size: 19px;
+    font-size: 17px;
   }
 
   .compact-field .input {
-    min-height: 44px;
-    height: 44px;
+    min-height: 38px;
+    height: 38px;
   }
 
   .compact-field .compact-textarea {
-    min-height: 120px;
+    min-height: 92px;
   }
 
   .compact-meta-grid {
@@ -2234,6 +2294,14 @@ textarea.input {
     justify-content: space-between;
   }
 
+  .order-filter-bar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .order-filter-clear {
+    width: fit-content;
+  }
+
   .pagination-shell {
     flex-direction: column;
     align-items: stretch;
@@ -2402,6 +2470,14 @@ textarea.input {
   }
 
   .filter-group {
+    width: 100%;
+  }
+
+  .order-filter-bar {
+    grid-template-columns: 1fr;
+  }
+
+  .order-filter-clear {
     width: 100%;
   }
 

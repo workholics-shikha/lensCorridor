@@ -51,6 +51,16 @@ const MasterSectionPage = ({
   const [page, setPage] = useState(1)
   const [draftPowerTypeIds, setDraftPowerTypeIds] = useState([])
   const [lensCategorySaving, setLensCategorySaving] = useState(false)
+  const [lensCategoryForm, setLensCategoryForm] = useState({
+    categoryName: '',
+    displayLabel: '',
+    linkedPricingBand: '',
+    description: '',
+    usageAndMapping: '',
+    priority: '',
+    status: 'Active',
+    internalCode: '',
+  })
 
   useEffect(() => {
     setPage(1)
@@ -59,15 +69,34 @@ const MasterSectionPage = ({
   useEffect(() => {
     if (!isLensCategoryMaster) {
       setDraftPowerTypeIds([])
+      setLensCategoryForm({
+        categoryName: '',
+        displayLabel: '',
+        linkedPricingBand: '',
+        description: '',
+        usageAndMapping: '',
+        priority: '',
+        status: 'Active',
+        internalCode: '',
+      })
       return
     }
 
-    const selectedIds = selectedMaster?._pendingPowertypeIds
-      ?? (Array.isArray(selectedMaster?.powertype_id)
-        ? selectedMaster.powertype_id.map((item) => item?._id).filter(Boolean)
-        : [])
+    const selectedIds = Array.isArray(selectedMaster?.powertype_id)
+      ? selectedMaster.powertype_id.map((item) => item?._id || item?.id || item).filter(Boolean)
+      : []
 
     setDraftPowerTypeIds(selectedIds)
+    setLensCategoryForm({
+      categoryName: selectedMaster?.title ?? '',
+      displayLabel: selectedMaster?.detailValues?.[1] ?? '',
+      linkedPricingBand: selectedMaster?.detailValues?.[2] ?? '',
+      description: selectedMaster?.detailValues?.[3] ?? '',
+      usageAndMapping: selectedMaster?.usageAndMapping ?? selectedMaster?.subtitle ?? '',
+      priority: selectedMaster?.detailValues?.[4] ?? '',
+      status: selectedMaster?.detailValues?.[5] ?? 'Active',
+      internalCode: selectedMaster?.detailValues?.[6] ?? '',
+    })
   }, [isLensCategoryMaster, selectedMaster, selectedMasterIndex])
 
   const totalPages = isLensCategoryMaster
@@ -117,18 +146,23 @@ const MasterSectionPage = ({
     setLensCategorySaving(true)
 
     try {
-      const categoryName = selectedMaster._pendingCategoryName ?? (selectedMaster?.detailValues?.[0] || '')
-      const displayLabel = selectedMaster._pendingDisplayLabel ?? (selectedMaster?.detailValues?.[1] || '')
-      const linkedPricingBand = selectedMaster._pendingLinkedPricingBand ?? (selectedMaster?.detailValues?.[2] || '')
-      const description = selectedMaster._pendingDescription ?? (selectedMaster?.detailValues?.[3] || '')
+      const categoryName = lensCategoryForm.categoryName.trim()
+      const displayLabel = lensCategoryForm.displayLabel.trim()
+      const linkedPricingBand = lensCategoryForm.linkedPricingBand.trim()
+      const description = lensCategoryForm.description.trim()
+      const usageAndMapping = lensCategoryForm.usageAndMapping.trim()
       const powertype_id = draftPowerTypeIds
-      const priorityValue = selectedMaster._pendingPriority ?? selectedMaster?.detailValues?.[4]
+      const priorityValue = lensCategoryForm.priority
       const priority = priorityValue === '' || priorityValue === '-' || priorityValue === undefined
         ? 0
         : Number(priorityValue)
-      const status = selectedMaster._pendingStatus ?? (selectedMaster?.detailValues?.[5] || 'Active')
-      const internalCode = selectedMaster._pendingInternalCode ?? (selectedMaster?.detailValues?.[6] || '')
+      const status = lensCategoryForm.status || 'Active'
+      const internalCode = lensCategoryForm.internalCode.trim()
       const id = selectedMaster.id || selectedMaster._id
+
+      if (!categoryName || !displayLabel) {
+        throw new Error('Category name and display label are required')
+      }
 
       const res = await fetch(`${adminBaseUrl}/api/masters/lens-category/${id}`, {
         method: 'PUT',
@@ -141,6 +175,7 @@ const MasterSectionPage = ({
           displayLabel,
           linkedPricingBand,
           description,
+          usageAndMapping,
           powertype_id,
           priority,
           status,
@@ -212,10 +247,10 @@ const MasterSectionPage = ({
                   <label>{currentMaster.fields[0]}</label>
                   <input
                     className="input filled"
-                    defaultValue={selectedMaster?.detailValues?.[0] ?? ''}
+                    value={lensCategoryForm.categoryName}
                     disabled={masterLoading || lensCategorySaving}
                     onChange={(e) => {
-                      selectedMaster._pendingCategoryName = e.target.value
+                      setLensCategoryForm((current) => ({ ...current, categoryName: e.target.value }))
                     }}
                   />
                 </div>
@@ -223,10 +258,10 @@ const MasterSectionPage = ({
                   <label>{currentMaster.fields[1]}</label>
                   <input
                     className="input filled"
-                    defaultValue={selectedMaster?.detailValues?.[1] ?? ''}
+                    value={lensCategoryForm.displayLabel}
                     disabled={masterLoading || lensCategorySaving}
                     onChange={(e) => {
-                      selectedMaster._pendingDisplayLabel = e.target.value
+                      setLensCategoryForm((current) => ({ ...current, displayLabel: e.target.value }))
                     }}
                   />
                 </div>
@@ -236,10 +271,10 @@ const MasterSectionPage = ({
                   <label>{currentMaster.fields[2]}</label>
                   <input
                     className="input filled"
-                    defaultValue={selectedMaster?.detailValues?.[2] ?? ''}
+                    value={lensCategoryForm.linkedPricingBand}
                     disabled={masterLoading || lensCategorySaving}
                     onChange={(e) => {
-                      selectedMaster._pendingLinkedPricingBand = e.target.value
+                      setLensCategoryForm((current) => ({ ...current, linkedPricingBand: e.target.value }))
                     }}
                   />
                 </div>
@@ -247,13 +282,24 @@ const MasterSectionPage = ({
                   <label>{currentMaster.fields[3]}</label>
                   <textarea
                     className="input filled compact-textarea"
-                    defaultValue={selectedMaster?.detailValues?.[3] ?? ''}
+                    value={lensCategoryForm.description}
                     disabled={masterLoading || lensCategorySaving}
                     onChange={(e) => {
-                      selectedMaster._pendingDescription = e.target.value
+                      setLensCategoryForm((current) => ({ ...current, description: e.target.value }))
                     }}
                   />
                 </div>
+              </div>
+              <div className="field compact-field">
+                <label>Usage &amp; Mapping</label>
+                <textarea
+                  className="input filled compact-textarea"
+                  value={lensCategoryForm.usageAndMapping}
+                  disabled={masterLoading || lensCategorySaving}
+                  onChange={(e) => {
+                    setLensCategoryForm((current) => ({ ...current, usageAndMapping: e.target.value }))
+                  }}
+                />
               </div>
             </section>
 
@@ -288,7 +334,6 @@ const MasterSectionPage = ({
                               : draftPowerTypeIds.filter((id) => id !== pt._id)
 
                             setDraftPowerTypeIds(nextIds)
-                            selectedMaster._pendingPowertypeIds = nextIds
                           }}
                         />
                         <span>
@@ -314,11 +359,11 @@ const MasterSectionPage = ({
                   <label>{currentMaster.fields[4]}</label>
                   <input
                     className="input filled"
-                    defaultValue={selectedMaster?.detailValues?.[4] ?? ''}
+                    value={lensCategoryForm.priority}
                     disabled={masterLoading || lensCategorySaving}
                     min="0"
                     onChange={(e) => {
-                      selectedMaster._pendingPriority = e.target.value
+                      setLensCategoryForm((current) => ({ ...current, priority: e.target.value }))
                     }}
                     type="number"
                   />
@@ -327,10 +372,10 @@ const MasterSectionPage = ({
                   <label>{currentMaster.fields[5]}</label>
                   <select
                     className="input filled"
-                    defaultValue={selectedMaster?.detailValues?.[5] ?? 'Active'}
+                    value={lensCategoryForm.status}
                     disabled={masterLoading || lensCategorySaving}
                     onChange={(e) => {
-                      selectedMaster._pendingStatus = e.target.value
+                      setLensCategoryForm((current) => ({ ...current, status: e.target.value }))
                     }}
                   >
                     <option value="Active">Active</option>
@@ -343,10 +388,10 @@ const MasterSectionPage = ({
                   <label>{currentMaster.fields[6]}</label>
                   <input
                     className="input filled"
-                    defaultValue={selectedMaster?.detailValues?.[6] ?? ''}
+                    value={lensCategoryForm.internalCode}
                     disabled={masterLoading || lensCategorySaving}
                     onChange={(e) => {
-                      selectedMaster._pendingInternalCode = e.target.value
+                      setLensCategoryForm((current) => ({ ...current, internalCode: e.target.value }))
                     }}
                   />
                 </div>

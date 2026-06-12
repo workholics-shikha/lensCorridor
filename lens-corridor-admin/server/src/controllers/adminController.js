@@ -1,9 +1,11 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const Admin = require('../models/Admin');
+const { normalizeAdminEmail } = require('../utils/ensureDefaultAdmin');
 
 const login = async (req, res) => {
-    const { email, password } = req.body;
+    const email = normalizeAdminEmail(req.body?.email);
+    const { password } = req.body;
 
     if (!email || !password) {
         return res.status(400).json({ error: 'Email and password are required' });

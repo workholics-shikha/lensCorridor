@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Platform,
   ScrollView,
@@ -12,8 +12,8 @@ import { router } from 'expo-router';
 import { ArrowLeft, CircleDollarSign, RotateCcw } from 'lucide-react-native';
 import { useOrderFlow } from '@/context/OrderFlowContext';
 import { useReturnExchange } from '@/context/ReturnExchangeContext';
+import { createReturnExchangeRequest } from '@/lib/api';
 import {
-  createReturnExchangeRecord,
   getOriginalItemAmount,
   type RefundType,
   type ReturnExchangeItemScope,
@@ -48,6 +48,8 @@ export default function ReturnExchangeReturnScreen() {
     updateReturnDraft,
     setCreatedRecord,
   } = useReturnExchange();
+  const [saving, setSaving] = useState(false);
+  const [submitError, setSubmitError] = useState('');
 
   const refundAmount = useMemo(() => (
     selectedOrder ? getOriginalItemAmount(selectedOrder, returnDraft.itemScope) : 0
@@ -64,28 +66,40 @@ export default function ReturnExchangeReturnScreen() {
     );
   }
 
-  const handleCreateReturn = () => {
+  const handleCreateReturn = async () => {
     if (!returnDraft.reason.trim()) {
       return;
     }
 
-    const record = createReturnExchangeRecord({
-      type: 'return',
-      order: selectedOrder,
-      itemScope: returnDraft.itemScope,
-      reason: returnDraft.reason,
-      remarks: returnDraft.remarks,
-      refundType: returnDraft.refundType,
-      originalAmount: refundAmount,
-      revisedAmount: 0,
-      settlementAmount: refundAmount,
-      settlementType: 'refund',
-      store: draft.store,
-      salesperson: draft.salesperson,
-    });
+    setSaving(true);
+    setSubmitError('');
 
-    setCreatedRecord(record);
-    router.push('/return-exchange-invoice');
+    try {
+      const record = await createReturnExchangeRequest({
+        type: 'return',
+        orderId: selectedOrder.id,
+        customerName: selectedOrder.customer.name || 'Customer',
+        customerPhone: selectedOrder.customer.phone,
+        itemScope: returnDraft.itemScope,
+        reason: returnDraft.reason,
+        remarks: returnDraft.remarks,
+        refundType: returnDraft.refundType,
+        originalAmount: refundAmount,
+        revisedAmount: 0,
+        settlementAmount: refundAmount,
+        settlementType: 'refund',
+        originalOrderSnapshot: selectedOrder,
+        store: draft.store,
+        salesperson: draft.salesperson,
+      });
+
+      setCreatedRecord(record);
+      router.push('/return-exchange-invoice');
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : 'Unable to create return request.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -169,13 +183,15 @@ export default function ReturnExchangeReturnScreen() {
           </Text>
         </View>
 
+        {submitError ? <Text style={styles.errorText}>{submitError}</Text> : null}
+
         <TouchableOpacity
           style={[styles.primaryButton, !returnDraft.reason.trim() && styles.primaryButtonDisabled]}
           onPress={handleCreateReturn}
           activeOpacity={0.88}
-          disabled={!returnDraft.reason.trim()}
+          disabled={!returnDraft.reason.trim() || saving}
         >
-          <Text style={styles.primaryButtonText}>Generate Return Invoice</Text>
+          <Text style={styles.primaryButtonText}>{saving ? 'Generating...' : 'Generate Return Invoice'}</Text>
         </TouchableOpacity>
       </ScrollView>
     </View>
@@ -343,6 +359,11 @@ const styles = StyleSheet.create({
     fontSize: 12.5,
     color: '#9A3412',
     marginTop: 4,
+  },
+  errorText: {
+    marginTop: 14,
+    fontSize: 12.5,
+    color: Colors.error,
   },
   primaryButton: {
     minHeight: 46,

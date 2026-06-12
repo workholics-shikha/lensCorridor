@@ -15,6 +15,7 @@ import { ArrowLeft, BadgeIndianRupee, FilePenLine } from 'lucide-react-native';
 import { useOrderFlow } from '@/context/OrderFlowContext';
 import { useReturnExchange } from '@/context/ReturnExchangeContext';
 import {
+  createReturnExchangeRequest,
   fetchFrameShapes,
   fetchLensCategories,
   fetchPowerTypes,
@@ -23,7 +24,6 @@ import {
 } from '@/lib/api';
 import type { FrameShape } from '@/lib/types';
 import {
-  createReturnExchangeRecord,
   getOriginalItemAmount,
   getRevisedItemAmount,
   getSettlement,
@@ -60,6 +60,8 @@ export default function ReturnExchangeExchangeScreen() {
   const [powerTypes, setPowerTypes] = useState<PowerTypeOption[]>([]);
   const [categories, setCategories] = useState<LensCategoryOption[]>([]);
   const [loadingCategories, setLoadingCategories] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [submitError, setSubmitError] = useState('');
 
   useEffect(() => {
     fetchFrameShapes().then(setShapes);
@@ -121,28 +123,40 @@ export default function ReturnExchangeExchangeScreen() {
     });
   };
 
-  const handleCreateExchange = () => {
+  const handleCreateExchange = async () => {
     if (!exchangeDraft.reason.trim()) {
       return;
     }
 
-    const record = createReturnExchangeRecord({
-      type: 'exchange',
-      order: selectedOrder,
-      itemScope: exchangeDraft.itemScope,
-      reason: exchangeDraft.reason,
-      remarks: exchangeDraft.remarks,
-      originalAmount,
-      revisedAmount,
-      settlementAmount: settlement.amount,
-      settlementType: settlement.type,
-      store: draft.store,
-      salesperson: draft.salesperson,
-      replacementDraft: draft,
-    });
+    setSaving(true);
+    setSubmitError('');
 
-    setCreatedRecord(record);
-    router.push('/return-exchange-invoice');
+    try {
+      const record = await createReturnExchangeRequest({
+        type: 'exchange',
+        orderId: selectedOrder.id,
+        customerName: selectedOrder.customer.name || 'Customer',
+        customerPhone: selectedOrder.customer.phone,
+        itemScope: exchangeDraft.itemScope,
+        reason: exchangeDraft.reason,
+        remarks: exchangeDraft.remarks,
+        originalAmount,
+        revisedAmount,
+        settlementAmount: settlement.amount,
+        settlementType: settlement.type,
+        originalOrderSnapshot: selectedOrder,
+        replacementDraft: draft,
+        store: draft.store,
+        salesperson: draft.salesperson,
+      });
+
+      setCreatedRecord(record);
+      router.push('/return-exchange-invoice');
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : 'Unable to create exchange request.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const showFrameSection = exchangeDraft.itemScope === 'frame' || exchangeDraft.itemScope === 'full-product';
@@ -296,13 +310,15 @@ export default function ReturnExchangeExchangeScreen() {
           </Text>
         </View>
 
+        {submitError ? <Text style={styles.errorText}>{submitError}</Text> : null}
+
         <TouchableOpacity
           style={[styles.primaryButton, !exchangeDraft.reason.trim() && styles.primaryButtonDisabled]}
           activeOpacity={0.88}
           onPress={handleCreateExchange}
-          disabled={!exchangeDraft.reason.trim()}
+          disabled={!exchangeDraft.reason.trim() || saving}
         >
-          <Text style={styles.primaryButtonText}>Generate Exchange Invoice</Text>
+          <Text style={styles.primaryButtonText}>{saving ? 'Generating...' : 'Generate Exchange Invoice'}</Text>
         </TouchableOpacity>
       </ScrollView>
     </View>
@@ -521,6 +537,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '800',
     color: '#B45309',
+  },
+  errorText: {
+    marginTop: 14,
+    fontSize: 12.5,
+    color: Colors.error,
   },
   primaryButton: {
     minHeight: 46,
