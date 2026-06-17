@@ -987,7 +987,7 @@ const AdminPanel = ({ user, onLogout }) => {
         subtitle: store.subtitle,
         revenue: formatCurrency(store.revenueAmount),
         meta: `${store.orderCount} order${store.orderCount === 1 ? '' : 's'}${store.pendingCount ? ` | ${store.pendingCount} pending` : ''}`,
-        status: index === 0 ? 'Top performer' : (store.pendingCount ? 'Needs follow-up' : 'Stable'),
+        status: index === 0 ? 'Top Performer' : (store.pendingCount ? 'Follow-up Needed' : 'Stable'),
         tone: index === 0 ? 'positive' : (store.pendingCount ? 'warning' : 'neutral'),
       }))
   }, [dashboardOrders, stores])

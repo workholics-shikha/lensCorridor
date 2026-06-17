@@ -8,7 +8,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { ArrowLeft, ShoppingCart } from 'lucide-react-native';
 import { fetchFrameShapes } from '@/lib/api';
 import { FrameShape } from '@/lib/types';
-import { Colors, Spacing, Radius, FontSize, Shadow } from '@/lib/theme';
+import { Colors, Spacing, Radius, Shadow } from '@/lib/theme';
 import { useCart } from '@/context/CartContext';
 
 const logoImage = require('@/assets/images/whiteLogo.png');
@@ -33,44 +33,102 @@ const QUICK_CARDS = [
     body: 'Get Your Glasses Repaired\nQuickly And Hassle-Free.',
     titleIcon: repairTitleIcon,
     image: repairCardImage,
-    action: () => {},
+    action: () => { },
   },
 ];
 
 export default function HomeScreen() {
   const { width, height } = useWindowDimensions();
+  const isSmallPhone = width < 390;
+  const isLargePhone = width >= 480 && width < 768;
   const isTablet = width >= 768;
   const isLandscape = width > height;
   const isTabletLandscape = isTablet && isLandscape;
+  const isTabletPortrait = isTablet && !isLandscape;
+  const isLargeTablet = width >= 1180;
   const { cartCount } = useCart();
   const [selectedShape, setSelectedShape] = useState('rectangle');
   const [frameShapes, setFrameShapes] = useState<FrameShape[]>([]);
 
   const metrics = useMemo(() => {
-    const horizontalPadding = isTabletLandscape ? 26 : 20;
-    const shapeCardWidth = isTabletLandscape ? 162 : isTablet ? 154 : 146;
-    const shapeCardHeight = isTabletLandscape ? 122 : isTablet ? 132 : 134;
-    const serviceCardHeight = isTabletLandscape ? 136 : isTablet ? 196 : 160;
+    const contentWidth = isTablet
+      ? Math.min(width - (isLargeTablet ? 48 : 28), isLargeTablet ? 1220 : 1040)
+      : width;
+    const horizontalPadding = isTabletLandscape ? 24 : isTabletPortrait ? 22 : isLargePhone ? 22 : isSmallPhone ? 16 : 20;
+   const shapeCardWidth =
+  isTabletLandscape
+    ? (isLargeTablet ? 220 : 195)
+    : isTabletPortrait
+    ? 185
+    : isLargePhone
+    ? 178
+    : 162;
+
+const shapeCardHeight =
+  isTabletLandscape ? 168 :
+  isTabletPortrait ? 170 :
+  152;
+    const serviceCardHeight = isTabletLandscape ? 136 : isTabletPortrait ? 154 : 172;
+    const tabBarHeight = isTablet ? 68 : 74;
+    const headerTopPadding = Platform.OS === 'ios'
+      ? (isTabletLandscape ? 18 : isTabletPortrait ? 52 : 52)
+      : (isTabletLandscape ? 16 : isTabletPortrait ? 36 : 36);
+    const headerBottomPadding = isTabletLandscape ? 16 : isTablet ? 20 : 20;
+    const headerVisualHeight = headerTopPadding
+      + headerBottomPadding
+      + 46;
+    const surfaceMinHeight = Math.max(
+      isTabletLandscape ? 420 : 360,
+      height - headerVisualHeight - (isTablet ? 8 : 0),
+    );
 
     return {
+      contentWidth,
       horizontalPadding,
-      headerTopPadding: Platform.OS === 'ios' ? (isTabletLandscape ? 22 : 52) : (isTabletLandscape ? 18 : 36),
-      headerBottomPadding: isTabletLandscape ? 24 : 18,
-      logoWidth: isTabletLandscape ? 206 : isTablet ? 248 : 240,
-      logoHeight: isTabletLandscape ? 34 : isTablet ? 48 : 42,
-      surfaceRadius: isTabletLandscape ? 32 : 30,
-      sectionTopPadding: isTabletLandscape ? 26 : 22,
-      sectionGap: isTabletLandscape ? 22 : isTablet ? 24 : 16,
-      shapeCardWidth: isTabletLandscape ? 172 : shapeCardWidth,
-      shapeCardHeight: isTabletLandscape ? 130 : shapeCardHeight,
-      shapeImageWidth: isTabletLandscape ? 128 : isTablet ? 138 : 114,
-      shapeImageHeight: isTabletLandscape ? 72 : isTablet ? 84 : 74,
-      shapeTitleSize: isTabletLandscape ? 20 : isTablet ? 22 : 17,
+      headerTopPadding,
+      headerBottomPadding,
+      logoWidth: isTabletLandscape ? 214 : isTablet ? 248 : 214,
+      logoHeight: isTabletLandscape ? 40 : isTablet ? 52 : 46,
+      // surfaceRadius: isTabletLandscape ? 60 : isTablet ? 52 : 28,
+      // surfaceOverlap: isTabletLandscape ? 18 : isTablet ? 14 : 8,
+
+      surfaceRadius: isTabletLandscape ? 42 : isTablet ? 40 : 28,
+      surfaceOverlap: isTabletLandscape ? 0 : isTablet ? 0 : 0,
+
+      sectionTopPadding: isTabletLandscape ? 42 : isTablet ? 38 : 28,
+      shapeCardWidth,
+      shapeCardHeight,
+     shapeImageWidth:
+  isTabletLandscape ? 145 :
+  isTabletPortrait ? 132 :
+  isLargePhone ? 132 :
+  128,
+
+shapeImageHeight:
+  isTabletLandscape ? 86 :
+  isTabletPortrait ? 78 :
+  isLargePhone ? 88 :
+  84,
+
+      shapeTitleSize: isTabletLandscape ? 19 : isTabletPortrait ? 19 : 18,
       serviceCardHeight,
-      serviceBodySize: isTabletLandscape ? 17 : 19,
-      serviceBodyLineHeight: isTabletLandscape ? 20 : 23,
+      serviceBodySize: isTabletLandscape ? 12.5 : isTabletPortrait ? 13.5 : 19,
+      serviceBodyLineHeight: isTabletLandscape ? 16 : isTabletPortrait ? 18 : 23,
+
+      sectionTitleSize: isTabletLandscape ? 21 : isTablet ? 22 : 24,
+      sectionIconSize: isTabletLandscape ? 32 : isTablet ? 34 : 36,
+      sectionTitleGap: isTabletLandscape ? 12 : 14,
+      
+      sectionTitlePadding: isTabletLandscape ? 24 : isTablet ? 24 : 26,
+      frameSectionBottomPadding: isTabletLandscape ? 6 : isTablet ? 12 : 16,
+      serviceTopMargin: isTabletLandscape ? 22 : isTablet ? 18 : 18,
+      quickCardGap: isTabletLandscape ? 14 : isTablet ? 16 : 20,
+      bottomSafeSpace: isTablet ? 36 : 88,
+      surfaceMinHeight,
+      tabBarHeight,
+      centerSpacerMinHeight: isTabletLandscape ? 24 : isTablet ? 20 : 20,
     };
-  }, [height, isTablet, isTabletLandscape, width]);
+  }, [height, isLargePhone, isLargeTablet, isSmallPhone, isTablet, isTabletLandscape, isTabletPortrait, width]);
 
   useEffect(() => {
     fetchFrameShapes().then(setFrameShapes);
@@ -99,6 +157,7 @@ export default function HomeScreen() {
             paddingTop: metrics.headerTopPadding,
             paddingBottom: metrics.headerBottomPadding,
             paddingHorizontal: metrics.horizontalPadding,
+            alignItems: 'center',
           },
         ]}
       >
@@ -106,7 +165,7 @@ export default function HomeScreen() {
           colors={['#1A6FD4', '#1A6FD4']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
-          style={styles.headerPanel}
+          style={[styles.headerPanel, { width: '100%', maxWidth: metrics.contentWidth }]}
         >
           <HeaderPrintPattern />
           <View style={styles.headerRow}>
@@ -115,8 +174,8 @@ export default function HomeScreen() {
             </TouchableOpacity> */}
 
             <TouchableOpacity style={styles.backButton} onPress={handleBack} activeOpacity={0.85}>
-            <ArrowLeft size={21} color="#1C1D21" />
-          </TouchableOpacity>
+              <ArrowLeft size={21} color="#1C1D21" />
+            </TouchableOpacity>
 
             <View style={styles.brandRow}>
               <Image
@@ -147,7 +206,10 @@ export default function HomeScreen() {
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[styles.scrollContent, isTablet && styles.scrollContentTablet]}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: metrics.bottomSafeSpace },
+        ]}
       >
         <View
           style={[
@@ -155,173 +217,153 @@ export default function HomeScreen() {
             {
               borderTopLeftRadius: metrics.surfaceRadius,
               borderTopRightRadius: metrics.surfaceRadius,
+
+              borderCurve: 'continuous',
+
               paddingTop: metrics.sectionTopPadding,
-              flex: isTablet ? 1 : undefined,
-              minHeight: isTablet ? height - 120 : undefined,
+              width: '100%',
+              overflow: 'hidden',
             },
           ]}
         >
-          <SectionTitle title="Select Frame Shapes" iconSource={frameShapesTitleIcon} />
-          {isTabletLandscape ? (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={[
-                styles.shapesRow,
-                styles.shapesRowTablet,
-                {
-                  paddingHorizontal: metrics.horizontalPadding,
-                  paddingBottom: metrics.sectionGap + 2,
-                },
-              ]}
-            >
-              {frameShapes.map((shape) => {
-                const active = selectedShape === shape.shape;
+          <View style={styles.surfaceBody}>
+            <View>
+              <SectionTitle
+                title="Select Frame Shapes"
+                iconSource={frameShapesTitleIcon}
+                titleSize={metrics.sectionTitleSize}
+                gap={metrics.sectionTitleGap}
+                paddingHorizontal={metrics.sectionTitlePadding}
+                iconSize={metrics.sectionIconSize}
+              />
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={[
+                  styles.shapesRow,
+                  isTabletLandscape && styles.shapesRowTablet,
+                  {
+                    paddingHorizontal: metrics.horizontalPadding,
+                    paddingBottom: metrics.frameSectionBottomPadding,
+                  },
+                ]}
+              >
+                {frameShapes.map((shape) => {
+                  const active = selectedShape === shape.shape;
 
-                return (
-                  <TouchableOpacity
-                    key={shape.id}
-                    style={[
-                      styles.shapeCard,
-                      active && styles.shapeCardActive,
-                      {
-                        width: metrics.shapeCardWidth,
-                        minHeight: metrics.shapeCardHeight,
-                      },
-                    ]}
-                    onPress={() => handleShapeSelect(shape.shape)}
-                    activeOpacity={0.85}
-                  >
-                    {shape.image ? (
-                      <Image
-                        source={{ uri: shape.image }}
-                        style={[
-                          styles.shapeImage,
-                          {
-                            width: metrics.shapeImageWidth,
-                            height: metrics.shapeImageHeight,
-                          },
-                        ]}
-                        resizeMode="contain"
-                      />
-                    ) : (
-                      <FrameShapeArtwork slug={shape.shape} active={active} />
-                    )}
-                  <Text
+                  return (
+                    <TouchableOpacity
+                      key={shape.id}
                       style={[
-                        styles.shapeLabel,
-                        active && styles.shapeLabelActive,
-                        { fontSize: metrics.shapeTitleSize },
+                        styles.shapeCard,
+                        active && styles.shapeCardActive,
+                        {
+                          width: metrics.shapeCardWidth,
+                          height: metrics.shapeCardHeight,
+                        },
                       ]}
+                      onPress={() => handleShapeSelect(shape.shape)}
+                      activeOpacity={0.85}
                     >
-                      {shape.title}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-          ) : (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={[
-                styles.shapesRow,
-                {
-                  paddingHorizontal: metrics.horizontalPadding,
-                  paddingBottom: metrics.sectionGap + 4,
-                },
-              ]}
-            >
-              {frameShapes.map((shape) => {
-                const active = selectedShape === shape.shape;
-
-                return (
-                  <TouchableOpacity
-                    key={shape.id}
-                    style={[
-                      styles.shapeCard,
-                      active && styles.shapeCardActive,
-                      {
-                        width: metrics.shapeCardWidth,
-                        minHeight: metrics.shapeCardHeight,
-                      },
-                    ]}
-                    onPress={() => handleShapeSelect(shape.shape)}
-                    activeOpacity={0.85}
-                  >
-                    {shape.image ? (
-                      <Image
-                        source={{ uri: shape.image }}
-                        style={[
-                          styles.shapeImage,
-                          {
-                            width: metrics.shapeImageWidth,
-                            height: metrics.shapeImageHeight,
-                          },
-                        ]}
-                        resizeMode="contain"
-                      />
-                    ) : (
-                      <FrameShapeArtwork slug={shape.shape} active={active} />
-                    )}
-                  <Text
-                      style={[
-                        styles.shapeLabel,
-                        active && styles.shapeLabelActive,
-                        { fontSize: metrics.shapeTitleSize },
-                      ]}
-                    >
-                      {shape.title}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-          )}
-
-          <View
-            style={[
-              styles.quickCardsWrap,
-              {
-                paddingHorizontal: metrics.horizontalPadding,
-                marginTop: metrics.sectionGap,
-              },
-            ]}
-          >
-            {QUICK_CARDS.map((card) => (
-              <View key={card.key} style={styles.quickCardBlock}>
-                <SectionTitle title={card.title} compact iconSource={card.titleIcon} />
-                <TouchableOpacity
-                  style={styles.quickCard}
-                  onPress={card.action}
-                  activeOpacity={0.9}
-                >
-                  <ImageBackground
-                    source={card.image}
-                    style={[styles.quickCardImage, { height: metrics.serviceCardHeight }]}
-                    imageStyle={styles.quickCardImageStyle}
-                    resizeMode="cover"
-                  >
-                    <View style={styles.quickCardOverlay}>
+                      {shape.image ? (
+                        <Image
+                          source={{ uri: shape.image }}
+                          style={[
+                            styles.shapeImage,
+                            {
+                              width: metrics.shapeImageWidth,
+                              height: metrics.shapeImageHeight,
+                            },
+                          ]}
+                          resizeMode="contain"
+                        />
+                      ) : (
+                        <FrameShapeArtwork slug={shape.shape} active={active} />
+                      )}
                       <Text
                         style={[
-                          styles.quickCardBody,
-                          {
-                            fontSize: metrics.serviceBodySize,
-                            lineHeight: metrics.serviceBodyLineHeight,
-                          },
+                          styles.shapeLabel,
+                          active && styles.shapeLabelActive,
+                          { fontSize: metrics.shapeTitleSize },
                         ]}
                       >
-                        {card.body}
+                        {shape.title}
                       </Text>
-                      <View style={styles.quickCardButton}>
-                        <Text style={styles.quickCardButtonText}>Start Now</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+
+            <View
+              style={[
+                styles.centerSpacer,
+                {
+                  minHeight: metrics.centerSpacerMinHeight,
+                },
+              ]}
+            >
+              <MiddleSurfacePattern />
+            </View>
+
+            <View
+              style={[
+                styles.quickCardsWrap,
+                {
+                  paddingHorizontal: metrics.horizontalPadding,
+                  marginTop: metrics.serviceTopMargin,
+                  gap: metrics.quickCardGap,
+                },
+              ]}
+            >
+              {QUICK_CARDS.map((card) => (
+                <View
+                  key={card.key}
+                  style={[
+                    styles.quickCardBlock,
+                    isTabletLandscape && styles.quickCardBlockTablet,
+                  ]}
+                >
+                  <SectionTitle
+                    title={card.title}
+                    compact
+                    iconSource={card.titleIcon}
+                    titleSize={metrics.sectionTitleSize}
+                    gap={metrics.sectionTitleGap}
+                    iconSize={metrics.sectionIconSize}
+                  />
+                  <TouchableOpacity
+                    style={styles.quickCard}
+                    onPress={card.action}
+                    activeOpacity={0.9}
+                  >
+                    <ImageBackground
+                      source={card.image}
+                      style={[styles.quickCardImage, { height: metrics.serviceCardHeight }]}
+                      imageStyle={styles.quickCardImageStyle}
+                      resizeMode="cover"
+                    >
+                      <View style={styles.quickCardOverlay}>
+                        <Text
+                          style={[
+                            styles.quickCardBody,
+                            {
+                              fontSize: metrics.serviceBodySize,
+                              lineHeight: metrics.serviceBodyLineHeight,
+                            },
+                          ]}
+                        >
+                          {card.body}
+                        </Text>
+                        <View style={styles.quickCardButton}>
+                          <Text style={styles.quickCardButtonText}>Start Now</Text>
+                        </View>
                       </View>
-                    </View>
-                  </ImageBackground>
-                </TouchableOpacity>
-              </View>
-            ))}
+                    </ImageBackground>
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </View>
           </View>
         </View>
       </ScrollView>
@@ -333,19 +375,33 @@ function SectionTitle({
   title,
   compact,
   iconSource,
+  titleSize = 18,
+  gap = 10,
+  paddingHorizontal = 26,
+  iconSize = 24,
 }: {
   title: string;
   compact?: boolean;
   iconSource?: number;
+  titleSize?: number;
+  gap?: number;
+  paddingHorizontal?: number;
+  iconSize?: number;
 }) {
   return (
-    <View style={[styles.sectionTitleRow, compact && styles.sectionTitleRowCompact]}>
+    <View
+      style={[
+        styles.sectionTitleRow,
+        compact && styles.sectionTitleRowCompact,
+        { gap, paddingHorizontal },
+      ]}
+    >
       {iconSource ? (
-        <Image source={iconSource} style={styles.sectionTitleIcon} resizeMode="contain" />
+        <Image source={iconSource} style={[styles.sectionTitleIcon, { width: iconSize, height: iconSize }]} resizeMode="contain" />
       ) : (
         <View style={styles.sectionIconDot} />
       )}
-      <Text style={styles.sectionTitle}>{title}</Text>
+      <Text style={[styles.sectionTitle, { fontSize: titleSize }]}>{title}</Text>
     </View>
   );
 }
@@ -362,6 +418,17 @@ function HeaderPrintPattern() {
       <EyeglassPatternShape style={{ top: -10, right: 18, transform: [{ rotate: '-18deg' }] }} />
       <EyeglassPatternShape style={{ top: 54, right: 332, transform: [{ rotate: '16deg' }], opacity: 0.18 }} />
       <EyeglassPatternShape style={{ top: 58, right: 38, transform: [{ rotate: '-14deg' }], opacity: 0.18 }} />
+    </View>
+  );
+}
+
+function MiddleSurfacePattern() {
+  return (
+    <View pointerEvents="none" style={styles.middlePattern}>
+      <EyeglassPatternShape style={{ top: 6, left: 52, transform: [{ rotate: '-12deg' }], opacity: 0.1 }} />
+      <EyeglassPatternShape style={{ top: 24, left: 208, transform: [{ rotate: '14deg' }], opacity: 0.08 }} />
+      <EyeglassPatternShape style={{ top: 8, right: 220, transform: [{ rotate: '-10deg' }], opacity: 0.08 }} />
+      <EyeglassPatternShape style={{ top: 30, right: 48, transform: [{ rotate: '16deg' }], opacity: 0.1 }} />
     </View>
   );
 }
@@ -438,11 +505,11 @@ const styles = StyleSheet.create({
   },
   headerPanel: {
     backgroundColor: '#1A6FD4',
-    borderTopLeftRadius: 26,
-    borderTopRightRadius: 26,
-    overflow: 'hidden',
-    paddingHorizontal: 0,
-    paddingVertical: 0,
+    // borderTopLeftRadius: 26,
+    // borderTopRightRadius: 26,
+    // overflow: 'hidden',
+    // paddingHorizontal: 0,
+    // paddingVertical: 0,
   },
   headerPrint: {
     ...StyleSheet.absoluteFill,
@@ -450,9 +517,8 @@ const styles = StyleSheet.create({
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    // justifyContent: 'space-between',
-    paddingHorizontal: 2,
-    minHeight: 46,
+    paddingHorizontal: 0,
+    minHeight: 48,
   },
   patternEyeglass: {
     position: 'absolute',
@@ -527,26 +593,27 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   backButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: Colors.white,
+    marginRight: 8,
   },
   brandRow: {
     flex: 1,
     alignItems: 'flex-start',
     justifyContent: 'center',
-    marginLeft: 8,
+    marginLeft: 0,
   },
   logoImage: {
     maxWidth: '100%',
   },
   cartButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     backgroundColor: Colors.white,
     alignItems: 'center',
     justifyContent: 'center',
@@ -570,31 +637,47 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   scrollContent: {
-    paddingBottom: 10,
-  },
-  scrollContentTablet: {
     flexGrow: 1,
   },
+  scrollContentTablet: {
+    alignItems: 'center',
+  },
   surface: {
-    marginTop: -4,
-    backgroundColor: '#F7F7FC',
+    flex: 1,
+    backgroundColor: '#FBFBFE',
     paddingBottom: Spacing.lg,
-    minHeight: '100%',
+    justifyContent: 'flex-start',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    overflow: 'hidden',
+    ...(Platform.OS === 'ios' ? { borderCurve: 'continuous' as const } : {}),
+  },
+  surfaceBody: {
+    flex: 1,
+    justifyContent: 'flex-start',
+  },
+  centerSpacer: {
+    position: 'relative',
+    justifyContent: 'center',
+    marginTop: 10,
+    marginBottom: 14,
+  },
+  middlePattern: {
+    ...StyleSheet.absoluteFill,
   },
   sectionTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    marginBottom: 14,
-    paddingHorizontal: 26,
+    marginTop: 4,
+    marginBottom: 18,
   },
   sectionTitleRowCompact: {
     paddingHorizontal: 0,
-    marginBottom: 12,
+    marginBottom: 10,
   },
   sectionTitleIcon: {
-    width: 24,
-    height: 24,
+    width: 26,
+    height: 26,
   },
   sectionIconDot: {
     width: 12,
@@ -605,32 +688,26 @@ const styles = StyleSheet.create({
     borderColor: '#1682FF',
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 15,
+    fontWeight: '500',
     color: '#20242E',
   },
   shapesRow: {
-    gap: 6,
+    gap: 12,
   },
   shapesRowTablet: {
-    gap: 10,
-  },
-  shapeGrid: {
-    flexDirection: 'row',
-    alignItems: 'stretch',
-    justifyContent: 'space-between',
-    gap: 6,
+    gap: 12,
   },
   shapeCard: {
-    borderRadius: 14,
+    borderRadius: 12,
     backgroundColor: Colors.white,
     borderWidth: 1,
     borderColor: '#E8E8EE',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: Spacing.sm,
+    paddingHorizontal: 10,
     paddingTop: 16,
-    paddingBottom: 12,
+    paddingBottom: 14,
     ...Shadow.sm,
   },
   shapeCardActive: {
@@ -638,14 +715,23 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFDFC',
   },
   shapeImage: {
-    marginTop: 2,
+    marginTop: 0,
   },
+  // shapeLabel: {
+  //   marginTop: 12,
+  //   marginBottom: 2,
+  //   fontWeight: '800',
+  //   color: '#2D2F37',
+  //   textAlign: 'center',
+  //   lineHeight: 18,
+  // },
   shapeLabel: {
-    marginTop: 18,
+    marginTop: 14,
     marginBottom: 2,
-    fontWeight: '700',
+    fontWeight: '500',
     color: '#2D2F37',
     textAlign: 'center',
+    lineHeight: 22,
   },
   shapeLabelActive: {
     color: '#23242B',
@@ -726,15 +812,18 @@ const styles = StyleSheet.create({
   },
   quickCardsWrap: {
     flexDirection: 'row',
-    gap: 20,
+    gap: 14,
   },
   quickCardBlock: {
     flex: 1,
     minWidth: 0,
   },
+  quickCardBlockTablet: {
+    justifyContent: 'flex-start',
+  },
   quickCard: {
     width: '100%',
-    borderRadius: Radius.lg,
+    borderRadius: 14,
     overflow: 'hidden',
     backgroundColor: '#1B1B1F',
     ...Shadow.sm,
@@ -746,19 +835,19 @@ const styles = StyleSheet.create({
   quickCardImageStyle: {
     width: '100%',
     height: '100%',
-    borderRadius: Radius.lg,
+    borderRadius: 14,
   },
   quickCardOverlay: {
     flex: 1,
     backgroundColor: 'rgba(16,18,24,0.34)',
-    paddingHorizontal: 12,
-    paddingTop: 16,
+    paddingHorizontal: 14,
+    paddingTop: 14,
     paddingBottom: 14,
     justifyContent: 'flex-end',
   },
   quickCardBody: {
     color: Colors.white,
-    maxWidth: '88%',
+    maxWidth: '84%',
     fontWeight: '400',
     marginBottom: 10,
   },

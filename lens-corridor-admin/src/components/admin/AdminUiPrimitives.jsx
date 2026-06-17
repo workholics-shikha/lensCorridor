@@ -1,5 +1,5 @@
-const StatusBadge = ({ tone, children }) => (
-  <span className={`status ${tone}`}>{children}</span>
+const StatusBadge = ({ tone, variant = 'pill', children }) => (
+  <span className={`status ${tone} ${variant === 'dot' ? 'status--dot' : ''}`}>{children}</span>
 )
 
 const InfoCard = ({ label, value }) => (

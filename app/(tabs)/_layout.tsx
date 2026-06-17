@@ -1,6 +1,6 @@
 import { Tabs } from 'expo-router';
 import { Bell, Home, ShoppingBag } from 'lucide-react-native';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, useWindowDimensions } from 'react-native';
 import { Colors } from '@/lib/theme';
 import { useCart } from '@/context/CartContext';
 
@@ -24,6 +24,12 @@ const badge = StyleSheet.create({
 });
 
 export default function TabsLayout() {
+  const { width, height } = useWindowDimensions();
+  const isTablet = width >= 768;
+  const isLandscape = width > height;
+  const isTabletLandscape = isTablet && isLandscape;
+  const tabIconSize = isTabletLandscape ? 24 : isTablet ? 26 : 24;
+
   return (
     <Tabs
       screenOptions={{
@@ -33,24 +39,28 @@ export default function TabsLayout() {
         tabBarStyle: {
           backgroundColor: Colors.white,
           borderTopWidth: 0,
-          height: 74,
-          paddingBottom: 10,
-          paddingTop: 8,
-          paddingHorizontal: 12,
-          borderTopLeftRadius: 24,
-          borderTopRightRadius: 24,
+          height: isTabletLandscape ? 68 : isTablet ? 72 : 60,
+          paddingBottom: isTablet ? 10 : 6,
+          paddingTop: isTablet ? 8 : 6,
+          paddingHorizontal: isTablet ? 18 : 10,
+          borderTopLeftRadius: isTablet ? 22 : 18,
+          borderTopRightRadius: isTablet ? 22 : 18,
           position: 'absolute',
-          left: 12,
-          right: 12,
-          bottom: 10,
+          left: 0,
+          right: 0,
+          bottom: 0,
           shadowColor: '#13213A',
-          shadowOffset: { width: 0, height: 2 },
-          shadowOpacity: 0.08,
-          shadowRadius: 16,
-          elevation: 8,
+          shadowOffset: { width: 0, height: -2 },
+          shadowOpacity: 0.06,
+          shadowRadius: 8,
+          elevation: 5,
         },
-        tabBarLabelStyle: { fontSize: 11, fontWeight: '500', marginTop: 2 },
-        tabBarItemStyle: { paddingVertical: 2 },
+        tabBarLabelStyle: {
+          fontSize: isTablet ? 11 : 10,
+          fontWeight: '500',
+          marginTop: isTablet ? 2 : 1,
+        },
+        tabBarItemStyle: { paddingVertical: isTablet ? 2 : 1 },
         sceneStyle: {
           backgroundColor: '#F3F4FB',
         },
@@ -60,7 +70,7 @@ export default function TabsLayout() {
         name="index"
         options={{
           title: 'Home',
-          tabBarIcon: ({ color, size }) => <Home size={size} color={color} />,
+          tabBarIcon: ({ color }) => <Home size={tabIconSize} color={color} />,
         }}
       />
       <Tabs.Screen
@@ -68,16 +78,16 @@ export default function TabsLayout() {
         options={{
           href: null,
           title: 'Wishlist',
-          tabBarIcon: ({ color, size }) => <ShoppingBag size={size} color={color} />,
+          tabBarIcon: ({ color }) => <ShoppingBag size={tabIconSize} color={color} />,
         }}
       />
       <Tabs.Screen
         name="orders"
         options={{
           title: 'Orders',
-          tabBarIcon: ({ color, size }) => (
+          tabBarIcon: ({ color }) => (
             <View>
-              <ShoppingBag size={size} color={color} />
+              <ShoppingBag size={tabIconSize} color={color} />
             </View>
           ),
         }}
@@ -86,7 +96,7 @@ export default function TabsLayout() {
         name="profile"
         options={{
           title: 'Notification',
-          tabBarIcon: ({ color, size }) => <Bell size={size} color={color} />,
+          tabBarIcon: ({ color }) => <Bell size={tabIconSize} color={color} />,
         }}
       />
     </Tabs>

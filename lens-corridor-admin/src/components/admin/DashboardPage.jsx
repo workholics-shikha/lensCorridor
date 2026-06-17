@@ -126,7 +126,7 @@ const DashboardPage = ({
                     <small className="table-cell-secondary">{store.meta}</small>
                   </td>
                   <td>
-                    <StatusBadge tone={store.tone}>{store.status}</StatusBadge>
+                    <StatusBadge tone={store.tone} variant="dot">{store.status}</StatusBadge>
                   </td>
                 </tr>
               )) : (
