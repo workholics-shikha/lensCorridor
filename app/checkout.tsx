@@ -276,7 +276,9 @@ export default function CheckoutScreen() {
           <TouchableOpacity style={styles.backButton} onPress={handleBack} activeOpacity={0.85}>
             <ArrowLeft size={21} color="#1C1D21" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Order Placement</Text>
+          <TouchableOpacity style={styles.headerTitleButton} onPress={handleBack} activeOpacity={0.85}>
+            <Text style={styles.headerTitle}>Order Placement</Text>
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -614,11 +616,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   backButton: {
-    width: 28,
-    height: 28,
+    width: 38,
+    height: 38,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 8,
+    marginRight: 6,
+  },
+  headerTitleButton: {
+    minHeight: 38,
+    justifyContent: 'center',
   },
   headerTitle: {
     fontSize: 17,

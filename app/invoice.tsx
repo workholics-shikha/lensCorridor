@@ -13,18 +13,49 @@ import { Shadow } from '@/lib/theme';
 
 const brandLogo = require('@/assets/images/blueLogo.png');
 
+type InvoiceSnapshot = {
+  customerName?: string;
+  phone?: string;
+  address?: string;
+  framePrice?: number;
+  lensPrice?: number;
+  discount?: number;
+  totalPayable?: number;
+  paidAmount?: number;
+  remainingAmount?: number;
+  lensType?: string;
+  paymentMode?: 'Online' | 'Card' | 'Cash';
+  frameImages?: unknown[];
+  selectedShape?: string;
+};
+
 export default function InvoiceScreen() {
   const { draft, resetDraft } = useOrderFlow();
-  const { width } = useWindowDimensions();
-  const { orderId, invoiceDate, recordId } = useLocalSearchParams<{
+  const { width, height } = useWindowDimensions();
+  const { orderId, invoiceDate, recordId, invoiceSnapshot } = useLocalSearchParams<{
     orderId?: string;
     invoiceDate?: string;
     recordId?: string;
+    invoiceSnapshot?: string;
   }>();
   const [orderRecord, setOrderRecord] = useState<OrderPlacementRecord | null>(null);
-  const [loadingOrder, setLoadingOrder] = useState(Boolean(recordId || orderId));
   const [orderError, setOrderError] = useState('');
   const isCompact = width < 760;
+  const isShortScreen = height < 820;
+  const stackActionButtons = width < 980 || isShortScreen;
+  const parsedInvoiceSnapshot = useMemo<InvoiceSnapshot | null>(() => {
+    if (!invoiceSnapshot) {
+      return null;
+    }
+
+    try {
+      const parsed = JSON.parse(invoiceSnapshot) as InvoiceSnapshot;
+      return typeof parsed === 'object' && parsed ? parsed : null;
+    } catch {
+      return null;
+    }
+  }, [invoiceSnapshot]);
+  const [loadingOrder, setLoadingOrder] = useState(Boolean((recordId || orderId) && !parsedInvoiceSnapshot));
 
   useEffect(() => {
     let active = true;
@@ -95,6 +126,26 @@ export default function InvoiceScreen() {
       };
     }
 
+    if (parsedInvoiceSnapshot) {
+      return {
+        orderId: orderId || '-',
+        invoiceDate: invoiceDate || new Date().toLocaleDateString('en-GB'),
+        customerName: parsedInvoiceSnapshot.customerName || 'Customer Name',
+        phone: parsedInvoiceSnapshot.phone || 'Phone not added',
+        address: parsedInvoiceSnapshot.address || 'Address not added',
+        framePrice: Number(parsedInvoiceSnapshot.framePrice || 0),
+        lensPrice: Number(parsedInvoiceSnapshot.lensPrice || 0),
+        discount: Number(parsedInvoiceSnapshot.discount || 0),
+        totalPayable: Number(parsedInvoiceSnapshot.totalPayable || 0),
+        paidAmount: Number(parsedInvoiceSnapshot.paidAmount || 0),
+        remainingAmount: Number(parsedInvoiceSnapshot.remainingAmount || 0),
+        lensType: parsedInvoiceSnapshot.lensType || 'Frame Only',
+        paymentMode: parsedInvoiceSnapshot.paymentMode || 'Online',
+        frameImages: Array.isArray(parsedInvoiceSnapshot.frameImages) ? parsedInvoiceSnapshot.frameImages : [],
+        selectedShape: parsedInvoiceSnapshot.selectedShape || 'Frame',
+      };
+    }
+
     const { framePrice, lensPrice, discount, totalPayable, paidAmount, remainingAmount } = getOrderAmounts(draft);
 
     return {
@@ -114,7 +165,7 @@ export default function InvoiceScreen() {
       frameImages: draft.frameImages,
       selectedShape: draft.selectedShape || 'Frame',
     };
-  }, [draft, invoiceDate, orderId, orderRecord]);
+  }, [draft, invoiceDate, orderId, orderRecord, parsedInvoiceSnapshot]);
 
   const primaryFrame = getPreferredFrameImage(invoiceSource.frameImages);
   const resolvedOrderId = invoiceSource.orderId;
@@ -283,7 +334,10 @@ export default function InvoiceScreen() {
     <View style={styles.screen}>
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          stackActionButtons && styles.scrollContentWithFooterSpace,
+        ]}
         showsVerticalScrollIndicator={false}
       >
         <View style={[styles.sheet, isCompact && styles.sheetCompact]}>
@@ -357,16 +411,36 @@ export default function InvoiceScreen() {
           Support: support@lenscorridor.com
         </Text>
 
-        <View style={styles.actionRow}> 
-          <TouchableOpacity style={[styles.downloadButton, isCompact && styles.actionButtonCompact]} onPress={handleDownload} activeOpacity={0.88}>
+        <View style={[styles.actionRow, stackActionButtons && styles.actionRowStacked]}>
+          <TouchableOpacity
+            style={[
+              styles.downloadButton,
+              isCompact && styles.actionButtonCompact,
+              stackActionButtons && styles.actionButtonStacked,
+            ]}
+            onPress={handleDownload}
+            activeOpacity={0.88}
+          >
             <Text style={styles.downloadButtonText}>Download</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.shareButton, isCompact && styles.actionButtonCompact]} onPress={handleShare} activeOpacity={0.88}>
+          <TouchableOpacity
+            style={[
+              styles.shareButton,
+              isCompact && styles.actionButtonCompact,
+              stackActionButtons && styles.actionButtonStacked,
+            ]}
+            onPress={handleShare}
+            activeOpacity={0.88}
+          >
             <MessageCircleMore size={16} color="#21A366" strokeWidth={2.1} />
             <Text style={styles.shareButtonText}>Share Whatsapp</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.homeButton, isCompact && styles.actionButtonCompact]}
+            style={[
+              styles.homeButton,
+              isCompact && styles.actionButtonCompact,
+              stackActionButtons && styles.actionButtonStacked,
+            ]}
             onPress={() => {
               resetDraft();
               router.replace('/(tabs)');
@@ -685,6 +759,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 16,
   },
+  scrollContentWithFooterSpace: {
+    paddingBottom: 28,
+  },
   sheet: {
     width: '100%',
     maxWidth: 780,
@@ -944,8 +1021,18 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     flexWrap: 'wrap',
   },
+  actionRowStacked: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    flexWrap: 'nowrap',
+  },
   actionButtonCompact: {
     minWidth: '48%',
+    marginRight: 0,
+  },
+  actionButtonStacked: {
+    width: '100%',
+    minWidth: 0,
     marginRight: 0,
   },
   backButton: {

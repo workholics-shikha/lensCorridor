@@ -73,7 +73,7 @@ const shapeCardHeight =
     const headerTopPadding = Platform.OS === 'ios'
       ? (isTabletLandscape ? 18 : isTabletPortrait ? 52 : 52)
       : (isTabletLandscape ? 16 : isTabletPortrait ? 36 : 36);
-    const headerBottomPadding = isTabletLandscape ? 16 : isTablet ? 20 : 20;
+    const headerBottomPadding = isTabletLandscape ? 24 : isTablet ? 30 : 20;
     const headerVisualHeight = headerTopPadding
       + headerBottomPadding
       + 46;
@@ -88,7 +88,7 @@ const shapeCardHeight =
       headerTopPadding,
       headerBottomPadding,
       logoWidth: isTabletLandscape ? 214 : isTablet ? 248 : 214,
-      logoHeight: isTabletLandscape ? 40 : isTablet ? 52 : 46,
+      logoHeight: isTabletLandscape ? 46 : isTablet ? 60 : 46,
       // surfaceRadius: isTabletLandscape ? 60 : isTablet ? 52 : 28,
       // surfaceOverlap: isTabletLandscape ? 18 : isTablet ? 14 : 8,
 
@@ -123,7 +123,11 @@ shapeImageHeight:
       frameSectionBottomPadding: isTabletLandscape ? 6 : isTablet ? 12 : 16,
       serviceTopMargin: isTabletLandscape ? 22 : isTablet ? 18 : 18,
       quickCardGap: isTabletLandscape ? 14 : isTablet ? 16 : 20,
-      bottomSafeSpace: isTablet ? 36 : 88,
+      bottomSafeSpace: isTabletLandscape
+        ? tabBarHeight + 28
+        : isTabletPortrait
+          ? tabBarHeight + 54
+          : 88,
       surfaceMinHeight,
       tabBarHeight,
       centerSpacerMinHeight: isTabletLandscape ? 24 : isTablet ? 20 : 20,
@@ -208,6 +212,7 @@ shapeImageHeight:
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[
           styles.scrollContent,
+          { minHeight: height },
           { paddingBottom: metrics.bottomSafeSpace },
         ]}
       >
@@ -217,11 +222,10 @@ shapeImageHeight:
             {
               borderTopLeftRadius: metrics.surfaceRadius,
               borderTopRightRadius: metrics.surfaceRadius,
-
               borderCurve: 'continuous',
-
               paddingTop: metrics.sectionTopPadding,
               width: '100%',
+              minHeight: metrics.surfaceMinHeight + metrics.bottomSafeSpace,
               overflow: 'hidden',
             },
           ]}

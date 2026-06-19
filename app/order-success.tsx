@@ -5,9 +5,11 @@ import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 const brandImage = require('@/assets/images/blueLogo.png');
 
 export default function OrderSuccessScreen() {
-  const { orderId, invoiceDate } = useLocalSearchParams<{
+  const { orderId, invoiceDate, recordId, invoiceSnapshot } = useLocalSearchParams<{
     orderId?: string;
     invoiceDate?: string;
+    recordId?: string;
+    invoiceSnapshot?: string;
   }>();
 
   const resolvedOrderId = orderId || `INV-${Date.now().toString().slice(-8)}`;
@@ -44,6 +46,8 @@ export default function OrderSuccessScreen() {
               params: {
                 orderId: resolvedOrderId,
                 invoiceDate: resolvedInvoiceDate,
+                recordId,
+                invoiceSnapshot,
               },
             });
           }}
@@ -64,9 +68,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   brandImage: {
-    width: 170,
-    height: 36,
-    marginBottom: 18,
+    width: 250,
+    height: 54,
+    marginBottom: 28,
   },
   closeButton: {
     position: 'absolute',
@@ -81,47 +85,47 @@ const styles = StyleSheet.create({
   },
   card: {
     width: '100%',
-    maxWidth: 192,
-    borderRadius: 18,
+    maxWidth: 280,
+    borderRadius: 24,
     backgroundColor: '#FFFFFF',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingTop: 22,
-    paddingBottom: 16,
+    paddingHorizontal: 20,
+    paddingTop: 28,
+    paddingBottom: 22,
   },
   iconCircle: {
-    width: 78,
-    height: 78,
-    borderRadius: 39,
+    width: 92,
+    height: 92,
+    borderRadius: 46,
     backgroundColor: '#156FE5',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 14,
+    marginBottom: 18,
   },
   title: {
-    fontSize: 16,
-    fontWeight: '500',
+    fontSize: 24,
+    fontWeight: '600',
     color: '#1C2027',
-    marginBottom: 6,
+    marginBottom: 8,
   },
   subtitle: {
-    fontSize: 11.5,
-    lineHeight: 16,
+    fontSize: 15.5,
+    lineHeight: 23,
     color: '#8A8F99',
     textAlign: 'center',
-    marginBottom: 16,
+    marginBottom: 20,
   },
   invoiceButton: {
     alignSelf: 'stretch',
-    minHeight: 28,
-    borderRadius: 6,
+    minHeight: 50,
+    borderRadius: 12,
     backgroundColor: '#EEF1F6',
     alignItems: 'center',
     justifyContent: 'center',
   },
   invoiceButtonText: {
-    fontSize: 11.5,
-    fontWeight: '500',
+    fontSize: 15,
+    fontWeight: '600',
     color: '#1C2027',
   },
 });

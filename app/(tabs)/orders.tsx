@@ -19,8 +19,12 @@ import { fetchOrderPlacements, type OrderPlacementRecord } from '@/lib/api';
 import { Colors, FontSize, Radius, Shadow, Spacing } from '@/lib/theme';
 
 export default function OrdersScreen() {
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
   const isTablet = width >= 920;
+  const isLandscape = width > height;
+  const bottomSafeSpace = isTablet
+    ? (isLandscape ? 112 : 132)
+    : 110;
   const pageSize = isTablet ? 4 : 6;
   const [orders, setOrders] = useState<OrderPlacementRecord[]>([]);
   const [suggestions, setSuggestions] = useState<OrderPlacementRecord[]>([]);
@@ -171,7 +175,7 @@ export default function OrdersScreen() {
       </View>
 
       <ScrollView
-        contentContainerStyle={styles.body}
+        contentContainerStyle={[styles.body, { paddingBottom: bottomSafeSpace }]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
@@ -388,7 +392,6 @@ const styles = StyleSheet.create({
   body: {
     flexGrow: 1,
     padding: 14,
-    paddingBottom: 110,
   },
   sectionHeader: {
     position: 'relative',

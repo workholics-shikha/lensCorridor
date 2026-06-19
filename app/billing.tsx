@@ -14,7 +14,7 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
-import { ArrowLeft, ChevronRight, FileText } from 'lucide-react-native';
+import { ArrowLeft, ChevronRight, FileText, X } from 'lucide-react-native';
 import { useOrderFlow } from '@/context/OrderFlowContext';
 import { createOrderPlacement } from '@/lib/api';
 import { formatPersonName } from '@/lib/textFormat';
@@ -34,7 +34,7 @@ const createFallbackOrderNumber = () => {
 };
 
 export default function BillingScreen() {
-  const { draft, updateDraft } = useOrderFlow();
+  const { draft, updateDraft, resetDraft } = useOrderFlow();
   const { width, height } = useWindowDimensions();
   const [address, setAddress] = useState(draft.billingAddress);
   const [discount, setDiscount] = useState(draft.billingDiscount || '0');
@@ -54,8 +54,11 @@ export default function BillingScreen() {
 
   const isCompact = width < 760;
   const isTablet = width >= 768;
-  const modalCardWidth = Math.min(width - (isTablet ? 96 : 32), isTablet ? 560 : 380);
-  const modalCardMaxHeight = Math.min(height * (isTablet ? 0.8 : 0.86), isTablet ? 680 : 560);
+  const isShortScreen = height < 760;
+  const modalHorizontalInset = isTablet ? 48 : 16;
+  const modalVerticalInset = isShortScreen ? 12 : isTablet ? 28 : 18;
+  const modalCardWidth = Math.min(width - (modalHorizontalInset * 2), isTablet ? 560 : 420);
+  const modalCardMaxHeight = Math.max(320, Math.min(height - (modalVerticalInset * 2), isTablet ? 680 : 560));
   const framePrice = Number(draft.price || 0);
   const lensPrice = draft.lensSelection.powerType.toLowerCase() === 'frame only' ? 0 : draft.lensSelection.lensPrice;
   const subtotal = framePrice + lensPrice;
@@ -177,7 +180,7 @@ export default function BillingScreen() {
             <ChevronRight size={16} color="#8D9098" />
           </TouchableOpacity>
 
-          <View style={[styles.inlineInputCard, isCompact && styles.discountCardCompact]}>
+          <View style={[styles.inlineInputCard, styles.discountCard, isCompact && styles.discountCardCompact]}>
             <Text style={styles.discountLabel}>Discount</Text>
             <TextInput
               value={discount}
@@ -194,7 +197,7 @@ export default function BillingScreen() {
         </View>
 
         <View style={[styles.bottomGrid, isCompact && styles.bottomGridCompact]}>
-          <View style={[styles.infoCard, isCompact && styles.infoCardCompact]}>
+          <View style={[styles.infoCard, styles.infoCardPrimary, isTablet && styles.infoCardTablet, isCompact && styles.infoCardCompact]}>
             <View style={styles.cardHeader}>
               <FileText size={16} color="#0D6CF5" />
               <Text style={styles.cardHeaderText}>Bill Details</Text>
@@ -215,7 +218,7 @@ export default function BillingScreen() {
             ) : null}
           </View>
 
-          <View style={[styles.infoCard, isCompact && styles.infoCardCompact]}>
+          <View style={[styles.infoCard, styles.infoCardSecondary, isTablet && styles.infoCardTablet, isCompact && styles.infoCardCompact]}>
             <View style={styles.cardHeader}>
               <FileText size={16} color="#0D6CF5" />
               <Text style={styles.cardHeaderText}>Select Payment Mode</Text>
@@ -338,6 +341,21 @@ export default function BillingScreen() {
               partialPaymentAmount: partialPaymentEnabled ? String(paidAmount) : '',
               paymentMode,
             } as const;
+            const invoiceSnapshot = JSON.stringify({
+              customerName: formatPersonName(customerName) || draft.customerName || 'Customer Name',
+              phone: customerPhone.trim() || draft.phone || 'Phone not added',
+              address: customerAddress.trim() || address || 'Address not added',
+              framePrice,
+              lensPrice,
+              discount: discountValue,
+              totalPayable,
+              paidAmount,
+              remainingAmount,
+              lensType: draft.lensSelection.lensCategory || draft.lensSelection.powerType || 'Frame Only',
+              paymentMode,
+              frameImages: draft.frameImages,
+              selectedShape: draft.selectedShape || 'Frame',
+            });
 
             updateDraft(nextDraftPatch);
             setSubmitting(true);
@@ -386,8 +404,11 @@ export default function BillingScreen() {
                 params: {
                   orderId: placedOrder.orderNumber,
                   invoiceDate: placedOrder.invoiceDate,
+                  recordId: placedOrder.id,
+                  invoiceSnapshot,
                 },
               });
+              resetDraft();
             } catch (_error) {
               Alert.alert(
                 'Order saved locally',
@@ -399,8 +420,10 @@ export default function BillingScreen() {
                 params: {
                   orderId: fallbackOrderId,
                   invoiceDate: fallbackInvoiceDate,
+                  invoiceSnapshot,
                 },
               });
+              resetDraft();
             } finally {
               setSubmitting(false);
             }
@@ -422,21 +445,33 @@ export default function BillingScreen() {
         <View style={styles.modalOverlay}>
           <KeyboardAvoidingView
             style={styles.modalAvoidingView}
-            behavior={Platform.OS === 'ios' ? 'padding' : 'position'}
-            keyboardVerticalOffset={Platform.OS === 'ios' ? 28 : 12}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? (isTablet ? 28 : 16) : 0}
           >
             <ScrollView
               style={styles.modalScroll}
               contentInsetAdjustmentBehavior="always"
-              contentContainerStyle={styles.modalScrollContent}
+              contentContainerStyle={[
+                styles.modalScrollContent,
+                isShortScreen && styles.modalScrollContentCompact,
+              ]}
               keyboardShouldPersistTaps="handled"
               keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
               showsVerticalScrollIndicator={false}
             >
               <View style={[styles.modalCard, { width: modalCardWidth, maxHeight: modalCardMaxHeight }]}>
                 <View style={styles.modalHeader}>
-                  <Image source={userIcon} style={styles.modalHeaderIcon} resizeMode="contain" />
-                  <Text style={styles.modalTitle}>Customer Information</Text>
+                  <View style={styles.modalHeaderInfo}>
+                    <Image source={userIcon} style={styles.modalHeaderIcon} resizeMode="contain" />
+                    <Text style={styles.modalTitle}>Customer Information</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.modalCloseButton}
+                    activeOpacity={0.86}
+                    onPress={() => setDetailsOpen(false)}
+                  >
+                    <X size={16} color="#667085" />
+                  </TouchableOpacity>
                 </View>
                 <ScrollView
                   style={styles.modalFormScroll}
@@ -659,52 +694,63 @@ const styles = StyleSheet.create({
   topInputRow: {
     flexDirection: 'row',
     marginTop: 14,
+    alignItems: 'stretch',
   },
   topInputRowCompact: {
     flexDirection: 'column',
   },
   inlineInputCard: {
-    minHeight: 42,
+    minHeight: 48,
     borderRadius: 10,
     borderWidth: 1,
     borderColor: '#E7E8F0',
     backgroundColor: '#FFFFFF',
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     ...Shadow.sm,
   },
   addressCard: {
-    flex: 1.05,
-    marginRight: 10,
+    flex: 1,
+    minWidth: 0,
+    marginRight: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+  },
+  discountCard: {
+    flex: 0.62,
+    minWidth: 132,
+    justifyContent: 'center',
   },
   discountCardCompact: {
     marginTop: 10,
   },
   inlineInputText: {
-    fontSize: 12.5,
+    flex: 1,
+    fontSize: 13.5,
     color: '#1F2430',
+    paddingRight: 10,
   },
   inlineInputPlaceholder: {
     color: '#1F2430',
   },
   inlineInput: {
     flex: 1,
-    fontSize: 12.5,
+    fontSize: 13.5,
     color: '#1F2430',
     paddingTop: 0,
     paddingBottom: 0,
   },
   discountLabel: {
-    fontSize: 11,
+    fontSize: 12,
+    fontWeight: '500',
     color: '#7A7F88',
     marginTop: 6,
     marginBottom: 2,
   },
   bottomGrid: {
     flexDirection: 'row',
-    marginTop: 16,
+    marginTop: 20,
+    alignItems: 'stretch',
   },
   bottomGridCompact: {
     flexDirection: 'column',
@@ -715,42 +761,59 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     borderColor: '#E7E8F0',
-    paddingHorizontal: 14,
-    paddingTop: 14,
-    paddingBottom: 12,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 14,
     ...Shadow.sm,
+  },
+  infoCardPrimary: {
+    marginRight: 12,
+  },
+  infoCardSecondary: {
+    marginLeft: 0,
+  },
+  infoCardTablet: {
+    paddingHorizontal: 18,
+    paddingTop: 18,
+    paddingBottom: 16,
   },
   infoCardCompact: {
     marginBottom: 12,
+    marginRight: 0,
   },
   cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingBottom: 12,
-    marginBottom: 12,
+    paddingBottom: 14,
+    marginBottom: 14,
     borderBottomWidth: 1,
     borderBottomColor: '#F0F0F2',
   },
   cardHeaderText: {
     marginLeft: 8,
-    fontSize: 14.5,
-    fontWeight: '500',
+    fontSize: 16,
+    fontWeight: '600',
     color: '#1C2027',
   },
   billRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
-    marginBottom: 10,
+    marginBottom: 12,
   },
   billLabel: {
-    fontSize: 12.5,
+    flex: 1,
+    fontSize: 14,
+    lineHeight: 20,
     color: '#20242B',
+    paddingRight: 12,
   },
   billValue: {
-    fontSize: 12.5,
+    fontSize: 14,
+    lineHeight: 20,
     fontWeight: '600',
     color: '#20242B',
+    textAlign: 'right',
   },
   discountValue: {
     color: '#FF4136',
@@ -770,55 +833,59 @@ const styles = StyleSheet.create({
   billDivider: {
     height: 1,
     backgroundColor: '#F0F0F2',
-    marginTop: 6,
-    marginBottom: 12,
+    marginTop: 8,
+    marginBottom: 14,
   },
   paymentRow: {
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'wrap',
+    marginHorizontal: -4,
   },
   paymentOption: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginRight: 26,
-    marginBottom: 8,
+    marginRight: 18,
+    marginBottom: 12,
+    paddingHorizontal: 8,
+    minHeight: 38,
   },
   radioOuter: {
-    width: 12,
-    height: 12,
+    width: 16,
+    height: 16,
     borderRadius: 999,
-    borderWidth: 1,
+    borderWidth: 1.4,
     borderColor: '#F1C6A3',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 8,
+    marginRight: 10,
     backgroundColor: '#FFFFFF',
   },
   radioOuterSelected: {
     borderColor: '#F28A22',
   },
   radioInner: {
-    width: 6,
-    height: 6,
+    width: 8,
+    height: 8,
     borderRadius: 999,
     backgroundColor: '#F28A22',
   },
   paymentLabel: {
-    fontSize: 13.5,
+    fontSize: 15.5,
+    fontWeight: '600',
     color: '#20242B',
   },
   partialSection: {
-    marginTop: 14,
+    marginTop: 18,
     borderTopWidth: 1,
     borderTopColor: '#F0F0F2',
-    paddingTop: 14,
+    paddingTop: 16,
   },
   partialSectionTitle: {
-    fontSize: 13,
+    fontSize: 14.5,
     fontWeight: '700',
     color: '#1F2430',
-    marginBottom: 10,
+    marginBottom: 12,
   },
   partialTypeRow: {
     flexDirection: 'row',
@@ -841,7 +908,7 @@ const styles = StyleSheet.create({
     borderColor: '#1C71D8',
   },
   partialTypeText: {
-    fontSize: 12.5,
+    fontSize: 13.5,
     fontWeight: '500',
     color: '#667085',
   },
@@ -853,9 +920,9 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   partialInputLabel: {
-    fontSize: 11.5,
+    fontSize: 12.5,
     color: '#7A7F88',
-    marginBottom: 6,
+    marginBottom: 8,
   },
   partialInput: {
     minHeight: 40,
@@ -864,7 +931,7 @@ const styles = StyleSheet.create({
     borderColor: '#E5E7EF',
     backgroundColor: '#FFFFFF',
     paddingHorizontal: 12,
-    fontSize: 13,
+    fontSize: 14,
     color: '#1F2430',
   },
   partialInputError: {
@@ -877,10 +944,10 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
   partialHint: {
-    fontSize: 11.5,
+    fontSize: 12.5,
     color: '#667085',
-    marginTop: 8,
-    lineHeight: 16,
+    marginTop: 10,
+    lineHeight: 18,
   },
   primaryButton: {
     width: 248,
@@ -922,7 +989,11 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 4,
   },
+  modalScrollContentCompact: {
+    justifyContent: 'flex-start',
+  },
   modalCard: {
+    width: '100%',
     backgroundColor: '#FFFFFF',
     borderRadius: 22,
     paddingTop: 18,
@@ -932,6 +1003,7 @@ const styles = StyleSheet.create({
     ...Shadow.sm,
   },
   modalFormScroll: {
+    width: '100%',
     flexGrow: 0,
   },
   modalFormContent: {
@@ -940,10 +1012,18 @@ const styles = StyleSheet.create({
   modalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingBottom: 12,
     marginBottom: 14,
     borderBottomWidth: 1,
     borderBottomColor: '#D8E7FF',
+  },
+  modalHeaderInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    minWidth: 0,
+    paddingRight: 12,
   },
   modalTitle: {
     marginLeft: 8,
@@ -954,6 +1034,15 @@ const styles = StyleSheet.create({
   modalHeaderIcon: {
     width: 16,
     height: 16,
+  },
+  modalCloseButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F3F6FB',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
   },
   modalInput: {
     minHeight: 38,
