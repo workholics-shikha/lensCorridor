@@ -1,10 +1,13 @@
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { Check, X } from 'lucide-react-native';
-import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useCallback } from 'react';
+import { BackHandler, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useOrderFlow } from '@/context/OrderFlowContext';
 
 const brandImage = require('@/assets/images/blueLogo.png');
 
 export default function OrderSuccessScreen() {
+  const { resetDraft } = useOrderFlow();
   const { orderId, invoiceDate, recordId, invoiceSnapshot } = useLocalSearchParams<{
     orderId?: string;
     invoiceDate?: string;
@@ -14,12 +17,29 @@ export default function OrderSuccessScreen() {
 
   const resolvedOrderId = orderId || `INV-${Date.now().toString().slice(-8)}`;
   const resolvedInvoiceDate = invoiceDate || new Date().toLocaleDateString('en-GB');
+  const handleExitSuccess = useCallback(() => {
+    resetDraft();
+    router.replace('/(tabs)');
+  }, [resetDraft]);
+
+  useFocusEffect(
+    useCallback(() => {
+      const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+        handleExitSuccess();
+        return true;
+      });
+
+      return () => {
+        subscription.remove();
+      };
+    }, [handleExitSuccess])
+  );
 
   return (
     <View style={styles.screen}>
       <TouchableOpacity
         style={styles.closeButton}
-        onPress={() => router.back()}
+        onPress={handleExitSuccess}
         activeOpacity={0.88}
       >
         <X size={18} color="#5E6470" />

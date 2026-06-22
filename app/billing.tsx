@@ -1,8 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { router } from 'expo-router';
 import {
   Alert,
   Image,
+  Keyboard,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -19,6 +20,7 @@ import { useOrderFlow } from '@/context/OrderFlowContext';
 import { createOrderPlacement } from '@/lib/api';
 import { formatPersonName } from '@/lib/textFormat';
 import { Shadow } from '@/lib/theme';
+import { useResponsiveMetrics } from '@/lib/responsive';
 
 type PaymentMode = 'Online' | 'Card' | 'Cash';
 
@@ -36,6 +38,7 @@ const createFallbackOrderNumber = () => {
 export default function BillingScreen() {
   const { draft, updateDraft, resetDraft } = useOrderFlow();
   const { width, height } = useWindowDimensions();
+  const viewport = useResponsiveMetrics();
   const [address, setAddress] = useState(draft.billingAddress);
   const [discount, setDiscount] = useState(draft.billingDiscount || '0');
   const [paymentMode, setPaymentMode] = useState<PaymentMode>(draft.paymentMode);
@@ -51,14 +54,22 @@ export default function BillingScreen() {
     address?: string;
   }>({});
   const [submitting, setSubmitting] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
 
-  const isCompact = width < 760;
-  const isTablet = width >= 768;
+  const isCompact = viewport.compact;
+  const isTablet = viewport.isTablet;
   const isShortScreen = height < 760;
-  const modalHorizontalInset = isTablet ? 48 : 16;
+  const modalHorizontalInset = isTablet ? viewport.horizontalPadding : 16;
   const modalVerticalInset = isShortScreen ? 12 : isTablet ? 28 : 18;
-  const modalCardWidth = Math.min(width - (modalHorizontalInset * 2), isTablet ? 560 : 420);
-  const modalCardMaxHeight = Math.max(320, Math.min(height - (modalVerticalInset * 2), isTablet ? 680 : 560));
+  const modalCardWidth = Math.min(
+    width - (modalHorizontalInset * 2),
+    isTablet ? Math.min(viewport.contentMaxWidth * 0.62, 640) : 420
+  );
+  const modalCardMaxHeight = Math.max(
+    320,
+    Math.min(height - (modalVerticalInset * 2), isTablet ? Math.min(height * 0.82, 760) : 560)
+  );
   const framePrice = Number(draft.price || 0);
   const lensPrice = draft.lensSelection.powerType.toLowerCase() === 'frame only' ? 0 : draft.lensSelection.lensPrice;
   const subtotal = framePrice + lensPrice;
@@ -79,6 +90,41 @@ export default function BillingScreen() {
 
     return `Frame + ${draft.lensSelection.lensCategory || draft.lensSelection.powerType}`;
   }, [draft.lensSelection.lensCategory, draft.lensSelection.powerType]);
+
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    const showSubscription = Keyboard.addListener(showEvent, (event) => {
+      setKeyboardVisible(true);
+      setKeyboardHeight(event.endCoordinates?.height ?? 0);
+    });
+    const hideSubscription = Keyboard.addListener(hideEvent, () => {
+      setKeyboardVisible(false);
+      setKeyboardHeight(0);
+    });
+
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!partialPaymentEnabled) {
+      return;
+    }
+
+    const normalizedPartialAmount = String(Math.min(Math.max(rawPartialAmount, 0), totalPayable));
+
+    if ((partialPaymentAmount || '0') !== normalizedPartialAmount) {
+      setPartialPaymentAmount(normalizedPartialAmount === '0' && totalPayable === 0 ? '' : normalizedPartialAmount);
+      updateDraft({
+        partialPaymentEnabled: true,
+        partialPaymentAmount: normalizedPartialAmount === '0' && totalPayable === 0 ? '' : normalizedPartialAmount,
+      });
+    }
+  }, [partialPaymentAmount, partialPaymentEnabled, rawPartialAmount, totalPayable, updateDraft]);
 
   const validateCustomerFields = () => {
     const nextErrors: {
@@ -144,7 +190,15 @@ export default function BillingScreen() {
       </View>
 
       <ScrollView
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[
+          styles.content,
+          isTablet && {
+            alignSelf: 'center',
+            width: '100%',
+            maxWidth: viewport.contentMaxWidth,
+            paddingHorizontal: viewport.horizontalPadding,
+          },
+        ]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
@@ -193,6 +247,9 @@ export default function BillingScreen() {
               placeholderTextColor="#9095A0"
               style={styles.inlineInput}
             />
+            <Text style={styles.discountHelperText}>
+              Final: Rs. {totalPayable.toLocaleString('en-IN')}
+            </Text>
           </View>
         </View>
 
@@ -399,7 +456,7 @@ export default function BillingScreen() {
                 },
               });
 
-              router.push({
+              router.replace({
                 pathname: '/order-success',
                 params: {
                   orderId: placedOrder.orderNumber,
@@ -415,7 +472,7 @@ export default function BillingScreen() {
                 'We could not reach the server right now, so the order flow will continue without cloud sync.'
               );
 
-              router.push({
+              router.replace({
                 pathname: '/order-success',
                 params: {
                   orderId: fallbackOrderId,
@@ -444,8 +501,13 @@ export default function BillingScreen() {
       >
         <View style={styles.modalOverlay}>
           <KeyboardAvoidingView
-            style={styles.modalAvoidingView}
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={[
+              styles.modalAvoidingView,
+              Platform.OS === 'android' && keyboardVisible && {
+                paddingBottom: Math.max(12, keyboardHeight - 12),
+              },
+            ]}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
             keyboardVerticalOffset={Platform.OS === 'ios' ? (isTablet ? 28 : 16) : 0}
           >
             <ScrollView
@@ -454,12 +516,23 @@ export default function BillingScreen() {
               contentContainerStyle={[
                 styles.modalScrollContent,
                 isShortScreen && styles.modalScrollContentCompact,
+                Platform.OS === 'android' && keyboardVisible && styles.modalScrollContentKeyboardOpen,
               ]}
               keyboardShouldPersistTaps="handled"
               keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
               showsVerticalScrollIndicator={false}
             >
-              <View style={[styles.modalCard, { width: modalCardWidth, maxHeight: modalCardMaxHeight }]}>
+              <View
+                style={[
+                  styles.modalCard,
+                  {
+                    width: modalCardWidth,
+                    maxHeight: keyboardVisible && Platform.OS === 'android'
+                      ? Math.max(280, height - keyboardHeight - (modalVerticalInset + 24))
+                      : modalCardMaxHeight,
+                  },
+                ]}
+              >
                 <View style={styles.modalHeader}>
                   <View style={styles.modalHeaderInfo}>
                     <Image source={userIcon} style={styles.modalHeaderIcon} resizeMode="contain" />
@@ -717,8 +790,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   discountCard: {
-    flex: 0.62,
-    minWidth: 132,
+    flex: 0.42,
+    minWidth: 124,
+    maxWidth: 220,
     justifyContent: 'center',
   },
   discountCardCompact: {
@@ -746,6 +820,13 @@ const styles = StyleSheet.create({
     color: '#7A7F88',
     marginTop: 6,
     marginBottom: 2,
+  },
+  discountHelperText: {
+    marginTop: 4,
+    marginBottom: 6,
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: '#1C71D8',
   },
   bottomGrid: {
     flexDirection: 'row',
@@ -969,7 +1050,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.28)',
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'flex-end',
     paddingHorizontal: 16,
     paddingVertical: 20,
   },
@@ -977,7 +1058,7 @@ const styles = StyleSheet.create({
     flex: 1,
     width: '100%',
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'flex-end',
   },
   modalScroll: {
     width: '100%',
@@ -985,12 +1066,16 @@ const styles = StyleSheet.create({
   },
   modalScrollContent: {
     flexGrow: 1,
-    justifyContent: 'center',
+    justifyContent: 'flex-end',
     paddingVertical: 12,
     paddingHorizontal: 4,
   },
   modalScrollContentCompact: {
     justifyContent: 'flex-start',
+  },
+  modalScrollContentKeyboardOpen: {
+    justifyContent: 'flex-start',
+    paddingTop: 12,
   },
   modalCard: {
     width: '100%',

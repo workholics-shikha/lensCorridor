@@ -10,6 +10,7 @@ import { useOrderFlow } from '@/context/OrderFlowContext';
 import { fetchSalespeople, fetchStores, StoreOption } from '@/lib/api';
 import { Salesperson } from '@/lib/types';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '@/lib/theme';
+import { useResponsiveMetrics } from '@/lib/responsive';
 
 const logoImage = require('@/assets/images/lens-corridor-logo.png');
 const splashBackground = require('@/assets/images/splash-background.png');
@@ -17,8 +18,9 @@ const splashBackground = require('@/assets/images/splash-background.png');
 export default function SplashScreen() {
   const { user, loading } = useAuth();
   const { updateDraft } = useOrderFlow();
-  const { width } = useWindowDimensions();
-  const isTablet = width >= 768;
+  const viewport = useResponsiveMetrics();
+  const { width } = viewport;
+  const isTablet = viewport.isTablet;
   const logoWidth = useMemo(() => Math.min(width * 0.58, isTablet ? 320 : 220), [width, isTablet]);
   const logoHeight = logoWidth * 0.53;
   const [stores, setStores] = useState<StoreOption[]>([]);
@@ -34,7 +36,9 @@ export default function SplashScreen() {
       .replace(/\b\w/g, (char) => char.toUpperCase());
   };
 
-  const controlsWidth = isTablet ? Math.min(width * 0.62, 480) : Math.min(width * 0.9, 420);
+  const controlsWidth = isTablet
+    ? Math.min(viewport.contentMaxWidth, viewport.isTabletLandscape ? width * 0.52 : width * 0.68)
+    : Math.min(width * 0.9, 420);
 
   useEffect(() => {
     fetchStores().then(setStores);

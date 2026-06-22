@@ -1,5 +1,7 @@
 const EyeTest = require('../models/EyeTest');
 
+const normalizePhone = (value = '') => String(value).replace(/\D/g, '').slice(-10);
+
 // POST /api/eye-tests
 const createEyeTest = async (req, res) => {
   try {
@@ -45,7 +47,12 @@ const createEyeTest = async (req, res) => {
 // GET /api/eye-tests
 const getAllEyeTests = async (req, res) => {
   try {
-    const eyeTests = await EyeTest.find().sort({ createdAt: -1 });
+    const normalizedMobileNumber = normalizePhone(req.query?.mobileNumber);
+    const filter = normalizedMobileNumber
+      ? { mobileNumber: { $regex: `${normalizedMobileNumber}$` } }
+      : {};
+
+    const eyeTests = await EyeTest.find(filter).sort({ createdAt: -1 });
     res.json({ success: true, data: eyeTests });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

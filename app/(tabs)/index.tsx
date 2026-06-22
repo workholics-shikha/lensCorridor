@@ -10,6 +10,8 @@ import { fetchFrameShapes } from '@/lib/api';
 import { FrameShape } from '@/lib/types';
 import { Colors, Spacing, Radius, Shadow } from '@/lib/theme';
 import { useCart } from '@/context/CartContext';
+import { useTabScreenBottomSpace } from '@/lib/tabBar';
+import { useResponsiveMetrics } from '@/lib/responsive';
 
 const logoImage = require('@/assets/images/whiteLogo.png');
 const frameShapesTitleIcon = require('@/assets/images/healthicons_eyeglasses-24px.png');
@@ -39,22 +41,22 @@ const QUICK_CARDS = [
 
 export default function HomeScreen() {
   const { width, height } = useWindowDimensions();
+  const viewport = useResponsiveMetrics();
   const isSmallPhone = width < 390;
-  const isLargePhone = width >= 480 && width < 768;
-  const isTablet = width >= 768;
-  const isLandscape = width > height;
-  const isTabletLandscape = isTablet && isLandscape;
-  const isTabletPortrait = isTablet && !isLandscape;
-  const isLargeTablet = width >= 1180;
+  const isLargePhone = width >= 480 && !viewport.isTablet;
+  const isTablet = viewport.isTablet;
+  const isLandscape = viewport.isLandscape;
+  const isTabletLandscape = viewport.isTabletLandscape;
+  const isTabletPortrait = viewport.isTabletPortrait;
+  const isLargeTablet = viewport.isLargeTablet;
   const { cartCount } = useCart();
+  const bottomSafeSpace = useTabScreenBottomSpace(isTablet ? 28 : 20);
   const [selectedShape, setSelectedShape] = useState('rectangle');
   const [frameShapes, setFrameShapes] = useState<FrameShape[]>([]);
 
   const metrics = useMemo(() => {
-    const contentWidth = isTablet
-      ? Math.min(width - (isLargeTablet ? 48 : 28), isLargeTablet ? 1220 : 1040)
-      : width;
-    const horizontalPadding = isTabletLandscape ? 24 : isTabletPortrait ? 22 : isLargePhone ? 22 : isSmallPhone ? 16 : 20;
+    const contentWidth = viewport.contentMaxWidth;
+    const horizontalPadding = viewport.horizontalPadding;
    const shapeCardWidth =
   isTabletLandscape
     ? (isLargeTablet ? 220 : 195)
@@ -69,11 +71,10 @@ const shapeCardHeight =
   isTabletPortrait ? 170 :
   152;
     const serviceCardHeight = isTabletLandscape ? 136 : isTabletPortrait ? 154 : 172;
-    const tabBarHeight = isTablet ? 68 : 74;
     const headerTopPadding = Platform.OS === 'ios'
-      ? (isTabletLandscape ? 18 : isTabletPortrait ? 52 : 52)
-      : (isTabletLandscape ? 16 : isTabletPortrait ? 36 : 36);
-    const headerBottomPadding = isTabletLandscape ? 24 : isTablet ? 30 : 20;
+      ? (isTabletLandscape ? 42 : isTabletPortrait ? 62 : 68)
+      : (isTabletLandscape ? 28 : isTabletPortrait ? 40 : 48);
+    const headerBottomPadding = isTabletLandscape ? 24 : isTablet ? 30 : 24;
     const headerVisualHeight = headerTopPadding
       + headerBottomPadding
       + 46;
@@ -98,17 +99,8 @@ const shapeCardHeight =
       sectionTopPadding: isTabletLandscape ? 42 : isTablet ? 38 : 28,
       shapeCardWidth,
       shapeCardHeight,
-     shapeImageWidth:
-  isTabletLandscape ? 145 :
-  isTabletPortrait ? 132 :
-  isLargePhone ? 132 :
-  128,
-
-shapeImageHeight:
-  isTabletLandscape ? 86 :
-  isTabletPortrait ? 78 :
-  isLargePhone ? 88 :
-  84,
+      shapeImageWidth: isTabletLandscape ? 145 : isTabletPortrait ? 132 : isLargePhone ? 132 : 128,
+      shapeImageHeight: isTabletLandscape ? 86 : isTabletPortrait ? 78 : isLargePhone ? 88 : 84,
 
       shapeTitleSize: isTabletLandscape ? 19 : isTabletPortrait ? 19 : 18,
       serviceCardHeight,
@@ -123,13 +115,7 @@ shapeImageHeight:
       frameSectionBottomPadding: isTabletLandscape ? 6 : isTablet ? 12 : 16,
       serviceTopMargin: isTabletLandscape ? 22 : isTablet ? 18 : 18,
       quickCardGap: isTabletLandscape ? 14 : isTablet ? 16 : 20,
-      bottomSafeSpace: isTabletLandscape
-        ? tabBarHeight + 28
-        : isTabletPortrait
-          ? tabBarHeight + 54
-          : 88,
       surfaceMinHeight,
-      tabBarHeight,
       centerSpacerMinHeight: isTabletLandscape ? 24 : isTablet ? 20 : 20,
     };
   }, [height, isLargePhone, isLargeTablet, isSmallPhone, isTablet, isTabletLandscape, isTabletPortrait, width]);
@@ -213,7 +199,7 @@ shapeImageHeight:
         contentContainerStyle={[
           styles.scrollContent,
           { minHeight: height },
-          { paddingBottom: metrics.bottomSafeSpace },
+          { paddingBottom: bottomSafeSpace },
         ]}
       >
         <View
@@ -225,7 +211,7 @@ shapeImageHeight:
               borderCurve: 'continuous',
               paddingTop: metrics.sectionTopPadding,
               width: '100%',
-              minHeight: metrics.surfaceMinHeight + metrics.bottomSafeSpace,
+              minHeight: metrics.surfaceMinHeight + bottomSafeSpace,
               overflow: 'hidden',
             },
           ]}
@@ -509,6 +495,7 @@ const styles = StyleSheet.create({
   },
   headerPanel: {
     backgroundColor: '#1A6FD4',
+    alignSelf: 'center',
     // borderTopLeftRadius: 26,
     // borderTopRightRadius: 26,
     // overflow: 'hidden',
@@ -597,9 +584,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   backButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: Colors.white,
@@ -615,9 +602,9 @@ const styles = StyleSheet.create({
     maxWidth: '100%',
   },
   cartButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     backgroundColor: Colors.white,
     alignItems: 'center',
     justifyContent: 'center',

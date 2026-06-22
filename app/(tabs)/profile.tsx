@@ -10,10 +10,13 @@ import { getProfile, updateProfile } from '@/lib/localStore';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '@/lib/theme';
 import { useAuth } from '@/context/AuthContext';
 import { Profile } from '@/lib/types';
+import { useTabScreenBottomSpace } from '@/lib/tabBar';
+import { useResponsiveMetrics } from '@/lib/responsive';
 
 export default function ProfileScreen() {
-  const { width } = useWindowDimensions();
-  const isTablet = width >= 768;
+  const viewport = useResponsiveMetrics();
+  const isTablet = viewport.isTablet;
+  const bottomSafeSpace = useTabScreenBottomSpace(isTablet ? 28 : 20);
   const { user, signOut } = useAuth();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [editing, setEditing] = useState(false);
@@ -71,7 +74,11 @@ export default function ProfileScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
-        contentContainerStyle={[styles.scrollContent, isTablet && styles.scrollContentTablet]}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: bottomSafeSpace },
+          isTablet && styles.scrollContentTablet,
+        ]}
       >
         <View style={[styles.content, isTablet && styles.contentTablet]}>
           {/* Header */}
@@ -142,8 +149,6 @@ export default function ProfileScreen() {
               <Text style={styles.signOutText}>Sign Out</Text>
             </TouchableOpacity>
           </View>
-
-          <View style={{ height: Spacing.xxl }} />
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -168,10 +173,10 @@ const menuStyles = StyleSheet.create({
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
-  scrollContent: { flexGrow: 1, paddingBottom: Spacing.xl },
+  scrollContent: { flexGrow: 1 },
   scrollContentTablet: { alignItems: 'center' },
   content: { width: '100%' },
-  contentTablet: { width: '100%', maxWidth: 860 },
+  contentTablet: { width: '100%', maxWidth: 980 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.background, padding: Spacing.xl },
   profileHeader: {
     flexDirection: 'row', alignItems: 'center',

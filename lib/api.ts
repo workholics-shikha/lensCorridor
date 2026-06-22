@@ -110,6 +110,11 @@ export interface OrderPlacementPayload {
     partialPaymentEnabled?: boolean;
     paidAmount?: number;
     remainingAmount?: number;
+    payments?: Array<{
+      amount: number;
+      paymentMode: 'Online' | 'Card' | 'Cash';
+      collectedAt: string;
+    }>;
   };
   meta?: {
     source?: string;
@@ -175,6 +180,11 @@ export interface OrderPlacementRecord extends OrderPlacementResponse {
     partialPaymentEnabled?: boolean;
     paidAmount?: number;
     remainingAmount?: number;
+    payments?: Array<{
+      amount: number;
+      paymentMode: 'Online' | 'Card' | 'Cash';
+      collectedAt: string;
+    }>;
   };
   meta?: {
     source?: string;
@@ -218,6 +228,38 @@ export interface ReturnExchangePayload {
     name: string;
     employeeId: string;
   } | null;
+}
+
+export interface OrderBillingUpdatePayload {
+  additionalCollectedAmount: number;
+  paymentMode: 'Online' | 'Card' | 'Cash';
+}
+
+export interface EyeTestPayload {
+  samePowerBothEyes: boolean;
+  hasCylindricalPower: boolean;
+  spherical: {
+    right: number | null;
+    left: number | null;
+  };
+  cylindrical: {
+    right: number | null;
+    left: number | null;
+  };
+  axis: {
+    right: number | null;
+    left: number | null;
+  };
+  name: string;
+  mobileNumber: string;
+  email: string;
+  address: string;
+}
+
+export interface EyeTestRecord extends EyeTestPayload {
+  _id: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 function getApiBaseUrl() {
@@ -625,6 +667,62 @@ export async function fetchOrderPlacementById(id: string): Promise<OrderPlacemen
   }
 
   return result.data;
+}
+
+export async function updateOrderPlacementBilling(
+  id: string,
+  payload: OrderBillingUpdatePayload
+): Promise<OrderPlacementRecord> {
+  const response = await fetch(`${getApiBaseUrl()}/api/order-placement/${id}/billing`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const result = (await response.json().catch(() => null)) as { data?: OrderPlacementRecord; message?: string } | null;
+
+  if (!response.ok || !result?.data) {
+    throw new Error(result?.message || `Order billing update API returned ${response.status}`);
+  }
+
+  return result.data;
+}
+
+export async function createEyeTestRecord(payload: EyeTestPayload): Promise<EyeTestRecord> {
+  const response = await fetch(`${getApiBaseUrl()}/api/eye-tests`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const result = (await response.json().catch(() => null)) as { data?: EyeTestRecord; message?: string } | null;
+
+  if (!response.ok || !result?.data) {
+    throw new Error(result?.message || `Eye test API returned ${response.status}`);
+  }
+
+  return result.data;
+}
+
+export async function fetchEyeTests(input?: { mobileNumber?: string }): Promise<EyeTestRecord[]> {
+  const url = new URL(`${getApiBaseUrl()}/api/eye-tests`);
+  const normalizedPhone = input?.mobileNumber?.replace(/\D/g, '').slice(-10);
+
+  if (normalizedPhone) {
+    url.searchParams.set('mobileNumber', normalizedPhone);
+  }
+
+  const response = await fetch(url.toString());
+  if (!response.ok) {
+    throw new Error(`Eye test list API returned ${response.status}`);
+  }
+
+  const result = (await response.json().catch(() => null)) as { data?: EyeTestRecord[] } | null;
+  return result?.data ?? [];
 }
 
 export async function createReturnExchangeRequest(payload: ReturnExchangePayload): Promise<ReturnExchangeRecord> {

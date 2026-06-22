@@ -31,6 +31,7 @@ import {
 } from '@/lib/returnExchange';
 import { getLensPriceFromBand } from '@/lib/orderPricing';
 import { Colors, Shadow } from '@/lib/theme';
+import { useResponsiveMetrics } from '@/lib/responsive';
 
 const EXCHANGE_REASONS = [
   'Power Update',
@@ -47,8 +48,8 @@ const ITEM_SCOPES: Array<{ label: string; value: ReturnExchangeItemScope }> = [
 ];
 
 export default function ReturnExchangeExchangeScreen() {
-  const { width } = useWindowDimensions();
-  const isTablet = width >= 920;
+  const viewport = useResponsiveMetrics();
+  const isTablet = viewport.isTablet;
   const { draft, updateDraft, updateLensSelection } = useOrderFlow();
   const {
     selectedOrder,
@@ -171,7 +172,18 @@ export default function ReturnExchangeExchangeScreen() {
         <Text style={styles.headerTitle}>Exchange Request</Text>
       </View>
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={[
+          styles.content,
+          {
+            maxWidth: viewport.contentMaxWidth,
+            alignSelf: 'center',
+            width: '100%',
+            paddingHorizontal: viewport.horizontalPadding,
+          },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={[styles.topGrid, isTablet && styles.topGridTablet]}>
           <View style={[styles.panel, isTablet && styles.panelHalf]}>
             <Text style={styles.panelTitle}>Original Order</Text>
@@ -386,7 +398,7 @@ const styles = StyleSheet.create({
     color: '#1F2430',
   },
   content: {
-    padding: 16,
+    paddingTop: 16,
     paddingBottom: 40,
   },
   topGrid: {

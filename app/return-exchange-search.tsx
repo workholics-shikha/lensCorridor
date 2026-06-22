@@ -18,9 +18,11 @@ import { useReturnExchange } from '@/context/ReturnExchangeContext';
 import { fetchOrderPlacements, type OrderPlacementRecord } from '@/lib/api';
 import { buildDraftFromOrder } from '@/lib/orderFlow';
 import { Colors, Shadow } from '@/lib/theme';
+import { useResponsiveMetrics } from '@/lib/responsive';
 
 export default function ReturnExchangeSearchScreen() {
   const { width } = useWindowDimensions();
+  const viewport = useResponsiveMetrics();
   const { draft, updateDraft } = useOrderFlow();
   const {
     selectedOrder,
@@ -28,7 +30,7 @@ export default function ReturnExchangeSearchScreen() {
     setTransactionType,
     reset,
   } = useReturnExchange();
-  const isTablet = width >= 920;
+  const isTablet = viewport.isTablet;
   const [query, setQuery] = useState('');
   const [orders, setOrders] = useState<OrderPlacementRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -144,7 +146,16 @@ export default function ReturnExchangeSearchScreen() {
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
       >
-        <View style={[styles.body, isTablet && styles.bodyTablet]}>
+        <View
+          style={[
+            styles.body,
+            isTablet && styles.bodyTablet,
+            {
+              maxWidth: viewport.contentMaxWidth,
+              paddingHorizontal: viewport.horizontalPadding,
+            },
+          ]}
+        >
           <View style={[styles.panel, styles.searchPanel, isTablet && styles.searchPanelTablet]}>
             <View style={styles.panelHeader}>
               <FileSearch size={16} color={Colors.primary} />
@@ -298,6 +309,8 @@ const styles = StyleSheet.create({
   body: {
     padding: 16,
     gap: 16,
+    width: '100%',
+    alignSelf: 'center',
   },
   bodyScrollContent: {
     flexGrow: 1,

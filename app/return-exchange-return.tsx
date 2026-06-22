@@ -19,6 +19,7 @@ import {
   type ReturnExchangeItemScope,
 } from '@/lib/returnExchange';
 import { Colors, Shadow } from '@/lib/theme';
+import { useResponsiveMetrics } from '@/lib/responsive';
 
 const RETURN_REASONS = [
   'Damaged Product',
@@ -41,6 +42,7 @@ const REFUND_TYPES: Array<{ label: string; value: RefundType }> = [
 ];
 
 export default function ReturnExchangeReturnScreen() {
+  const viewport = useResponsiveMetrics();
   const { draft } = useOrderFlow();
   const {
     selectedOrder,
@@ -111,7 +113,18 @@ export default function ReturnExchangeReturnScreen() {
         <Text style={styles.headerTitle}>Return Request</Text>
       </View>
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={[
+          styles.content,
+          {
+            maxWidth: viewport.contentMaxWidth,
+            alignSelf: 'center',
+            width: '100%',
+            paddingHorizontal: viewport.horizontalPadding,
+          },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.summaryCard}>
           <View style={styles.summaryTitleRow}>
             <RotateCcw size={16} color={Colors.primary} />
@@ -263,7 +276,7 @@ const styles = StyleSheet.create({
     color: '#1F2430',
   },
   content: {
-    padding: 16,
+    paddingTop: 16,
     paddingBottom: 40,
   },
   summaryCard: {

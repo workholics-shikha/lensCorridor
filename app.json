@@ -6,8 +6,7 @@
     "orientation": "default",
     "icon": "./assets/images/icon.png",
     "scheme": "myapp",
-    "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
+    "userInterfaceStyle": "automatic" ,
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
@@ -32,7 +31,7 @@
       "expo-web-browser"
     ],
     "experiments": {
-      "typedRoutes": true
+       
     },
     "extra": {
       "router": {},

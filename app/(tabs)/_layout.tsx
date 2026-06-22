@@ -1,8 +1,10 @@
 import { Tabs } from 'expo-router';
 import { Bell, Home, ShoppingBag } from 'lucide-react-native';
-import { View, Text, StyleSheet, useWindowDimensions } from 'react-native';
+import { type ColorValue, View, Text, StyleSheet, useWindowDimensions } from 'react-native';
 import { Colors } from '@/lib/theme';
 import { useCart } from '@/context/CartContext';
+import { scaleForTablet } from '@/lib/tabletTypography';
+import { useTabBarLayoutMetrics } from '@/lib/tabBar';
 
 function CartBadge() {
   const { cartCount } = useCart();
@@ -17,18 +19,45 @@ function CartBadge() {
 const badge = StyleSheet.create({
   container: {
     position: 'absolute', top: -4, right: -8,
-    backgroundColor: Colors.accent, borderRadius: 10,
-    minWidth: 16, height: 16, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3,
+    backgroundColor: Colors.accent, borderRadius: scaleForTablet(10),
+    minWidth: scaleForTablet(16), height: scaleForTablet(16), alignItems: 'center', justifyContent: 'center', paddingHorizontal: scaleForTablet(3),
   },
-  text: { color: Colors.white, fontSize: 9, fontWeight: '800' },
+  text: { color: Colors.white, fontSize: scaleForTablet(9), fontWeight: '800' },
 });
+
+function TabItem({
+  focused,
+  color,
+  label,
+  icon,
+}: {
+  focused: boolean;
+  color: ColorValue;
+  label: string;
+  icon: React.ReactNode;
+}) {
+  return (
+    <View style={styles.tabPill}>
+      {icon}
+      <Text
+        style={[styles.tabPillLabel, focused && styles.tabPillLabelActive, { color }]}
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.92}
+      >
+        {label}
+      </Text>
+    </View>
+  );
+}
 
 export default function TabsLayout() {
   const { width, height } = useWindowDimensions();
   const isTablet = width >= 768;
   const isLandscape = width > height;
   const isTabletLandscape = isTablet && isLandscape;
-  const tabIconSize = isTabletLandscape ? 24 : isTablet ? 26 : 24;
+  const tabIconSize = isTabletLandscape ? scaleForTablet(24, 26, 28) : isTablet ? scaleForTablet(24, 28, 30) : 24;
+  const tabBarMetrics = useTabBarLayoutMetrics();
 
   return (
     <Tabs
@@ -36,31 +65,34 @@ export default function TabsLayout() {
         headerShown: false,
         tabBarActiveTintColor: Colors.primary,
         tabBarInactiveTintColor: Colors.gray400,
+        tabBarShowLabel: false,
         tabBarStyle: {
           backgroundColor: Colors.white,
           borderTopWidth: 0,
-          height: isTabletLandscape ? 68 : isTablet ? 72 : 60,
-          paddingBottom: isTablet ? 10 : 6,
-          paddingTop: isTablet ? 8 : 6,
-          paddingHorizontal: isTablet ? 18 : 10,
-          borderTopLeftRadius: isTablet ? 22 : 18,
-          borderTopRightRadius: isTablet ? 22 : 18,
+          height: tabBarMetrics.totalHeight,
+          paddingBottom: tabBarMetrics.bottomPadding + tabBarMetrics.insetBottom,
+          paddingTop: tabBarMetrics.topPadding,
+          paddingHorizontal: tabBarMetrics.horizontalPadding,
+          borderTopLeftRadius: tabBarMetrics.radius,
+          borderTopRightRadius: tabBarMetrics.radius,
           position: 'absolute',
           left: 0,
           right: 0,
           bottom: 0,
+          zIndex: 1000,
           shadowColor: '#13213A',
           shadowOffset: { width: 0, height: -2 },
           shadowOpacity: 0.06,
           shadowRadius: 8,
-          elevation: 5,
+          elevation: 20,
+          overflow: 'visible',
         },
-        tabBarLabelStyle: {
-          fontSize: isTablet ? 11 : 10,
-          fontWeight: '500',
-          marginTop: isTablet ? 2 : 1,
+        tabBarItemStyle: {
+          flex: 1,
+          justifyContent: 'center',
+          alignItems: 'center',
+          paddingVertical: isTablet ? scaleForTablet(2, 2, 3) : 1,
         },
-        tabBarItemStyle: { paddingVertical: isTablet ? 2 : 1 },
         sceneStyle: {
           backgroundColor: '#F3F4FB',
         },
@@ -70,7 +102,14 @@ export default function TabsLayout() {
         name="index"
         options={{
           title: 'Home',
-          tabBarIcon: ({ color }) => <Home size={tabIconSize} color={color} />,
+          tabBarIcon: ({ color, focused }) => (
+            <TabItem
+              focused={focused}
+              color={color}
+              label="Home"
+              icon={<Home size={tabIconSize} color={color} />}
+            />
+          ),
         }}
       />
       <Tabs.Screen
@@ -78,17 +117,27 @@ export default function TabsLayout() {
         options={{
           href: null,
           title: 'Wishlist',
-          tabBarIcon: ({ color }) => <ShoppingBag size={tabIconSize} color={color} />,
+          tabBarIcon: ({ color, focused }) => (
+            <TabItem
+              focused={focused}
+              color={color}
+              label="Wishlist"
+              icon={<ShoppingBag size={tabIconSize} color={color} />}
+            />
+          ),
         }}
       />
       <Tabs.Screen
         name="orders"
         options={{
           title: 'Orders',
-          tabBarIcon: ({ color }) => (
-            <View>
-              <ShoppingBag size={tabIconSize} color={color} />
-            </View>
+          tabBarIcon: ({ color, focused }) => (
+            <TabItem
+              focused={focused}
+              color={color}
+              label="Orders"
+              icon={<ShoppingBag size={tabIconSize} color={color} />}
+            />
           ),
         }}
       />
@@ -96,9 +145,42 @@ export default function TabsLayout() {
         name="profile"
         options={{
           title: 'Notification',
-          tabBarIcon: ({ color }) => <Bell size={tabIconSize} color={color} />,
+          tabBarIcon: ({ color, focused }) => (
+            <TabItem
+              focused={focused}
+              color={color}
+              label="Notification"
+              icon={<Bell size={tabIconSize} color={color} />}
+            />
+          ),
         }}
       />
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  tabPill: {
+    minWidth: scaleForTablet(64, 66, 72),
+    maxWidth: scaleForTablet(110, 124, 132),
+    paddingHorizontal: scaleForTablet(10, 8, 10),
+    paddingVertical: scaleForTablet(6, 4, 5),
+    borderRadius: scaleForTablet(14, 14, 16),
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'center',
+    gap: scaleForTablet(2, 2, 3),
+  },
+  tabPillLabel: {
+    width: '100%',
+    fontSize: scaleForTablet(10, 11.5, 12.5),
+    lineHeight: scaleForTablet(12, 13, 14),
+    fontWeight: '600',
+    textAlign: 'center',
+    includeFontPadding: false,
+    letterSpacing: -0.15,
+  },
+  tabPillLabelActive: {
+    fontWeight: '700',
+  },
+});

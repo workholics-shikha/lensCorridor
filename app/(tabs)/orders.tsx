@@ -17,15 +17,19 @@ import { router } from 'expo-router';
 import { History, Phone, Search } from 'lucide-react-native';
 import { fetchOrderPlacements, type OrderPlacementRecord } from '@/lib/api';
 import { Colors, FontSize, Radius, Shadow, Spacing } from '@/lib/theme';
+import { useTabScreenBottomSpace } from '@/lib/tabBar';
+import { scaleForTablet } from '@/lib/tabletTypography';
+import { useResponsiveMetrics } from '@/lib/responsive';
 
 export default function OrdersScreen() {
   const { width, height } = useWindowDimensions();
-  const isTablet = width >= 920;
-  const isLandscape = width > height;
-  const bottomSafeSpace = isTablet
-    ? (isLandscape ? 112 : 132)
-    : 110;
-  const pageSize = isTablet ? 4 : 6;
+  const viewport = useResponsiveMetrics();
+  const isTablet = viewport.isTablet;
+  const isLandscape = viewport.isLandscape;
+  const bottomSafeSpace = useTabScreenBottomSpace(isTablet ? (isLandscape ? 28 : 32) : 20);
+  const pageSize = viewport.isTabletLandscape ? 6 : isTablet ? 4 : 6;
+  const headerIconSize = isTablet ? scaleForTablet(14, 18, 20) : 14;
+  const searchIconSize = isTablet ? scaleForTablet(14, 18, 20) : 14;
   const [orders, setOrders] = useState<OrderPlacementRecord[]>([]);
   const [suggestions, setSuggestions] = useState<OrderPlacementRecord[]>([]);
   const [searchValue, setSearchValue] = useState('');
@@ -175,26 +179,35 @@ export default function OrdersScreen() {
       </View>
 
       <ScrollView
-        contentContainerStyle={[styles.body, { paddingBottom: bottomSafeSpace }]}
+        contentContainerStyle={[
+          styles.body,
+          {
+            paddingBottom: bottomSafeSpace,
+            maxWidth: viewport.contentMaxWidth,
+            alignSelf: 'center',
+            width: '100%',
+            paddingHorizontal: viewport.horizontalPadding,
+          },
+        ]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
       >
         <View style={styles.sectionHeader}>
           <View style={styles.sectionLabelRow}>
-            <History size={14} color={Colors.primary} />
-            <Text style={styles.sectionLabel}>Order History</Text>
+            <History size={headerIconSize} color={Colors.primary} />
+            <Text style={[styles.sectionLabel, isTablet && styles.sectionLabelTablet]}>Order History</Text>
           </View>
 
-          <View style={styles.searchWrap}>
-            <Search size={14} color="#BABFCB" />
+          <View style={[styles.searchWrap, isTablet && styles.searchWrapTablet]}>
+            <Search size={searchIconSize} color="#BABFCB" />
             <TextInput
               value={searchValue}
               onChangeText={setSearchValue}
               placeholder="Search by customer name or mobile number"
               placeholderTextColor="#A0A5B1"
               keyboardType="default"
-              style={styles.searchInput}
+              style={[styles.searchInput, isTablet && styles.searchInputTablet]}
             />
           </View>
 
@@ -305,43 +318,56 @@ function OrderHistoryCard({
 
   return (
     <TouchableOpacity
-      style={[styles.orderCard, highlighted && styles.orderCardHighlighted, { width: cardWidth }]}
+      style={[
+        styles.orderCard,
+        highlighted && styles.orderCardHighlighted,
+        isTablet && styles.orderCardTablet,
+        { width: cardWidth },
+      ]}
       activeOpacity={0.9}
       onPress={() => router.push({ pathname: '/order-details', params: { orderId: order.id } })}
     >
       <View style={styles.customerRow}>
-        <Text style={styles.customerMeta}>
+        <Text style={[styles.customerMeta, isTablet && styles.customerMetaTablet]}>
           Customer Name - <Text style={styles.customerMetaStrong}>{order.customer.name || 'Customer'}</Text>
         </Text>
         <View style={styles.customerPhoneWrap}>
-          <Phone size={11} color={Colors.primary} />
-          <Text style={styles.customerPhone}>{order.customer.phone}</Text>
+          <Phone size={isTablet ? scaleForTablet(11, 15, 17) : 11} color={Colors.primary} />
+          <Text style={[styles.customerPhone, isTablet && styles.customerPhoneTablet]}>{order.customer.phone}</Text>
         </View>
       </View>
 
       <View style={styles.productRow}>
-        <View style={styles.productImageShell}>
+        <View style={[styles.productImageShell, isTablet && styles.productImageShellTablet]}>
           {frameImage ? (
             <Image source={{ uri: frameImage }} resizeMode="contain" style={styles.productImage} />
           ) : (
-            <View style={styles.imageFallback} />
+            <View style={[styles.imageFallback, isTablet && styles.imageFallbackTablet]} />
           )}
         </View>
 
         <View style={styles.productBody}>
-          <Text style={styles.productTitle}>Lenscorridor frame</Text>
-          <Text style={styles.productSub}>
+          <Text style={[styles.productTitle, isTablet && styles.productTitleTablet]}>Lenscorridor frame</Text>
+          <Text style={[styles.productSub, isTablet && styles.productSubTablet]}>
             Frame + {order.lensSelection.lensCategory || order.lensSelection.powerType || 'Lens'}
           </Text>
-          <Text style={styles.productPrice}>Rs. {order.billing.totalPayable}</Text>
+          <Text style={[styles.productPrice, isTablet && styles.productPriceTablet]}>Rs. {order.billing.totalPayable}</Text>
         </View>
       </View>
 
-      <View style={styles.footerRow}>
-        <FooterMeta label="Order ID:" value={order.orderNumber} />
-        <FooterMeta label="Order Date:" value={orderDate} centered />
-        <FooterMeta label="Total Price:" value={`Rs. ${order.billing.totalPayable}`} right />
+      <View style={[styles.footerRow, isTablet && styles.footerRowTablet]}>
+        <FooterMeta label="Order ID:" value={order.orderNumber} isTablet={isTablet} />
+        <FooterMeta label="Order Date:" value={orderDate} centered isTablet={isTablet} />
+        <FooterMeta label="Total Price:" value={`Rs. ${order.billing.totalPayable}`} right isTablet={isTablet} />
       </View>
+
+      {Number(order.billing.remainingAmount ?? 0) > 0 ? (
+        <View style={styles.pendingPaymentRow}>
+          <Text style={styles.pendingPaymentText}>
+            Pending payment: Rs. {Number(order.billing.remainingAmount ?? 0).toLocaleString('en-IN')}
+          </Text>
+        </View>
+      ) : null}
     </TouchableOpacity>
   );
 }
@@ -351,16 +377,18 @@ function FooterMeta({
   value,
   centered,
   right,
+  isTablet,
 }: {
   label: string;
   value: string;
   centered?: boolean;
   right?: boolean;
+  isTablet?: boolean;
 }) {
   return (
     <View style={[styles.footerMeta, centered && styles.footerMetaCenter, right && styles.footerMetaRight]}>
-      <Text style={styles.footerLabel}>{label}</Text>
-      <Text style={styles.footerValue}>{value}</Text>
+      <Text style={[styles.footerLabel, isTablet && styles.footerLabelTablet]}>{label}</Text>
+      <Text style={[styles.footerValue, isTablet && styles.footerValueTablet]}>{value}</Text>
     </View>
   );
 }
@@ -389,10 +417,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: '#20242B',
   },
-  body: {
-    flexGrow: 1,
-    padding: 14,
-  },
+  body: { flexGrow: 1, paddingTop: 14 },
   sectionHeader: {
     position: 'relative',
     zIndex: 2,
@@ -408,6 +433,9 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: '#252A33',
   },
+  sectionLabelTablet: {
+    marginLeft: 8,
+  },
   searchWrap: {
     minHeight: 42,
     borderRadius: 8,
@@ -420,6 +448,12 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     width: '100%',
   },
+  searchWrapTablet: {
+    minHeight: 54,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    marginBottom: 16,
+  },
   searchInput: {
     flex: 1,
     marginLeft: 8,
@@ -427,6 +461,10 @@ const styles = StyleSheet.create({
     color: '#1F2430',
     minWidth: 0,
     paddingVertical: 10,
+  },
+  searchInputTablet: {
+    marginLeft: 10,
+    paddingVertical: 14,
   },
   dropdown: {
     position: 'absolute',
@@ -481,6 +519,11 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     ...Shadow.sm,
   },
+  orderCardTablet: {
+    borderRadius: 18,
+    padding: 16,
+    marginBottom: 16,
+  },
   orderCardHighlighted: {
     borderColor: '#F0A252',
   },
@@ -496,6 +539,9 @@ const styles = StyleSheet.create({
     color: '#8B92A1',
     marginRight: 8,
   },
+  customerMetaTablet: {
+    marginRight: 12,
+  },
   customerMetaStrong: {
     color: '#20242B',
     fontWeight: '600',
@@ -508,6 +554,9 @@ const styles = StyleSheet.create({
     marginLeft: 4,
     fontSize: 10.5,
     color: '#20242B',
+  },
+  customerPhoneTablet: {
+    marginLeft: 6,
   },
   productRow: {
     flexDirection: 'row',
@@ -522,6 +571,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     overflow: 'hidden',
   },
+  productImageShellTablet: {
+    width: 132,
+    height: 84,
+    borderRadius: 14,
+  },
   productImage: {
     width: '100%',
     height: '100%',
@@ -533,6 +587,11 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#1C1D21',
   },
+  imageFallbackTablet: {
+    width: 82,
+    height: 42,
+    borderRadius: 14,
+  },
   productBody: {
     flex: 1,
     marginLeft: 12,
@@ -542,16 +601,25 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: '#20242B',
   },
+  productTitleTablet: {
+    fontWeight: '600',
+  },
   productSub: {
     marginTop: 4,
     fontSize: 10.5,
     color: '#878E9D',
+  },
+  productSubTablet: {
+    marginTop: 6,
   },
   productPrice: {
     marginTop: 6,
     fontSize: 16,
     fontWeight: '700',
     color: Colors.primary,
+  },
+  productPriceTablet: {
+    marginTop: 8,
   },
   footerRow: {
     flexDirection: 'row',
@@ -560,6 +628,10 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     borderTopWidth: 1,
     borderTopColor: '#EFF2F6',
+  },
+  footerRowTablet: {
+    marginTop: 14,
+    paddingTop: 12,
   },
   footerMeta: {
     flex: 1,
@@ -574,11 +646,32 @@ const styles = StyleSheet.create({
     fontSize: 9.5,
     color: '#8A91A1',
   },
+  footerLabelTablet: {
+    lineHeight: 18,
+  },
   footerValue: {
     marginTop: 2,
     fontSize: 10.5,
     color: '#20242B',
     fontWeight: '500',
+  },
+  footerValueTablet: {
+    marginTop: 4,
+    fontWeight: '600',
+  },
+  pendingPaymentRow: {
+    marginTop: 10,
+    borderRadius: 12,
+    backgroundColor: '#FFF7ED',
+    borderWidth: 1,
+    borderColor: '#F5D2A7',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  pendingPaymentText: {
+    fontSize: 12,
+    color: '#B45309',
+    fontWeight: '700',
   },
   emptyText: {
     paddingVertical: 28,
@@ -590,13 +683,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 8,
-    marginBottom: 4,
+    marginTop: 12,
+    marginBottom: 8,
+    flexWrap: 'wrap',
+    gap: 4,
   },
   paginationNav: {
-    width: 24,
-    height: 24,
-    borderRadius: 4,
+    width: 36,
+    height: 36,
+    borderRadius: 10,
     backgroundColor: '#F1F4F8',
     alignItems: 'center',
     justifyContent: 'center',
@@ -606,20 +701,20 @@ const styles = StyleSheet.create({
     opacity: 0.45,
   },
   paginationNavText: {
-    fontSize: 11,
+    fontSize: 13,
     color: '#8A91A1',
     fontWeight: '700',
   },
   paginationPage: {
-    minWidth: 24,
-    height: 24,
-    borderRadius: 4,
+    minWidth: 36,
+    height: 36,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: '#E3E8F1',
     backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 6,
+    paddingHorizontal: 10,
     marginHorizontal: 4,
   },
   paginationPageActive: {
@@ -627,7 +722,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#EAF2FF',
   },
   paginationPageText: {
-    fontSize: 11,
+    fontSize: 13,
     color: '#5F6778',
     fontWeight: '500',
   },
@@ -636,13 +731,14 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   paginationEllipsisWrap: {
-    minWidth: 20,
+    minWidth: 28,
+    minHeight: 36,
     alignItems: 'center',
     justifyContent: 'center',
     marginHorizontal: 2,
   },
   paginationEllipsis: {
-    fontSize: 11,
+    fontSize: 13,
     color: '#8A91A1',
     fontWeight: '600',
   },

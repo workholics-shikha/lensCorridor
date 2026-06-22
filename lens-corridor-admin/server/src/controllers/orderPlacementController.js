@@ -90,6 +90,11 @@ const syncCustomerFromOrder = async (payload) => {
   });
 };
 
+const sanitizePaymentMode = (value) => {
+  const normalizedValue = String(value ?? '').trim();
+  return ['Online', 'Card', 'Cash'].includes(normalizedValue) ? normalizedValue : 'Online';
+};
+
 const createOrderPlacement = async (req, res) => {
   try {
     const payload = req.body || {};
@@ -97,6 +102,17 @@ const createOrderPlacement = async (req, res) => {
     const orderNumber = payload.orderNumber?.trim() || await generateOrderNumber(invoiceDate);
     const normalizedPhone = normalizePhone(payload.customer?.phone);
     const storeId = resolveStoreId(payload.meta?.store?.id);
+    const totalPayable = Number(payload.billing?.totalPayable ?? 0);
+    const paidAmount = Number(payload.billing?.paidAmount ?? totalPayable);
+    const paymentMode = sanitizePaymentMode(payload.billing?.paymentMode);
+    const remainingAmount = Number(payload.billing?.remainingAmount ?? Math.max(0, totalPayable - paidAmount));
+    const payments = paidAmount > 0
+      ? [{
+          amount: Math.min(paidAmount, totalPayable),
+          paymentMode,
+          collectedAt: invoiceDate,
+        }]
+      : [];
 
     const document = await AppOrderPlacement.create({
       orderNumber,
@@ -125,12 +141,13 @@ const createOrderPlacement = async (req, res) => {
       lensDetails: Array.isArray(payload.lensDetails) ? payload.lensDetails : [],
       billing: {
         discount: Number(payload.billing?.discount ?? 0),
-        paymentMode: payload.billing?.paymentMode ?? 'Online',
+        paymentMode,
         subtotal: Number(payload.billing?.subtotal ?? 0),
-        totalPayable: Number(payload.billing?.totalPayable ?? 0),
-        partialPaymentEnabled: Boolean(payload.billing?.partialPaymentEnabled),
-        paidAmount: Number(payload.billing?.paidAmount ?? payload.billing?.totalPayable ?? 0),
-        remainingAmount: Number(payload.billing?.remainingAmount ?? 0),
+        totalPayable,
+        partialPaymentEnabled: remainingAmount > 0,
+        paidAmount,
+        remainingAmount,
+        payments,
       },
       meta: {
         source: payload.meta?.source ?? 'mobile-app',
@@ -217,6 +234,7 @@ const updateOrderPlacementBilling = async (req, res) => {
     const totalPayable = Number(document.billing?.totalPayable ?? 0);
     const currentPaidAmount = Number(document.billing?.paidAmount ?? 0);
     const additionalCollectedAmount = Number(req.body?.additionalCollectedAmount ?? 0);
+    const nextPaymentMode = String(req.body?.paymentMode ?? '').trim();
 
     if (!Number.isFinite(additionalCollectedAmount) || additionalCollectedAmount <= 0) {
       return res.status(400).json({
@@ -225,12 +243,37 @@ const updateOrderPlacementBilling = async (req, res) => {
       });
     }
 
+    if (nextPaymentMode && !['Online', 'Card', 'Cash'].includes(nextPaymentMode)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Payment mode is invalid',
+      });
+    }
+
     const nextPaidAmount = Math.min(totalPayable, currentPaidAmount + additionalCollectedAmount);
     const nextRemainingAmount = Math.max(0, totalPayable - nextPaidAmount);
+    const appliedPaymentMode = sanitizePaymentMode(nextPaymentMode || document.billing?.paymentMode);
+    const appliedCollectedAmount = Math.min(additionalCollectedAmount, Math.max(0, totalPayable - currentPaidAmount));
+
+    if (!Array.isArray(document.billing.payments)) {
+      document.billing.payments = [];
+    }
+
+    document.billing.payments.push({
+      amount: appliedCollectedAmount,
+      paymentMode: appliedPaymentMode,
+      collectedAt: new Date(),
+    });
 
     document.billing.paidAmount = nextPaidAmount;
     document.billing.remainingAmount = nextRemainingAmount;
     document.billing.partialPaymentEnabled = nextRemainingAmount > 0;
+    if (nextPaymentMode) {
+      document.billing.paymentMode = sanitizePaymentMode(nextPaymentMode);
+    }
+    if (nextRemainingAmount === 0 && document.status === 'Pending') {
+      document.status = 'Completed';
+    }
 
     await document.save();
 

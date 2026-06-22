@@ -1,6 +1,6 @@
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
-  Platform, Dimensions,
+  Platform, useWindowDimensions,
 } from 'react-native';
 import { router } from 'expo-router';
 import { Heart } from 'lucide-react-native';
@@ -8,15 +8,21 @@ import { Colors, Spacing, Radius, FontSize, Shadow } from '@/lib/theme';
 import { useCart } from '@/context/CartContext';
 import { useAuth } from '@/context/AuthContext';
 import ProductCard from '@/components/ProductCard';
-
-const { width } = Dimensions.get('window');
-const isTablet = width >= 768;
-const numColumns = isTablet ? 4 : 2;
-const cardWidth = (width - Spacing.md * 2 - Spacing.sm * (numColumns - 1)) / numColumns;
+import { useTabScreenBottomSpace } from '@/lib/tabBar';
+import { useResponsiveMetrics } from '@/lib/responsive';
 
 export default function WishlistScreen() {
+  const { width } = useWindowDimensions();
+  const viewport = useResponsiveMetrics();
   const { wishlistItems } = useCart();
   const { user } = useAuth();
+  const bottomSafeSpace = useTabScreenBottomSpace(viewport.isTablet ? 28 : 20);
+  const numColumns = viewport.isTabletLandscape ? 4 : viewport.isTablet ? 3 : 2;
+  const cardGap = viewport.isTablet ? Spacing.md : Spacing.sm;
+  const cardWidth = Math.max(
+    0,
+    (Math.min(width - (viewport.horizontalPadding * 2), viewport.contentMaxWidth) - (cardGap * (numColumns - 1))) / numColumns
+  );
 
   if (!user) {
     return (
@@ -45,8 +51,18 @@ export default function WishlistScreen() {
         data={products}
         keyExtractor={(i) => i.id}
         numColumns={numColumns}
-        contentContainerStyle={styles.list}
-        columnWrapperStyle={numColumns > 1 ? styles.row : undefined}
+        key={`wishlist-${numColumns}`}
+        contentContainerStyle={[
+          styles.list,
+          {
+            paddingHorizontal: viewport.horizontalPadding,
+            paddingBottom: bottomSafeSpace,
+            maxWidth: viewport.contentMaxWidth,
+            alignSelf: 'center',
+            width: '100%',
+          },
+        ]}
+        columnWrapperStyle={numColumns > 1 ? [styles.row, { gap: cardGap, marginBottom: cardGap }] : undefined}
         renderItem={({ item }) => <ProductCard product={item} style={{ width: cardWidth }} />}
         ListEmptyComponent={
           <View style={styles.empty}>
@@ -73,8 +89,8 @@ const styles = StyleSheet.create({
   },
   headerTitle: { fontSize: FontSize.xl, fontWeight: '700', color: Colors.text },
   count: { fontSize: FontSize.sm, fontWeight: '600', color: Colors.textSecondary },
-  list: { padding: Spacing.md, paddingBottom: Spacing.xxl },
-  row: { gap: Spacing.sm, marginBottom: Spacing.sm },
+  list: { paddingTop: Spacing.md },
+  row: {},
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: Spacing.xxl },
   emptyTitle: { fontSize: FontSize.xl, fontWeight: '700', color: Colors.text, marginTop: Spacing.md, marginBottom: 4 },
   emptySub: { fontSize: FontSize.md, color: Colors.textSecondary, textAlign: 'center', marginBottom: Spacing.lg },

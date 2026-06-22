@@ -23,9 +23,9 @@ import {
   X,
 } from 'lucide-react-native';
 import { fetchOrderPlacements, type OrderPlacementRecord } from '@/lib/api';
-import { buildDraftFromOrder } from '@/lib/orderFlow';
 import { Shadow } from '@/lib/theme';
 import { useOrderFlow } from '@/context/OrderFlowContext';
+import { useResponsiveMetrics } from '@/lib/responsive';
 
 type FramePreviewItem = {
   id: string;
@@ -33,19 +33,27 @@ type FramePreviewItem = {
   shape?: string;
 };
 
+type CustomerSuggestion = {
+  id: string;
+  name: string;
+  phone: string;
+  billingAddress: string;
+};
+
 const SELECT_FRAME_ICON = require('@/assets/images/healthicons_eyeglasses-24px.png');
 
 export default function CheckoutScreen() {
   const { width } = useWindowDimensions();
+  const viewport = useResponsiveMetrics();
   const { shape } = useLocalSearchParams<{ shape?: string }>();
   const inputRef = useRef<any>(null);
-  const isTablet = width >= 768;
-  const containerWidth = isTablet ? 1040 : width;
+  const isTablet = viewport.isTablet;
+  const containerWidth = viewport.contentMaxWidth;
   const { draft, updateDraft } = useOrderFlow();
 
   const [customerSearch, setCustomerSearch] = useState(draft.phone);
-  const [matchedCustomer, setMatchedCustomer] = useState<OrderPlacementRecord | null>(null);
-  const [customerSuggestions, setCustomerSuggestions] = useState<OrderPlacementRecord[]>([]);
+  const [matchedCustomer, setMatchedCustomer] = useState<CustomerSuggestion | null>(null);
+  const [customerSuggestions, setCustomerSuggestions] = useState<CustomerSuggestion[]>([]);
   const [searchingCustomer, setSearchingCustomer] = useState(false);
   const [price, setPrice] = useState(draft.price);
   const [error, setError] = useState('');
@@ -56,15 +64,35 @@ export default function CheckoutScreen() {
     ? 'Mobile number must be 10 digits.'
     : '';
 
-  const applyOrderHistory = (order: OrderPlacementRecord) => {
-    const nextDraft = buildDraftFromOrder(order, draft);
+  const buildCustomerSuggestions = (items: OrderPlacementRecord[]) => {
+    const suggestionsByPhone = new Map<string, CustomerSuggestion>();
 
-    setCustomerSearch(order.customer.phone || '');
-    setMatchedCustomer(order);
+    for (const item of items) {
+      const normalizedPhone = item.customer.phone.replace(/\D/g, '').slice(-10);
+      if (!normalizedPhone || suggestionsByPhone.has(normalizedPhone)) {
+        continue;
+      }
+
+      suggestionsByPhone.set(normalizedPhone, {
+        id: item.id,
+        name: item.customer.name || 'Customer',
+        phone: item.customer.phone || normalizedPhone,
+        billingAddress: item.customer.billingAddress || '',
+      });
+    }
+
+    return [...suggestionsByPhone.values()];
+  };
+
+  const applyCustomerDetails = (customer: CustomerSuggestion) => {
+    setCustomerSearch(customer.phone || '');
+    setMatchedCustomer(customer);
     setCustomerSuggestions([]);
-    setPrice(nextDraft.price);
-    setFramePreviews(nextDraft.frameImages);
-    updateDraft(nextDraft);
+    updateDraft({
+      customerName: customer.name || '',
+      phone: customer.phone || '',
+      billingAddress: customer.billingAddress || '',
+    });
   };
 
   const handleBack = () => {
@@ -110,11 +138,12 @@ export default function CheckoutScreen() {
             return;
           }
 
-          setCustomerSuggestions(items);
-          const exactMatch = items.find((item) => (
+          const suggestions = buildCustomerSuggestions(items);
+          setCustomerSuggestions(suggestions);
+          const exactMatch = suggestions.find((item) => (
             isPhoneQuery
-              ? item.customer.phone.replace(/\D/g, '').slice(-10) === normalizedPhone
-              : item.customer.name.trim().toLowerCase() === trimmedQuery.toLowerCase()
+              ? item.phone.replace(/\D/g, '').slice(-10) === normalizedPhone
+              : item.name.trim().toLowerCase() === trimmedQuery.toLowerCase()
           ));
           setMatchedCustomer(exactMatch ?? null);
         })
@@ -174,6 +203,7 @@ export default function CheckoutScreen() {
         const result = source === 'camera'
           ? await ImagePicker.launchCameraAsync({
             mediaTypes: ['images'],
+            cameraType: ImagePicker.CameraType.back,
             quality: 0.8,
             base64: true,
           })
@@ -256,7 +286,8 @@ export default function CheckoutScreen() {
 
     updateDraft({
       phone: customerSearch,
-      customerName: matchedCustomer?.customer.name ?? draft.customerName,
+      customerName: matchedCustomer?.name ?? draft.customerName,
+      billingAddress: matchedCustomer?.billingAddress ?? draft.billingAddress,
       price,
       selectedShape: shape ?? draft.selectedShape,
       frameImages: framePreviews,
@@ -336,11 +367,11 @@ export default function CheckoutScreen() {
                       style={styles.customerDropdownItem}
                       activeOpacity={0.86}
                       onPress={() => {
-                        applyOrderHistory(item);
+                        applyCustomerDetails(item);
                       }}
                     >
-                      <Text style={styles.customerDropdownName}>{item.customer.name || 'Customer'}</Text>
-                      <Text style={styles.customerDropdownPhone}>{item.customer.phone}</Text>
+                      <Text style={styles.customerDropdownName}>{item.name || 'Customer'}</Text>
+                      <Text style={styles.customerDropdownPhone}>{item.phone}</Text>
                     </TouchableOpacity>
                   ))
                 )}
@@ -351,17 +382,23 @@ export default function CheckoutScreen() {
               <View style={styles.customerMatchCard}>
                 <Text style={styles.customerMatchTitle}>Matched Customer</Text>
                 <Text style={styles.customerMatchText}>
-                  {matchedCustomer.customer.name || 'Customer'} • {matchedCustomer.customer.phone}
+                  {matchedCustomer.name || 'Customer'} • {matchedCustomer.phone}
                 </Text>
-                {matchedCustomer.customer.billingAddress ? (
-                  <Text style={styles.customerMatchSub}>{matchedCustomer.customer.billingAddress}</Text>
+                {matchedCustomer.billingAddress ? (
+                  <Text style={styles.customerMatchSub}>{matchedCustomer.billingAddress}</Text>
                 ) : null}
               </View>
             ) : null}
           </View>
 
-          <View style={[styles.frameRow, isTablet ? styles.frameRowTablet : styles.frameRowMobile]}>
-            <View style={[styles.frameUploadCard, isTablet && styles.frameUploadCardTablet]}>
+          <View style={[styles.frameRow, isTablet ? styles.frameRowTablet : styles.frameRowMobile, { gap: viewport.cardGap }]}>
+            <View
+              style={[
+                styles.frameUploadCard,
+                isTablet && styles.frameUploadCardTablet,
+                isTablet && { width: Math.min(containerWidth * 0.3, 340) },
+              ]}
+            >
               <View style={styles.fieldCard}>
                 <SectionLabel
                   title="Select Frame"
@@ -457,7 +494,7 @@ export default function CheckoutScreen() {
             </View>
           ) : null}
 
-          <TouchableOpacity style={styles.nextButton} onPress={handleNext} activeOpacity={0.88}>
+          <TouchableOpacity style={[styles.nextButton, { width: Math.min(containerWidth, 340) }]} onPress={handleNext} activeOpacity={0.88}>
             <Text style={styles.nextButtonText}>Next</Text>
           </TouchableOpacity>
         </View>
@@ -640,7 +677,7 @@ const styles = StyleSheet.create({
   },
   scrollContentTablet: {
     alignItems: 'center',
-    paddingHorizontal: 24,
+    paddingHorizontal: 0,
   },
   content: {
     width: '100%',
@@ -792,7 +829,6 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   frameRow: {
-    gap: 10,
     marginTop: 24,
     marginBottom: 24,
   },
@@ -807,7 +843,6 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   frameUploadCardTablet: {
-    width: 278,
     flexShrink: 0,
   },
   uploadOptions: {

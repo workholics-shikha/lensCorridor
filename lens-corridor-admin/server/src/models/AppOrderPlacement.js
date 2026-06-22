@@ -16,6 +16,12 @@ const lensDetailSchema = new mongoose.Schema({
   add: { type: String, default: '' },
 }, { _id: false });
 
+const paymentEntrySchema = new mongoose.Schema({
+  amount: { type: Number, default: 0 },
+  paymentMode: { type: String, enum: ['Online', 'Card', 'Cash'], default: 'Online' },
+  collectedAt: { type: Date, default: Date.now },
+}, { _id: false });
+
 const appOrderPlacementSchema = new mongoose.Schema({
   orderNumber: { type: String, required: true, unique: true, index: true },
   invoiceDate: { type: Date, required: true },
@@ -49,6 +55,7 @@ const appOrderPlacementSchema = new mongoose.Schema({
     partialPaymentEnabled: { type: Boolean, default: false },
     paidAmount: { type: Number, default: 0 },
     remainingAmount: { type: Number, default: 0 },
+    payments: { type: [paymentEntrySchema], default: [] },
   },
   meta: {
     source: { type: String, default: 'mobile-app' },

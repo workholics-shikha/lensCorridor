@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  Image, Dimensions, Platform, ActivityIndicator,
+  Image, Platform, ActivityIndicator, useWindowDimensions,
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { ArrowLeft, Heart, ShoppingCart, Star, Shield, Truck, RotateCcw, ChevronRight } from 'lucide-react-native';
@@ -9,11 +9,11 @@ import { getProductById } from '@/lib/localStore';
 import { Product } from '@/lib/types';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '@/lib/theme';
 import { useCart } from '@/context/CartContext';
-
-const { width } = Dimensions.get('window');
-const isTablet = width >= 768;
+import { useResponsiveMetrics } from '@/lib/responsive';
 
 export default function ProductDetailScreen() {
+  const { width } = useWindowDimensions();
+  const viewport = useResponsiveMetrics();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
@@ -60,12 +60,15 @@ export default function ProductDetailScreen() {
   const finalPrice = product.discount_price ?? product.price;
   const discount = product.discount_price ? Math.round((1 - product.discount_price / product.price) * 100) : 0;
   const images = product.images?.length ? product.images : ['https://images.pexels.com/photos/701877/pexels-photo-701877.jpeg?auto=compress&cs=tinysrgb&w=800'];
+  const galleryHeight = viewport.isTablet
+    ? Math.min(Math.max(width * (viewport.isLandscape ? 0.34 : 0.42), 340), viewport.isExtraLargeTablet ? 500 : 440)
+    : 320;
 
   return (
     <View style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Image Gallery */}
-        <View style={styles.gallery}>
+        <View style={[styles.gallery, { height: galleryHeight }]}>
           <Image source={{ uri: images[selectedImage] }} style={styles.mainImage} resizeMode="cover" />
           {/* Header Overlay */}
           <View style={styles.galleryHeader}>
@@ -98,7 +101,16 @@ export default function ProductDetailScreen() {
         </View>
 
         {/* Product Info */}
-        <View style={[styles.infoSection, isTablet && styles.infoSectionTablet]}>
+        <View style={[
+          styles.infoSection,
+          viewport.isTablet && styles.infoSectionTablet,
+          {
+            paddingHorizontal: viewport.horizontalPadding,
+            alignSelf: 'center',
+            width: '100%',
+            maxWidth: viewport.contentMaxWidth,
+          },
+        ]}>
           <View style={styles.brandRow}>
             <Text style={styles.brand}>{product.brand}</Text>
             {product.categories?.name && (
@@ -107,7 +119,7 @@ export default function ProductDetailScreen() {
               </View>
             )}
           </View>
-          <Text style={styles.productName}>{product.name}</Text>
+          <Text style={[styles.productName, viewport.isTablet && styles.productNameTablet]}>{product.name}</Text>
 
           {/* Rating */}
           <View style={styles.ratingRow}>
@@ -212,11 +224,7 @@ const trustStyles = StyleSheet.create({
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   loader: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.background },
-  gallery: {
-    height: isTablet ? 380 : 320,
-    backgroundColor: Colors.gray50,
-    position: 'relative',
-  },
+  gallery: { backgroundColor: Colors.gray50, position: 'relative' },
   mainImage: { width: '100%', height: '100%' },
   galleryHeader: {
     position: 'absolute', top: Platform.OS === 'ios' ? 52 : 36,
@@ -244,12 +252,13 @@ const styles = StyleSheet.create({
   brand: { fontSize: FontSize.sm, fontWeight: '600', color: Colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 },
   categoryChip: { backgroundColor: Colors.primaryLight, borderRadius: Radius.full, paddingHorizontal: Spacing.sm, paddingVertical: 2 },
   categoryChipText: { fontSize: FontSize.xs, fontWeight: '600', color: Colors.primary },
-  productName: { fontSize: isTablet ? FontSize.xxl : FontSize.xl, fontWeight: '700', color: Colors.text, marginBottom: Spacing.sm, lineHeight: isTablet ? 32 : 26 },
+  productName: { fontSize: FontSize.xl, fontWeight: '700', color: Colors.text, marginBottom: Spacing.sm, lineHeight: 26 },
+  productNameTablet: { fontSize: FontSize.xxl, lineHeight: 32, maxWidth: '92%' },
   ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: Spacing.md },
   ratingText: { fontSize: FontSize.sm, fontWeight: '700', color: Colors.gray700 },
   reviewCount: { fontSize: FontSize.sm, color: Colors.textMuted },
   priceSection: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginBottom: Spacing.md },
-  finalPrice: { fontSize: isTablet ? FontSize.xxl : FontSize.xl, fontWeight: '800', color: Colors.text },
+  finalPrice: { fontSize: FontSize.xl, fontWeight: '800', color: Colors.text },
   originalPrice: { fontSize: FontSize.md, color: Colors.textMuted, textDecorationLine: 'line-through' },
   savings: { fontSize: FontSize.sm, fontWeight: '600', color: Colors.success, backgroundColor: '#DCFCE7', paddingHorizontal: 6, paddingVertical: 2, borderRadius: Radius.sm },
   specsCard: { backgroundColor: Colors.white, borderRadius: Radius.lg, padding: Spacing.md, marginBottom: Spacing.md, ...Shadow.sm },

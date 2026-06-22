@@ -13,6 +13,7 @@ import {
 import { useOrderFlow } from '@/context/OrderFlowContext';
 import { fetchPowerTypes, type PowerTypeOption } from '@/lib/api';
 import { Shadow } from '@/lib/theme';
+import { useResponsiveMetrics } from '@/lib/responsive';
 
 const POWER_TYPE_IMAGE_MAP: Record<string, number> = {
   'with-power.png': require('@/assets/images/with-power.png'),
@@ -28,6 +29,7 @@ const POWER_TYPE_IMAGE_MAP: Record<string, number> = {
 };
 
 export default function SelectLensScreen() {
+  const viewport = useResponsiveMetrics();
   const { draft, updateLensSelection } = useOrderFlow();
   const [powerTypes, setPowerTypes] = useState<PowerTypeOption[]>([]);
   const [loading, setLoading] = useState(true);
@@ -110,7 +112,18 @@ export default function SelectLensScreen() {
           <ActivityIndicator size="large" color="#1C71D8" />
         </View>
       ) : (
-        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          contentContainerStyle={[
+            styles.content,
+            {
+              maxWidth: viewport.contentMaxWidth,
+              alignSelf: 'center',
+              width: '100%',
+              paddingHorizontal: viewport.horizontalPadding,
+            },
+          ]}
+          showsVerticalScrollIndicator={false}
+        >
           {powerTypes.map((item) => {
             const selected = draft.lensSelection.powerType === item.name;
 
@@ -227,7 +240,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   content: {
-    paddingHorizontal: 12,
     paddingTop: 22,
     paddingBottom: 42,
   },

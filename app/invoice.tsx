@@ -13,6 +13,12 @@ import { Shadow } from '@/lib/theme';
 
 const brandLogo = require('@/assets/images/blueLogo.png');
 
+type InvoiceFrameImage = {
+  id: string;
+  image?: string;
+  shape?: string;
+};
+
 type InvoiceSnapshot = {
   customerName?: string;
   phone?: string;
@@ -25,9 +31,18 @@ type InvoiceSnapshot = {
   remainingAmount?: number;
   lensType?: string;
   paymentMode?: 'Online' | 'Card' | 'Cash';
-  frameImages?: unknown[];
+  frameImages?: InvoiceFrameImage[];
   selectedShape?: string;
 };
+
+function isInvoiceFrameImage(value: unknown): value is InvoiceFrameImage {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  const item = value as Record<string, unknown>;
+  return typeof item.id === 'string';
+}
 
 export default function InvoiceScreen() {
   const { draft, resetDraft } = useOrderFlow();
@@ -141,7 +156,9 @@ export default function InvoiceScreen() {
         remainingAmount: Number(parsedInvoiceSnapshot.remainingAmount || 0),
         lensType: parsedInvoiceSnapshot.lensType || 'Frame Only',
         paymentMode: parsedInvoiceSnapshot.paymentMode || 'Online',
-        frameImages: Array.isArray(parsedInvoiceSnapshot.frameImages) ? parsedInvoiceSnapshot.frameImages : [],
+        frameImages: Array.isArray(parsedInvoiceSnapshot.frameImages)
+          ? parsedInvoiceSnapshot.frameImages.filter(isInvoiceFrameImage)
+          : [],
         selectedShape: parsedInvoiceSnapshot.selectedShape || 'Frame',
       };
     }
