@@ -6,7 +6,7 @@
     "orientation": "default",
     "icon": "./assets/images/icon.png",
     "scheme": "myapp",
-    "userInterfaceStyle": "automatic" ,
+    "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
@@ -30,17 +30,16 @@
       "expo-font",
       "expo-web-browser"
     ],
-    "experiments": {
-       
-    },
+    "experiments": {},
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "ec92f5a2-4302-4e52-a50f-197ec13ee182"
+        "projectId": "33c75450-60b6-4241-944d-054003062add"
       }
     },
     "android": {
       "package": "com.shikha0624.lenscorridornativewind"
-    }
+    },
+    "owner": "wokholics-shikha"
   }
 }

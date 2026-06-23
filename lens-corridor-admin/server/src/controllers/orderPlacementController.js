@@ -9,6 +9,50 @@ const formatInvoiceDate = (date) => date.toLocaleDateString('en-GB', {
   year: 'numeric',
 });
 
+const formatPaymentDate = (date) => new Date(date).toLocaleDateString('en-GB', {
+  day: '2-digit',
+  month: 'short',
+  year: 'numeric',
+});
+
+const formatPaymentTime = (date) => new Date(date).toLocaleTimeString('en-GB', {
+  hour: '2-digit',
+  minute: '2-digit',
+  hour12: false,
+});
+
+const buildPaymentEntry = (input, fallbackDate) => {
+  const collectedAt = input?.collectedAt || fallbackDate || new Date();
+
+  return {
+    amount: Number(input?.amount ?? 0),
+    paymentMode: sanitizePaymentMode(input?.paymentMode),
+    collectedAt,
+    paymentDate: String(input?.paymentDate || formatPaymentDate(collectedAt)),
+    paymentTime: String(input?.paymentTime || formatPaymentTime(collectedAt)),
+  };
+};
+
+const toPlainBilling = (billing, fallbackDate) => {
+  const plainBilling = billing?.toObject?.() || billing || {};
+  const payments = Array.isArray(plainBilling.payments)
+    ? plainBilling.payments
+      .filter((payment) => Number(payment?.amount ?? 0) > 0)
+      .map((payment) => buildPaymentEntry(payment, fallbackDate))
+    : [];
+
+  return {
+    discount: Number(plainBilling.discount ?? 0),
+    paymentMode: sanitizePaymentMode(plainBilling.paymentMode),
+    subtotal: Number(plainBilling.subtotal ?? 0),
+    totalPayable: Number(plainBilling.totalPayable ?? 0),
+    partialPaymentEnabled: Boolean(plainBilling.partialPaymentEnabled),
+    paidAmount: Number(plainBilling.paidAmount ?? 0),
+    remainingAmount: Number(plainBilling.remainingAmount ?? 0),
+    payments,
+  };
+};
+
 const padNumber = (value, size) => String(value).padStart(size, '0');
 
 const generateOrderNumber = async (invoiceDate) => {
@@ -34,7 +78,7 @@ const mapOrderPlacement = (document) => ({
   frame: document.frame,
   lensSelection: document.lensSelection,
   lensDetails: document.lensDetails,
-  billing: document.billing,
+  billing: toPlainBilling(document.billing, document.invoiceDate || document.createdAt),
   meta: document.meta,
   status: document.status,
   createdAt: document.createdAt,
@@ -95,6 +139,40 @@ const sanitizePaymentMode = (value) => {
   return ['Online', 'Card', 'Cash'].includes(normalizedValue) ? normalizedValue : 'Online';
 };
 
+const normalizeBillingPayments = (document) => {
+  if (!document?.billing) {
+    return false;
+  }
+
+  const billing = document.billing;
+  const totalPayable = Number(billing.totalPayable ?? 0);
+  const paidAmount = Number(billing.paidAmount ?? 0);
+  const normalizedPaymentMode = sanitizePaymentMode(billing.paymentMode);
+  const existingPayments = Array.isArray(billing.payments)
+    ? billing.payments.filter((payment) => Number(payment?.amount ?? 0) > 0)
+    : [];
+  const recordedAmount = existingPayments.reduce((sum, payment) => (
+    sum + Number(payment?.amount ?? 0)
+  ), 0);
+  const missingAmount = Math.max(0, Math.min(paidAmount, totalPayable || paidAmount) - recordedAmount);
+
+  billing.payments = existingPayments;
+
+  if (missingAmount <= 0) {
+    return false;
+  }
+
+  billing.payments.push({
+    ...buildPaymentEntry({
+      amount: missingAmount,
+      paymentMode: normalizedPaymentMode,
+      collectedAt: document.invoiceDate || document.createdAt || new Date(),
+    }, document.invoiceDate || document.createdAt),
+  });
+
+  return true;
+};
+
 const createOrderPlacement = async (req, res) => {
   try {
     const payload = req.body || {};
@@ -106,12 +184,14 @@ const createOrderPlacement = async (req, res) => {
     const paidAmount = Number(payload.billing?.paidAmount ?? totalPayable);
     const paymentMode = sanitizePaymentMode(payload.billing?.paymentMode);
     const remainingAmount = Number(payload.billing?.remainingAmount ?? Math.max(0, totalPayable - paidAmount));
-    const payments = paidAmount > 0
-      ? [{
-          amount: Math.min(paidAmount, totalPayable),
+    const normalizedPaidAmount = Math.min(Math.max(paidAmount, 0), Math.max(totalPayable, 0));
+    const normalizedRemainingAmount = Math.max(0, totalPayable - normalizedPaidAmount);
+    const payments = normalizedPaidAmount > 0
+      ? [buildPaymentEntry({
+          amount: normalizedPaidAmount,
           paymentMode,
           collectedAt: invoiceDate,
-        }]
+        }, invoiceDate)]
       : [];
 
     const document = await AppOrderPlacement.create({
@@ -144,9 +224,9 @@ const createOrderPlacement = async (req, res) => {
         paymentMode,
         subtotal: Number(payload.billing?.subtotal ?? 0),
         totalPayable,
-        partialPaymentEnabled: remainingAmount > 0,
-        paidAmount,
-        remainingAmount,
+        partialPaymentEnabled: normalizedRemainingAmount > 0,
+        paidAmount: normalizedPaidAmount,
+        remainingAmount: normalizedRemainingAmount,
         payments,
       },
       meta: {
@@ -231,6 +311,7 @@ const updateOrderPlacementBilling = async (req, res) => {
       });
     }
 
+    normalizeBillingPayments(document);
     const totalPayable = Number(document.billing?.totalPayable ?? 0);
     const currentPaidAmount = Number(document.billing?.paidAmount ?? 0);
     const additionalCollectedAmount = Number(req.body?.additionalCollectedAmount ?? 0);
@@ -254,27 +335,34 @@ const updateOrderPlacementBilling = async (req, res) => {
     const nextRemainingAmount = Math.max(0, totalPayable - nextPaidAmount);
     const appliedPaymentMode = sanitizePaymentMode(nextPaymentMode || document.billing?.paymentMode);
     const appliedCollectedAmount = Math.min(additionalCollectedAmount, Math.max(0, totalPayable - currentPaidAmount));
-
-    if (!Array.isArray(document.billing.payments)) {
-      document.billing.payments = [];
-    }
-
-    document.billing.payments.push({
-      amount: appliedCollectedAmount,
+    const existingPayments = Array.isArray(document.billing?.payments)
+      ? document.billing.payments
+        .filter((payment) => Number(payment?.amount ?? 0) > 0)
+        .map((payment) => buildPaymentEntry(payment, document.invoiceDate || document.createdAt))
+      : [];
+    const nextPayments = [
+      ...existingPayments,
+      buildPaymentEntry({
+        amount: appliedCollectedAmount,
+        paymentMode: appliedPaymentMode,
+        collectedAt: new Date(),
+      }, document.invoiceDate || document.createdAt),
+    ];
+    const nextStatus = nextRemainingAmount === 0
+      ? 'Completed'
+      : document.status;
+    const nextBilling = {
+      ...toPlainBilling(document.billing, document.invoiceDate || document.createdAt),
       paymentMode: appliedPaymentMode,
-      collectedAt: new Date(),
-    });
+      paidAmount: nextPaidAmount,
+      remainingAmount: nextRemainingAmount,
+      partialPaymentEnabled: nextRemainingAmount > 0,
+      payments: nextPayments,
+    };
 
-    document.billing.paidAmount = nextPaidAmount;
-    document.billing.remainingAmount = nextRemainingAmount;
-    document.billing.partialPaymentEnabled = nextRemainingAmount > 0;
-    if (nextPaymentMode) {
-      document.billing.paymentMode = sanitizePaymentMode(nextPaymentMode);
-    }
-    if (nextRemainingAmount === 0 && document.status === 'Pending') {
-      document.status = 'Completed';
-    }
-
+    document.billing = nextBilling;
+    document.status = nextStatus;
+    document.markModified('billing');
     await document.save();
 
     res.json({
@@ -360,6 +448,10 @@ const getOrderPlacementById = async (req, res) => {
         success: false,
         message: 'Order placement not found',
       });
+    }
+
+    if (normalizeBillingPayments(document)) {
+      await document.save();
     }
 
     res.json({

@@ -114,6 +114,8 @@ export interface OrderPlacementPayload {
       amount: number;
       paymentMode: 'Online' | 'Card' | 'Cash';
       collectedAt: string;
+      paymentDate?: string;
+      paymentTime?: string;
     }>;
   };
   meta?: {
@@ -184,6 +186,8 @@ export interface OrderPlacementRecord extends OrderPlacementResponse {
       amount: number;
       paymentMode: 'Online' | 'Card' | 'Cash';
       collectedAt: string;
+      paymentDate?: string;
+      paymentTime?: string;
     }>;
   };
   meta?: {
@@ -267,6 +271,7 @@ const SEARCH_CACHE_TTL_MS = 10 * 1000;
 
 const responseCache = new Map<string, { expiresAt: number; value: unknown }>();
 const inFlightRequests = new Map<string, Promise<unknown>>();
+const orderPlacementSubscribers = new Set<(order: OrderPlacementRecord) => void>();
 
 function getApiBaseUrl() {
   const configuredBaseUrl =
@@ -361,6 +366,60 @@ function invalidateCacheByPrefix(prefix: string) {
       responseCache.delete(key);
     }
   }
+}
+
+function syncCachedOrderRecord(updatedOrder: OrderPlacementRecord) {
+  responseCache.set(`order:${updatedOrder.id}`, {
+    value: { data: updatedOrder },
+    expiresAt: Date.now() + SEARCH_CACHE_TTL_MS,
+  });
+
+  for (const [key, entry] of responseCache.entries()) {
+    if (!key.startsWith('orders:')) {
+      continue;
+    }
+
+    const cachedPayload = entry.value as { data?: OrderPlacementRecord[] } | undefined;
+    if (!cachedPayload?.data?.length) {
+      continue;
+    }
+
+    let didUpdate = false;
+    const nextOrders = cachedPayload.data.map((item) => {
+      if (item.id !== updatedOrder.id) {
+        return item;
+      }
+
+      didUpdate = true;
+      return updatedOrder;
+    });
+
+    if (!didUpdate) {
+      continue;
+    }
+
+    responseCache.set(key, {
+      ...entry,
+      value: {
+        ...cachedPayload,
+        data: nextOrders,
+      },
+    });
+  }
+}
+
+function notifyOrderPlacementUpdated(order: OrderPlacementRecord) {
+  for (const subscriber of orderPlacementSubscribers) {
+    subscriber(order);
+  }
+}
+
+export function subscribeOrderPlacementUpdates(listener: (order: OrderPlacementRecord) => void) {
+  orderPlacementSubscribers.add(listener);
+
+  return () => {
+    orderPlacementSubscribers.delete(listener);
+  };
 }
 
 export async function fetchSalespeople(storeId?: string): Promise<Salesperson[]> {
@@ -731,13 +790,17 @@ export async function fetchOrderPlacements(input?: {
   return result.data ?? [];
 }
 
-export async function fetchOrderPlacementById(id: string): Promise<OrderPlacementRecord> {
+export async function fetchOrderPlacementById(
+  id: string,
+  options?: { bypassCache?: boolean }
+): Promise<OrderPlacementRecord> {
   const result = await fetchJsonWithCache<{ data?: OrderPlacementRecord }>(
     `${getApiBaseUrl()}/api/order-placement/${id}`,
     undefined,
     {
       cacheKey: `order:${id}`,
       ttlMs: SEARCH_CACHE_TTL_MS,
+      bypassCache: options?.bypassCache,
     }
   );
   if (!result.data) {
@@ -765,8 +828,9 @@ export async function updateOrderPlacementBilling(
     throw new Error(result?.message || `Order billing update API returned ${response.status}`);
   }
 
+  syncCachedOrderRecord(result.data);
+  notifyOrderPlacementUpdated(result.data);
   invalidateCacheByPrefix('orders:');
-  invalidateCacheByPrefix(`order:${id}`);
   return result.data;
 }
 

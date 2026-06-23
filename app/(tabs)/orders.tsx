@@ -15,11 +15,17 @@ import {
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { History, Phone, Search } from 'lucide-react-native';
-import { fetchOrderPlacements, type OrderPlacementRecord } from '@/lib/api';
+import {
+  fetchOrderPlacements,
+  subscribeOrderPlacementUpdates,
+  type OrderPlacementRecord,
+} from '@/lib/api';
 import { Colors, FontSize, Radius, Shadow, Spacing } from '@/lib/theme';
 import { useTabScreenBottomSpace } from '@/lib/tabBar';
 import { scaleForTablet } from '@/lib/tabletTypography';
 import { useResponsiveMetrics } from '@/lib/responsive';
+
+let latestOrdersSnapshot: OrderPlacementRecord[] = [];
 
 export default function OrdersScreen() {
   const { width, height } = useWindowDimensions();
@@ -30,11 +36,12 @@ export default function OrdersScreen() {
   const pageSize = viewport.isTabletLandscape ? 6 : isTablet ? 4 : 6;
   const headerIconSize = isTablet ? scaleForTablet(14, 18, 20) : 14;
   const searchIconSize = isTablet ? scaleForTablet(14, 18, 20) : 14;
-  const [orders, setOrders] = useState<OrderPlacementRecord[]>([]);
+  const [orders, setOrders] = useState<OrderPlacementRecord[]>(latestOrdersSnapshot);
   const [suggestions, setSuggestions] = useState<OrderPlacementRecord[]>([]);
   const [searchValue, setSearchValue] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(latestOrdersSnapshot.length === 0);
   const [searching, setSearching] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
 
@@ -43,6 +50,8 @@ export default function OrdersScreen() {
 
     if (showLoader) {
       setLoading(true);
+    } else {
+      setRefreshing(true);
     }
     setError('');
 
@@ -52,6 +61,7 @@ export default function OrdersScreen() {
           return;
         }
 
+        latestOrdersSnapshot = items;
         setOrders(items);
       })
       .catch(() => {
@@ -62,6 +72,7 @@ export default function OrdersScreen() {
       .finally(() => {
         if (active) {
           setLoading(false);
+          setRefreshing(false);
         }
       });
 
@@ -76,6 +87,21 @@ export default function OrdersScreen() {
       return cleanup;
     }, [loadOrders, orders.length])
   );
+
+  useEffect(() => (
+    subscribeOrderPlacementUpdates((updatedOrder) => {
+      setOrders((current) => {
+        const nextOrders = current.map((item) => (
+          item.id === updatedOrder.id ? updatedOrder : item
+        ));
+        latestOrdersSnapshot = nextOrders;
+        return nextOrders;
+      });
+      setSuggestions((current) => current.map((item) => (
+        item.id === updatedOrder.id ? updatedOrder : item
+      )));
+    })
+  ), []);
 
   useEffect(() => {
     const trimmedQuery = searchValue.trim();
@@ -172,14 +198,6 @@ export default function OrdersScreen() {
     return [1, '...', currentPage, '...', totalPages] as const;
   }, [currentPage, totalPages]);
 
-  if (loading) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color={Colors.primary} />
-      </View>
-    );
-  }
-
   return (
     <KeyboardAvoidingView
       style={styles.container}
@@ -209,6 +227,7 @@ export default function OrdersScreen() {
           <View style={styles.sectionLabelRow}>
             <History size={headerIconSize} color={Colors.primary} />
             <Text style={[styles.sectionLabel, isTablet && styles.sectionLabelTablet]}>Order History</Text>
+            {refreshing ? <ActivityIndicator size="small" color={Colors.primary} style={styles.headerSpinner} /> : null}
           </View>
 
           <View style={[styles.searchWrap, isTablet && styles.searchWrapTablet]}>
@@ -249,23 +268,29 @@ export default function OrdersScreen() {
 
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
-        <FlatList
-          data={paginatedOrders}
-          key={isTablet ? 'grid' : 'list'}
-          numColumns={isTablet ? 2 : 1}
-          scrollEnabled={false}
-          columnWrapperStyle={isTablet ? styles.gridRow : undefined}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContent}
-          ListEmptyComponent={<Text style={styles.emptyText}>No matching orders found.</Text>}
-          renderItem={({ item, index }) => (
-            <OrderHistoryCard
-              order={item}
-              highlighted={index === 1}
-              isTablet={isTablet}
-            />
-          )}
-        />
+        {loading && orders.length === 0 ? (
+          <View style={styles.centerInline}>
+            <ActivityIndicator size="large" color={Colors.primary} />
+          </View>
+        ) : (
+          <FlatList
+            data={paginatedOrders}
+            key={isTablet ? 'grid' : 'list'}
+            numColumns={isTablet ? 2 : 1}
+            scrollEnabled={false}
+            columnWrapperStyle={isTablet ? styles.gridRow : undefined}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.listContent}
+            ListEmptyComponent={<Text style={styles.emptyText}>No matching orders found.</Text>}
+            renderItem={({ item, index }) => (
+              <OrderHistoryCard
+                order={item}
+                highlighted={index === 1}
+                isTablet={isTablet}
+              />
+            )}
+          />
+        )}
 
         {visibleOrders.length > pageSize ? (
           <View style={styles.paginationRow}>
@@ -327,6 +352,9 @@ function OrderHistoryCard({
     month: 'short',
   });
   const cardWidth = isTablet ? '49%' : '100%';
+  const paidAmount = Number(order.billing.paidAmount ?? 0);
+  const remainingAmount = Number(order.billing.remainingAmount ?? 0);
+  const paymentMode = order.billing.paymentMode || '-';
 
   return (
     <TouchableOpacity
@@ -373,13 +401,26 @@ function OrderHistoryCard({
         <FooterMeta label="Total Price:" value={`Rs. ${order.billing.totalPayable}`} right isTablet={isTablet} />
       </View>
 
-      {Number(order.billing.remainingAmount ?? 0) > 0 ? (
+      <View style={styles.paymentSummaryRow}>
+        <Text style={styles.paymentSummaryText}>
+          Paid: Rs. {paidAmount.toLocaleString('en-IN')}
+        </Text>
+        <Text style={styles.paymentSummaryText}>
+          Mode: {paymentMode}
+        </Text>
+      </View>
+
+      {remainingAmount > 0 ? (
         <View style={styles.pendingPaymentRow}>
           <Text style={styles.pendingPaymentText}>
-            Pending payment: Rs. {Number(order.billing.remainingAmount ?? 0).toLocaleString('en-IN')}
+            Pending payment: Rs. {remainingAmount.toLocaleString('en-IN')}
           </Text>
         </View>
-      ) : null}
+      ) : (
+        <View style={styles.completedPaymentRow}>
+          <Text style={styles.completedPaymentText}>Fully paid</Text>
+        </View>
+      )}
     </TouchableOpacity>
   );
 }
@@ -416,6 +457,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: '#F4F5FA',
   },
+  centerInline: {
+    minHeight: 260,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   header: {
     backgroundColor: Colors.white,
     paddingTop: Platform.OS === 'ios' ? 52 : 36,
@@ -444,6 +490,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     color: '#252A33',
+  },
+  headerSpinner: {
+    marginLeft: 8,
   },
   sectionLabelTablet: {
     marginLeft: 8,
@@ -683,6 +732,32 @@ const styles = StyleSheet.create({
   pendingPaymentText: {
     fontSize: 12,
     color: '#B45309',
+    fontWeight: '700',
+  },
+  paymentSummaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 8,
+    marginTop: 10,
+  },
+  paymentSummaryText: {
+    flex: 1,
+    fontSize: 11.5,
+    color: '#5F6778',
+    fontWeight: '600',
+  },
+  completedPaymentRow: {
+    marginTop: 10,
+    borderRadius: 12,
+    backgroundColor: '#ECFDF3',
+    borderWidth: 1,
+    borderColor: '#B7E4C7',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  completedPaymentText: {
+    fontSize: 12,
+    color: '#17803D',
     fontWeight: '700',
   },
   emptyText: {

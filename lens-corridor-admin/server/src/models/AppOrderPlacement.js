@@ -20,6 +20,8 @@ const paymentEntrySchema = new mongoose.Schema({
   amount: { type: Number, default: 0 },
   paymentMode: { type: String, enum: ['Online', 'Card', 'Cash'], default: 'Online' },
   collectedAt: { type: Date, default: Date.now },
+  paymentDate: { type: String, default: '' },
+  paymentTime: { type: String, default: '' },
 }, { _id: false });
 
 const appOrderPlacementSchema = new mongoose.Schema({

@@ -109,6 +109,9 @@ const buildLensCategoryEditRoute = (masterId) => `/masters/lens-category/edit/${
 const buildEmployeeEditRoute = (employeeId) => `/employees/edit/${encodeURIComponent(employeeId)}`
 const buildStoreEditRoute = (storeId) => `/stores/edit/${encodeURIComponent(storeId)}`
 const buildOrderDetailsRoute = (orderId) => `/orders/${encodeURIComponent(orderId)}`
+const ORDER_DATA_CACHE_TTL_MS = 30 * 1000
+let cachedAdminOrders = []
+let cachedAdminOrdersAt = 0
 
 const toInputDate = (value) => {
   const year = value.getFullYear()
@@ -323,6 +326,27 @@ const getPaymentStatusTone = (order) => (
 const getCollectableAmount = (order) => Math.max(0, Number(order?.billing?.remainingAmount ?? 0))
 
 const formatCurrency = (value = 0) => `Rs. ${Number(value || 0).toLocaleString('en-IN')}`
+
+const getOrderPayments = (order) => {
+  const payments = Array.isArray(order?.billing?.payments)
+    ? order.billing.payments.filter((payment) => Number(payment?.amount ?? 0) > 0)
+    : []
+
+  if (payments.length > 0) {
+    return payments
+  }
+
+  const fallbackAmount = Number(order?.billing?.paidAmount ?? 0)
+  if (fallbackAmount <= 0) {
+    return []
+  }
+
+  return [{
+    amount: fallbackAmount,
+    paymentMode: order?.billing?.paymentMode || 'Online',
+    collectedAt: order?.createdAt || order?.invoiceDate || new Date().toISOString(),
+  }]
+}
 
 const formatOrderDate = (value) => {
   if (!value) {
@@ -627,8 +651,9 @@ const AdminPanel = ({ user, onLogout }) => {
   const [powerTypes, setPowerTypes] = useState([])
   const [powerTypesLoading, setPowerTypesLoading] = useState(false)
   const [powerTypesError, setPowerTypesError] = useState('')
-  const [appOrders, setAppOrders] = useState([])
-  const [appOrdersLoading, setAppOrdersLoading] = useState(false)
+  const [appOrders, setAppOrders] = useState(cachedAdminOrders)
+  const [appOrdersLoading, setAppOrdersLoading] = useState(cachedAdminOrders.length === 0)
+  const [appOrdersRefreshing, setAppOrdersRefreshing] = useState(false)
   const [appOrdersError, setAppOrdersError] = useState('')
   const [returnRequests, setReturnRequests] = useState([])
   const [returnRequestsLoading, setReturnRequestsLoading] = useState(false)
@@ -639,6 +664,7 @@ const AdminPanel = ({ user, onLogout }) => {
   const [orderPhoneSearch, setOrderPhoneSearch] = useState('')
   const [orderPage, setOrderPage] = useState(1)
   const [paymentCollectionAmount, setPaymentCollectionAmount] = useState('')
+  const [paymentCollectionMode, setPaymentCollectionMode] = useState('Cash')
   const [paymentCollectionSaving, setPaymentCollectionSaving] = useState(false)
   const [paymentCollectionMessage, setPaymentCollectionMessage] = useState('')
   const [customers, setCustomers] = useState([])
@@ -1039,29 +1065,44 @@ const AdminPanel = ({ user, onLogout }) => {
       { label: 'AOV', value: formatCurrency(Math.round(averageOrderValue)) },
     ]
   }, [dashboardOrders])
-  const paymentDateRangeOrders = useMemo(() => {
+  const paymentDateRangePayments = useMemo(() => {
     const from = parseDateValue(fromDate)
     const to = parseDateValue(toDate)
     const fromBound = from ? startOfDay(from) : null
     const toBound = to ? endOfDay(to) : null
 
-    return dashboardOrders.filter((order) => {
-      const createdAt = parseDateValue(order.createdAt)
-      if (!createdAt) {
-        return false
-      }
+    return dashboardOrders.flatMap((order) => (
+      getOrderPayments(order)
+        .map((payment, index) => ({
+          key: `${order.id || order.orderNumber || 'order'}-${payment.collectedAt || index}-${index}`,
+          orderId: order.id,
+          remainingAmount: Number(order.billing?.remainingAmount ?? 0),
+          paymentMode: payment?.paymentMode || 'Online',
+          amount: Number(payment?.amount ?? 0),
+          collectedAt: payment?.collectedAt,
+        }))
+        .filter((payment) => {
+          const collectedAt = parseDateValue(payment.collectedAt)
+          if (!collectedAt) {
+            return false
+          }
 
-      if (fromBound && createdAt < fromBound) {
-        return false
-      }
+          if (fromBound && collectedAt < fromBound) {
+            return false
+          }
 
-      if (toBound && createdAt > toBound) {
-        return false
-      }
+          if (toBound && collectedAt > toBound) {
+            return false
+          }
 
-      return true
-    })
+          return true
+        })
+    ))
   }, [dashboardOrders, fromDate, toDate])
+  const paymentDateRangeOrders = useMemo(() => {
+    const includedOrderIds = new Set(paymentDateRangePayments.map((payment) => payment.orderId))
+    return dashboardOrders.filter((order) => includedOrderIds.has(order.id))
+  }, [dashboardOrders, paymentDateRangePayments])
   const paymentSummary = useMemo(() => {
     const summary = {
       Cash: { amount: 0, count: 0 },
@@ -1069,12 +1110,12 @@ const AdminPanel = ({ user, onLogout }) => {
       Online: { amount: 0, count: 0 },
     }
 
-    paymentDateRangeOrders.forEach((order) => {
-      const mode = order.billing?.paymentMode || 'Online'
+    paymentDateRangePayments.forEach((payment) => {
+      const mode = payment.paymentMode || 'Online'
       if (!summary[mode]) {
         summary[mode] = { amount: 0, count: 0 }
       }
-      summary[mode].amount += Number(order.billing?.paidAmount ?? 0)
+      summary[mode].amount += Number(payment.amount ?? 0)
       summary[mode].count += 1
     })
 
@@ -1088,7 +1129,7 @@ const AdminPanel = ({ user, onLogout }) => {
       pendingCollection,
       topMode,
     }
-  }, [paymentDateRangeOrders])
+  }, [paymentDateRangeOrders, paymentDateRangePayments])
   const paymentBreakdown = useMemo(() => {
     const partialPaymentOrders = paymentDateRangeOrders.filter((order) => Number(order.billing?.remainingAmount ?? 0) > 0)
     const completedOrders = paymentDateRangeOrders.filter((order) => Number(order.billing?.remainingAmount ?? 0) <= 0)
@@ -1099,7 +1140,7 @@ const AdminPanel = ({ user, onLogout }) => {
           ? `${paymentSummary.topMode[0]} collections lead this range`
           : 'No payment activity in selected range',
         meta: paymentSummary.topMode
-          ? `${formatCurrency(paymentSummary.topMode[1].amount)} collected across ${paymentSummary.topMode[1].count} orders`
+          ? `${formatCurrency(paymentSummary.topMode[1].amount)} collected across ${paymentSummary.topMode[1].count} payment${paymentSummary.topMode[1].count === 1 ? '' : 's'}`
           : 'Change the date range or wait for new app orders.',
       },
       {
@@ -1108,10 +1149,10 @@ const AdminPanel = ({ user, onLogout }) => {
       },
       {
         title: `${completedOrders.length} fully collected order${completedOrders.length === 1 ? '' : 's'}`,
-        meta: `${paymentDateRangeOrders.length} total order${paymentDateRangeOrders.length === 1 ? '' : 's'} in the chosen date range.`,
+        meta: `${paymentDateRangePayments.length} total payment${paymentDateRangePayments.length === 1 ? '' : 's'} collected in the chosen date range.`,
       },
     ]
-  }, [paymentDateRangeOrders, paymentSummary])
+  }, [paymentDateRangeOrders, paymentDateRangePayments, paymentSummary])
   const normalizedMasterItems = masterItems.map((item) => summarizeMasterItem(masterSection, item))
   const selectedMaster = normalizedMasterItems[selectedMasterIndex] || normalizedMasterItems[0]
   const masterCountLabel = `${normalizedMasterItems.length} record${normalizedMasterItems.length === 1 ? '' : 's'}`
@@ -1119,6 +1160,7 @@ const AdminPanel = ({ user, onLogout }) => {
   const storeOptions = stores
   const isFrameShapesMaster = masterSection === 'frame-shapes'
   const isMastersManagementRoute = activeScreen === 'masters'
+  const shouldLoadAdminOrders = ['dashboard', 'orders', 'order-details', 'cash'].includes(activeScreen)
 
   useEffect(() => {
     const handleResize = () => {
@@ -1459,8 +1501,28 @@ const AdminPanel = ({ user, onLogout }) => {
   useEffect(() => {
     const controller = new AbortController()
 
+    if (!shouldLoadAdminOrders) {
+      return () => controller.abort()
+    }
+
     const fetchOrders = async () => {
-      setAppOrdersLoading(true)
+      const hasCachedOrders = cachedAdminOrders.length > 0
+      const cacheIsFresh = hasCachedOrders && (Date.now() - cachedAdminOrdersAt) < ORDER_DATA_CACHE_TTL_MS
+
+      if (cacheIsFresh) {
+        setAppOrders(cachedAdminOrders)
+        setAppOrdersLoading(false)
+        setAppOrdersRefreshing(false)
+        return
+      }
+
+      if (hasCachedOrders) {
+        setAppOrders(cachedAdminOrders)
+        setAppOrdersRefreshing(true)
+        setAppOrdersLoading(false)
+      } else {
+        setAppOrdersLoading(true)
+      }
       setAppOrdersError('')
 
       try {
@@ -1475,6 +1537,8 @@ const AdminPanel = ({ user, onLogout }) => {
         }
 
         const payload = Array.isArray(data?.data) ? data.data : []
+        cachedAdminOrders = payload
+        cachedAdminOrdersAt = Date.now()
         setAppOrders(payload)
         setSelectedAppOrderId((current) => (
           routeState?.screen === 'order-details' && routeState.orderId && payload.some((item) => item.id === routeState.orderId)
@@ -1486,17 +1550,20 @@ const AdminPanel = ({ user, onLogout }) => {
           return
         }
 
-        setAppOrders([])
+        if (!cachedAdminOrders.length) {
+          setAppOrders([])
+        }
         setAppOrdersError(error.message || 'Failed to fetch orders')
       } finally {
         setAppOrdersLoading(false)
+        setAppOrdersRefreshing(false)
       }
     }
 
     fetchOrders()
 
     return () => controller.abort()
-  }, [])
+  }, [routeState, shouldLoadAdminOrders])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -1610,6 +1677,7 @@ const AdminPanel = ({ user, onLogout }) => {
 
     setSelectedAppOrderId(order.id)
     setPaymentCollectionAmount('')
+    setPaymentCollectionMode(order?.billing?.paymentMode || 'Cash')
     setPaymentCollectionMessage('')
     navigate(buildOrderDetailsRoute(order.id))
     setSidebarOpen(false)
@@ -1642,9 +1710,14 @@ const AdminPanel = ({ user, onLogout }) => {
         throw new Error(data?.message || 'Failed to update order status')
       }
 
-      setAppOrders((current) => current.map((item) => (
-        item.id === order.id ? data.data : item
-      )))
+      setAppOrders((current) => {
+        const nextOrders = current.map((item) => (
+          item.id === order.id ? data.data : item
+        ))
+        cachedAdminOrders = nextOrders
+        cachedAdminOrdersAt = Date.now()
+        return nextOrders
+      })
     } catch (error) {
       setAppOrdersError(error.message || 'Failed to update order status')
     }
@@ -1676,7 +1749,10 @@ const AdminPanel = ({ user, onLogout }) => {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ additionalCollectedAmount }),
+        body: JSON.stringify({
+          additionalCollectedAmount,
+          paymentMode: paymentCollectionMode,
+        }),
       })
 
       const data = await response.json().catch(() => null)
@@ -1685,9 +1761,14 @@ const AdminPanel = ({ user, onLogout }) => {
         throw new Error(data?.message || 'Failed to update payment collection')
       }
 
-      setAppOrders((current) => current.map((item) => (
-        item.id === order.id ? data.data : item
-      )))
+      setAppOrders((current) => {
+        const nextOrders = current.map((item) => (
+          item.id === order.id ? data.data : item
+        ))
+        cachedAdminOrders = nextOrders
+        cachedAdminOrdersAt = Date.now()
+        return nextOrders
+      })
       setPaymentCollectionAmount('')
       setPaymentCollectionMessage(`Collected ${formatCurrency(additionalCollectedAmount)} successfully.`)
     } catch (error) {
@@ -2598,6 +2679,7 @@ const AdminPanel = ({ user, onLogout }) => {
                       <span className="pill">{filteredAppOrders.length} Orders</span>
                       <span className="pill">{orderPageCount} Page{orderPageCount === 1 ? '' : 's'}</span>
                       <span className="pill">Mobile App</span>
+                      {appOrdersRefreshing ? <span className="pill">Refreshing...</span> : null}
                       {selectedOrderStore ? <span className="pill">{selectedOrderStore.name}</span> : null}
                     </div>
                   </div>
@@ -2720,6 +2802,9 @@ const AdminPanel = ({ user, onLogout }) => {
                                   {`Payment: ${getPaymentStatusLabel(order)}`}
                                 </StatusBadge>
                               </div>
+                              <small className="table-cell-secondary">
+                                {`Paid ${formatCurrency(order.billing?.paidAmount)} | Remaining ${formatCurrency(order.billing?.remainingAmount)} | ${order.billing?.paymentMode || 'Unknown'}`}
+                              </small>
                             </td>
                             <td>
                               <div className="table-action-pills">
@@ -2941,6 +3026,16 @@ const AdminPanel = ({ user, onLogout }) => {
                                     type="text"
                                     value={paymentCollectionAmount}
                                   />
+                                  <select
+                                    className="input filled"
+                                    onChange={(event) => setPaymentCollectionMode(event.target.value)}
+                                    style={{ minWidth: 130 }}
+                                    value={paymentCollectionMode}
+                                  >
+                                    <option value="Cash">Cash</option>
+                                    <option value="Card">Card</option>
+                                    <option value="Online">Online</option>
+                                  </select>
                                   <button
                                     className="primary-btn soft-btn"
                                     disabled={paymentCollectionSaving}
@@ -3151,6 +3246,9 @@ const AdminPanel = ({ user, onLogout }) => {
                       <p className="eyebrow">Payment summary</p>
                       <h4>Cash, card, and UPI collections</h4>
                     </div>
+                    <div className="filter-pills">
+                      {appOrdersRefreshing ? <span className="pill">Refreshing...</span> : null}
+                    </div>
                   </div>
                   <div className="filter-group">
                     <label className="date-pill">
@@ -3163,9 +3261,9 @@ const AdminPanel = ({ user, onLogout }) => {
                     </label>
                   </div>
                   <div className="metric-grid compact">
-                    <MetricCard hint={`${paymentSummary.modes.Cash.count} cash order${paymentSummary.modes.Cash.count === 1 ? '' : 's'}`} label="Cash Received" value={formatCurrency(paymentSummary.modes.Cash.amount)} />
-                    <MetricCard hint={`${paymentSummary.modes.Card.count} card order${paymentSummary.modes.Card.count === 1 ? '' : 's'}`} label="Card Received" value={formatCurrency(paymentSummary.modes.Card.amount)} />
-                    <MetricCard hint={`${paymentSummary.modes.Online.count} online order${paymentSummary.modes.Online.count === 1 ? '' : 's'}`} label="Online Received" value={formatCurrency(paymentSummary.modes.Online.amount)} />
+                    <MetricCard hint={`${paymentSummary.modes.Cash.count} cash payment${paymentSummary.modes.Cash.count === 1 ? '' : 's'}`} label="Cash Received" value={formatCurrency(paymentSummary.modes.Cash.amount)} />
+                    <MetricCard hint={`${paymentSummary.modes.Card.count} card payment${paymentSummary.modes.Card.count === 1 ? '' : 's'}`} label="Card Received" value={formatCurrency(paymentSummary.modes.Card.amount)} />
+                    <MetricCard hint={`${paymentSummary.modes.Online.count} online payment${paymentSummary.modes.Online.count === 1 ? '' : 's'}`} label="Online Received" value={formatCurrency(paymentSummary.modes.Online.amount)} />
                     <MetricCard hint={`Pending to collect ${formatCurrency(paymentSummary.pendingCollection)}`} label="Total Received" value={formatCurrency(paymentSummary.totalCollected)} />
                   </div>
                 </section>

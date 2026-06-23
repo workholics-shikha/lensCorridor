@@ -22,6 +22,92 @@ import { useResponsiveMetrics } from '@/lib/responsive';
 
 type PaymentMode = 'Online' | 'Card' | 'Cash';
 
+function getEffectivePaymentMode(order: OrderPlacementRecord | null) {
+  if (!order) {
+    return '-';
+  }
+
+  const payments = Array.isArray(order.billing.payments) ? order.billing.payments : [];
+  const latestPayment = payments[payments.length - 1];
+
+  return latestPayment?.paymentMode || order.billing.paymentMode || '-';
+}
+
+function getPaymentEntryLabel(index: number, totalPayments: number, remainingAmount: number) {
+  if (totalPayments === 1) {
+    return remainingAmount > 0 ? 'Advance Payment' : 'Payment 1';
+  }
+
+  if (index === 0) {
+    return 'Advance Payment';
+  }
+
+  if (index === totalPayments - 1 && remainingAmount <= 0) {
+    return 'Final Payment';
+  }
+
+  return `Installment ${index + 1}`;
+}
+
+function mergePaymentUpdate(
+  currentOrder: OrderPlacementRecord,
+  updatedOrder: OrderPlacementRecord,
+  amount: number,
+  paymentMode: PaymentMode
+) {
+  const currentPaidAmount = Number(currentOrder.billing.paidAmount ?? 0);
+  const currentRemainingAmount = Number(currentOrder.billing.remainingAmount ?? 0);
+  const nextPaidAmount = currentPaidAmount + amount;
+  const nextRemainingAmount = Math.max(currentRemainingAmount - amount, 0);
+  const existingPayments = Array.isArray(currentOrder.billing.payments) ? currentOrder.billing.payments : [];
+  const inferredExistingPayments = existingPayments.length > 0
+    ? existingPayments
+    : currentPaidAmount > 0
+      ? [{
+          amount: currentPaidAmount,
+          paymentMode: currentOrder.billing.paymentMode || paymentMode,
+          collectedAt: currentOrder.invoiceDate || currentOrder.createdAt,
+        }]
+      : [];
+  const responsePayments = Array.isArray(updatedOrder.billing.payments) ? updatedOrder.billing.payments : [];
+  const fallbackNewPayment = {
+    amount,
+    paymentMode,
+    collectedAt: new Date().toISOString(),
+  };
+  const responseLatestPayment = responsePayments[responsePayments.length - 1];
+  const hasRecordedNewPayment = responsePayments.some((payment) => (
+    Number(payment.amount ?? 0) === amount
+    && (payment.paymentMode || '-') === paymentMode
+  ));
+  const shouldAppendNewPayment = amount > 0;
+  const appendedPayment = hasRecordedNewPayment
+    ? responseLatestPayment
+    : fallbackNewPayment;
+  const mergedPayments = responsePayments.length > inferredExistingPayments.length
+    ? responsePayments
+    : shouldAppendNewPayment
+      ? [...inferredExistingPayments, appendedPayment]
+      : inferredExistingPayments;
+  const nextPayments = mergedPayments.filter((payment, index, payments) => {
+    const paymentKey = `${payment.collectedAt || 'unknown'}-${payment.paymentMode || '-'}-${Number(payment.amount ?? 0)}`;
+    return payments.findIndex((item) => (
+      `${item.collectedAt || 'unknown'}-${item.paymentMode || '-'}-${Number(item.amount ?? 0)}` === paymentKey
+    )) === index;
+  });
+
+  return {
+    ...updatedOrder,
+    billing: {
+      ...updatedOrder.billing,
+      paymentMode: updatedOrder.billing.paymentMode || paymentMode,
+      paidAmount: Number(updatedOrder.billing.paidAmount ?? nextPaidAmount),
+      remainingAmount: Number(updatedOrder.billing.remainingAmount ?? nextRemainingAmount),
+      payments: nextPayments,
+    },
+  };
+}
+
 export default function OrderDetailsScreen() {
   const viewport = useResponsiveMetrics();
   const { orderId } = useLocalSearchParams<{ orderId?: string }>();
@@ -45,7 +131,7 @@ export default function OrderDetailsScreen() {
 
     let active = true;
 
-    fetchOrderPlacementById(orderId)
+    fetchOrderPlacementById(orderId, { bypassCache: true })
       .then((item) => {
         if (active) {
           setOrder(item);
@@ -97,21 +183,42 @@ export default function OrderDetailsScreen() {
     }
 
     const rawPayments = Array.isArray(order.billing.payments) ? order.billing.payments : [];
+    const formatCollectedAt = (value?: string) => {
+      if (!value) {
+        return { date: 'Unavailable', time: '-' };
+      }
+
+      const parsedDate = new Date(value);
+      if (Number.isNaN(parsedDate.getTime())) {
+        return { date: value, time: '-' };
+      }
+
+      return {
+        date: parsedDate.toLocaleDateString('en-GB', {
+          day: 'numeric',
+          month: 'short',
+          year: 'numeric',
+        }),
+        time: parsedDate.toLocaleTimeString('en-GB', {
+          hour: 'numeric',
+          minute: '2-digit',
+        }),
+      };
+    };
 
     if (rawPayments.length > 0) {
-      return rawPayments.map((payment, index) => ({
-        key: `${payment.collectedAt ?? index}-${index}`,
-        label: `Payment ${index + 1}`,
-        mode: payment.paymentMode,
-        amount: Number(payment.amount ?? 0),
-        collectedAt: payment.collectedAt
-          ? new Date(payment.collectedAt).toLocaleDateString('en-GB', {
-              day: 'numeric',
-              month: 'short',
-              year: 'numeric',
-            })
-          : '',
-      }));
+      return rawPayments.map((payment, index) => {
+        const collectedAt = formatCollectedAt(payment.collectedAt);
+
+        return {
+          key: `${payment.collectedAt ?? index}-${index}`,
+          label: getPaymentEntryLabel(index, rawPayments.length, Number(order.billing.remainingAmount ?? 0)),
+          mode: payment.paymentMode || '-',
+          amount: Number(payment.amount ?? 0),
+          collectedDate: payment.paymentDate || collectedAt.date,
+          collectedTime: payment.paymentTime || collectedAt.time,
+        };
+      });
     }
 
     const fallbackPaidAmount = Number(order.billing.paidAmount ?? 0);
@@ -119,12 +226,15 @@ export default function OrderDetailsScreen() {
       return [];
     }
 
+    const fallbackCollectedAt = formatCollectedAt(order.invoiceDate);
+
     return [{
       key: 'initial-payment',
-      label: 'Payment 1',
-      mode: order.billing.paymentMode,
+      label: Number(order.billing.remainingAmount ?? 0) > 0 ? 'Advance Payment' : 'Payment 1',
+      mode: order.billing.paymentMode || '-',
       amount: fallbackPaidAmount,
-      collectedAt: order.invoiceDate,
+      collectedDate: fallbackCollectedAt.date,
+      collectedTime: fallbackCollectedAt.time,
     }];
   }, [order]);
 
@@ -149,6 +259,7 @@ export default function OrderDetailsScreen() {
   const totalPayable = order.billing.totalPayable.toLocaleString('en-IN');
   const remainingAmount = Number(order.billing.remainingAmount ?? 0);
   const paidAmount = Number(order.billing.paidAmount ?? 0);
+  const effectivePaymentMode = getEffectivePaymentMode(order);
   const hasPendingPayment = remainingAmount > 0;
   const canReorder = !hasPendingPayment;
   const handleReorder = () => {
@@ -157,7 +268,7 @@ export default function OrderDetailsScreen() {
   };
   const handleOpenPaymentModal = () => {
     setCollectionAmount(String(remainingAmount));
-    setCollectionMode(order.billing.paymentMode);
+    setCollectionMode((effectivePaymentMode === '-' ? 'Cash' : effectivePaymentMode) as PaymentMode);
     setPaymentError('');
     setPaymentModalOpen(true);
   };
@@ -182,8 +293,31 @@ export default function OrderDetailsScreen() {
         additionalCollectedAmount: numericAmount,
         paymentMode: collectionMode,
       });
-      setOrder(updatedOrder);
+
+      setOrder((currentOrder) => {
+        if (!currentOrder) {
+          return updatedOrder;
+        }
+
+        return mergePaymentUpdate(currentOrder, updatedOrder, numericAmount, collectionMode);
+      });
       setPaymentModalOpen(false);
+
+      if (orderId) {
+        fetchOrderPlacementById(orderId, { bypassCache: true })
+          .then((freshOrder) => {
+            setOrder((currentOrder) => {
+              if (!currentOrder) {
+                return freshOrder;
+              }
+
+              return mergePaymentUpdate(currentOrder, freshOrder, 0, collectionMode);
+            });
+          })
+          .catch(() => {
+            // Keep optimistic state if the refresh request fails.
+          });
+      }
     } catch (paymentUpdateError) {
       setPaymentError(paymentUpdateError instanceof Error ? paymentUpdateError.message : 'Unable to update payment.');
     } finally {
@@ -288,8 +422,23 @@ export default function OrderDetailsScreen() {
           {paymentEntries.length > 0 ? (
             <View style={[styles.paymentHistoryCard, isTablet && styles.paymentHistoryCardTablet]}>
               <Text style={[styles.paymentHistoryTitle, isTablet && styles.paymentHistoryTitleTablet]}>
-                Payment Summary
+                Payment History
               </Text>
+
+              <Text style={[styles.paymentHistorySubtitle, isTablet && styles.paymentHistorySubtitleTablet]}>
+                {paymentEntries.length} payment{paymentEntries.length === 1 ? '' : 's'} recorded for this order
+              </Text>
+
+              <View style={styles.paymentTotalsRow}>
+                <Text style={[styles.paymentTotalsText, isTablet && styles.paymentTotalsTextTablet]}>
+                  Total paid: Rs. {paidAmount.toLocaleString('en-IN')}
+                </Text>
+                <Text style={[styles.paymentTotalsText, remainingAmount > 0 && styles.paymentTotalsPending, isTablet && styles.paymentTotalsTextTablet]}>
+                  {remainingAmount > 0
+                    ? `Remaining: Rs. ${remainingAmount.toLocaleString('en-IN')}`
+                    : 'Fully paid'}
+                </Text>
+              </View>
 
               {paymentEntries.map((payment) => (
                 <View key={payment.key} style={styles.paymentHistoryRow}>
@@ -297,13 +446,27 @@ export default function OrderDetailsScreen() {
                     <Text style={[styles.paymentHistoryLabel, isTablet && styles.paymentHistoryLabelTablet]}>
                       {payment.label}
                     </Text>
-                    <Text style={[styles.paymentHistoryMeta, isTablet && styles.paymentHistoryMetaTablet]}>
-                      {payment.mode}{payment.collectedAt ? `  |  ${payment.collectedAt}` : ''}
+                    <View style={styles.paymentDetailGrid}>
+                      <View style={styles.paymentDetailItem}>
+                        <Text style={[styles.paymentDetailLabel, isTablet && styles.paymentDetailLabelTablet]}>Mode</Text>
+                        <Text style={[styles.paymentDetailValue, isTablet && styles.paymentDetailValueTablet]}>{payment.mode}</Text>
+                      </View>
+                      <View style={styles.paymentDetailItem}>
+                        <Text style={[styles.paymentDetailLabel, isTablet && styles.paymentDetailLabelTablet]}>Date</Text>
+                        <Text style={[styles.paymentDetailValue, isTablet && styles.paymentDetailValueTablet]}>{payment.collectedDate}</Text>
+                      </View>
+                      <View style={styles.paymentDetailItem}>
+                        <Text style={[styles.paymentDetailLabel, isTablet && styles.paymentDetailLabelTablet]}>Time</Text>
+                        <Text style={[styles.paymentDetailValue, isTablet && styles.paymentDetailValueTablet]}>{payment.collectedTime}</Text>
+                      </View>
+                    </View>
+                  </View>
+                  <View style={styles.paymentAmountBlock}>
+                    <Text style={[styles.paymentDetailLabel, isTablet && styles.paymentDetailLabelTablet]}>Amount</Text>
+                    <Text style={[styles.paymentHistoryAmount, isTablet && styles.paymentHistoryAmountTablet]}>
+                      Rs. {payment.amount.toLocaleString('en-IN')}
                     </Text>
                   </View>
-                  <Text style={[styles.paymentHistoryAmount, isTablet && styles.paymentHistoryAmountTablet]}>
-                    Rs. {payment.amount.toLocaleString('en-IN')}
-                  </Text>
                 </View>
               ))}
             </View>
@@ -311,7 +474,7 @@ export default function OrderDetailsScreen() {
 
           <View style={styles.bottomRow}>
             <Text style={[styles.paymentModeText, isTablet && styles.paymentModeTextTablet]}>
-              Payment Mode  -  <Text style={styles.paymentModeValue}>{order.billing.paymentMode}</Text>
+              Latest Payment Mode  -  <Text style={styles.paymentModeValue}>{effectivePaymentMode}</Text>
             </Text>
 
             <TouchableOpacity
@@ -724,6 +887,16 @@ const styles = StyleSheet.create({
     fontSize: 14.5,
     marginBottom: 10,
   },
+  paymentHistorySubtitle: {
+    fontSize: 10.5,
+    color: '#667085',
+    marginTop: -2,
+    marginBottom: 10,
+  },
+  paymentHistorySubtitleTablet: {
+    fontSize: 12,
+    marginBottom: 12,
+  },
   paymentHistoryRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -732,9 +905,53 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#EEF1F5',
   },
+  paymentTotalsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 10,
+    paddingBottom: 10,
+  },
+  paymentTotalsText: {
+    flex: 1,
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#344054',
+  },
+  paymentTotalsTextTablet: {
+    fontSize: 13,
+  },
+  paymentTotalsPending: {
+    color: '#B45309',
+    textAlign: 'right',
+  },
   paymentHistoryLeft: {
     flex: 1,
     paddingRight: 12,
+  },
+  paymentDetailGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginTop: 6,
+  },
+  paymentDetailItem: {
+    minWidth: 76,
+  },
+  paymentDetailLabel: {
+    fontSize: 10,
+    color: '#98A1B2',
+  },
+  paymentDetailLabelTablet: {
+    fontSize: 11.5,
+  },
+  paymentDetailValue: {
+    marginTop: 2,
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: '#20242B',
+  },
+  paymentDetailValueTablet: {
+    fontSize: 12.5,
   },
   paymentHistoryLabel: {
     fontSize: 11.5,
@@ -753,7 +970,12 @@ const styles = StyleSheet.create({
     marginTop: 4,
     fontSize: 12,
   },
+  paymentAmountBlock: {
+    minWidth: 96,
+    alignItems: 'flex-end',
+  },
   paymentHistoryAmount: {
+    marginTop: 2,
     fontSize: 12,
     fontWeight: '700',
     color: Colors.primary,
