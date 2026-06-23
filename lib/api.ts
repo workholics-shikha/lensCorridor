@@ -262,6 +262,12 @@ export interface EyeTestRecord extends EyeTestPayload {
   updatedAt: string;
 }
 
+const DEFAULT_CACHE_TTL_MS = 30 * 1000;
+const SEARCH_CACHE_TTL_MS = 10 * 1000;
+
+const responseCache = new Map<string, { expiresAt: number; value: unknown }>();
+const inFlightRequests = new Map<string, Promise<unknown>>();
+
 function getApiBaseUrl() {
   const configuredBaseUrl =
     process.env.EXPO_PUBLIC_API_BASE_URL?.trim();
@@ -295,6 +301,68 @@ function resolveApiAssetUrl(path?: string) {
   return `${getApiBaseUrl()}${normalizedPath}`;
 }
 
+async function fetchJsonWithCache<T>(
+  url: string,
+  init?: RequestInit,
+  options?: {
+    cacheKey?: string;
+    ttlMs?: number;
+    bypassCache?: boolean;
+  }
+): Promise<T> {
+  const method = (init?.method ?? 'GET').toUpperCase();
+  const cacheKey = options?.cacheKey ?? `${method}:${url}`;
+  const shouldCache = method === 'GET' && !options?.bypassCache;
+  const ttlMs = options?.ttlMs ?? DEFAULT_CACHE_TTL_MS;
+
+  if (shouldCache) {
+    const cached = responseCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.value as T;
+    }
+
+    const pending = inFlightRequests.get(cacheKey);
+    if (pending) {
+      return pending as Promise<T>;
+    }
+  }
+
+  const request = fetch(url, init).then(async (response) => {
+    if (!response.ok) {
+      throw new Error(`API returned ${response.status}`);
+    }
+
+    const payload = await response.json();
+
+    if (shouldCache) {
+      responseCache.set(cacheKey, {
+        value: payload,
+        expiresAt: Date.now() + ttlMs,
+      });
+    }
+
+    return payload as T;
+  }).finally(() => {
+    if (shouldCache) {
+      inFlightRequests.delete(cacheKey);
+    }
+  });
+
+  if (shouldCache) {
+    inFlightRequests.set(cacheKey, request);
+  }
+
+  return request;
+}
+
+function invalidateCacheByPrefix(prefix: string) {
+  for (const key of responseCache.keys()) {
+    if (key.startsWith(prefix)) {
+      responseCache.delete(key);
+    }
+  }
+}
+
 export async function fetchSalespeople(storeId?: string): Promise<Salesperson[]> {
   try {
     const url = new URL(`${getApiBaseUrl()}/api/salesmen`);
@@ -302,12 +370,13 @@ export async function fetchSalespeople(storeId?: string): Promise<Salesperson[]>
       url.searchParams.set('storeId', storeId);
     }
 
-    const response = await fetch(url.toString());
-    if (!response.ok) {
-      throw new Error(`Salesman API returned ${response.status}`);
-    }
-
-    const data = (await response.json()) as SalesmanApiResponse[];
+    const data = await fetchJsonWithCache<SalesmanApiResponse[]>(
+      url.toString(),
+      undefined,
+      {
+        cacheKey: `salesmen:${storeId ?? 'all'}`,
+      }
+    );
     return data
       .filter((item) => (item.status ?? 'Active') === 'Active')
       .map((item) => ({
@@ -323,12 +392,13 @@ export async function fetchSalespeople(storeId?: string): Promise<Salesperson[]>
 
 export async function fetchStores(): Promise<StoreOption[]> {
   try {
-    const response = await fetch(`${getApiBaseUrl()}/api/salesmen`);
-    if (!response.ok) {
-      throw new Error(`Salesman API returned ${response.status}`);
-    }
-
-    const data = (await response.json()) as SalesmanApiResponse[];
+    const data = await fetchJsonWithCache<SalesmanApiResponse[]>(
+      `${getApiBaseUrl()}/api/salesmen`,
+      undefined,
+      {
+        cacheKey: 'salesmen:all',
+      }
+    );
     const uniqueStores = new Map<string, StoreOption>();
 
     for (const item of data) {
@@ -351,12 +421,13 @@ export async function fetchStores(): Promise<StoreOption[]> {
 
 export async function fetchFrameShapes(): Promise<FrameShape[]> {
   try {
-    const response = await fetch(`${getApiBaseUrl()}/api/frame-shapes`);
-    if (!response.ok) {
-      throw new Error(`Frame shape API returned ${response.status}`);
-    }
-
-    const data = (await response.json()) as FrameShapeApiResponse[];
+    const data = await fetchJsonWithCache<FrameShapeApiResponse[]>(
+      `${getApiBaseUrl()}/api/frame-shapes`,
+      undefined,
+      {
+        cacheKey: 'frame-shapes',
+      }
+    );
     return data
       .filter((item) => item.shape)
       .sort((a, b) => (a.priority ?? 999) - (b.priority ?? 999))
@@ -439,12 +510,13 @@ const POWER_TYPE_FALLBACK: PowerTypeOption[] = [
 
 export async function fetchPowerTypes(): Promise<PowerTypeOption[]> {
   try {
-    const response = await fetch(`${getApiBaseUrl()}/api/power-types`);
-    if (!response.ok) {
-      throw new Error(`Power types API returned ${response.status}`);
-    }
-
-    const payload = (await response.json()) as { data?: PowerTypeApiItem[] };
+    const payload = await fetchJsonWithCache<{ data?: PowerTypeApiItem[] }>(
+      `${getApiBaseUrl()}/api/power-types`,
+      undefined,
+      {
+        cacheKey: 'power-types',
+      }
+    );
     const items = payload.data ?? [];
 
     return items
@@ -553,12 +625,7 @@ export async function fetchLensCategories(powerTypeId?: string): Promise<LensCat
       url.searchParams.set('powerTypeId', powerTypeId);
     }
 
-    const response = await fetch(url.toString());
-    if (!response.ok) {
-      throw new Error(`Lens categories API returned ${response.status}`);
-    }
-
-    const payload = (await response.json()) as {
+    const payload = await fetchJsonWithCache<{
       data?: Array<{
         id?: string;
         _id?: string;
@@ -570,7 +637,13 @@ export async function fetchLensCategories(powerTypeId?: string): Promise<LensCat
         priority?: number;
         powertype_id?: Array<{ id?: string; _id?: string } | string>;
       }>
-    };
+    }>(
+      url.toString(),
+      undefined,
+      {
+        cacheKey: `lens-categories:${powerTypeId ?? 'all'}`,
+      }
+    );
 
     return (payload.data ?? [])
       .filter((item) => item.categoryName)
@@ -616,6 +689,7 @@ export async function createOrderPlacement(payload: OrderPlacementPayload): Prom
     throw new Error('Order placement API returned an invalid payload');
   }
 
+  invalidateCacheByPrefix('orders:');
   return result.data;
 }
 
@@ -646,22 +720,26 @@ export async function fetchOrderPlacements(input?: {
     url.searchParams.set('limit', String(input.limit));
   }
 
-  const response = await fetch(url.toString());
-  if (!response.ok) {
-    throw new Error(`Order placement list API returned ${response.status}`);
-  }
-
-  const result = (await response.json()) as { data?: OrderPlacementRecord[] };
+  const result = await fetchJsonWithCache<{ data?: OrderPlacementRecord[] }>(
+    url.toString(),
+    undefined,
+    {
+      cacheKey: `orders:${url.toString()}`,
+      ttlMs: normalizedSearch || normalizedPhone || normalizedOrderNumber ? SEARCH_CACHE_TTL_MS : DEFAULT_CACHE_TTL_MS,
+    }
+  );
   return result.data ?? [];
 }
 
 export async function fetchOrderPlacementById(id: string): Promise<OrderPlacementRecord> {
-  const response = await fetch(`${getApiBaseUrl()}/api/order-placement/${id}`);
-  if (!response.ok) {
-    throw new Error(`Order placement details API returned ${response.status}`);
-  }
-
-  const result = (await response.json()) as { data?: OrderPlacementRecord };
+  const result = await fetchJsonWithCache<{ data?: OrderPlacementRecord }>(
+    `${getApiBaseUrl()}/api/order-placement/${id}`,
+    undefined,
+    {
+      cacheKey: `order:${id}`,
+      ttlMs: SEARCH_CACHE_TTL_MS,
+    }
+  );
   if (!result.data) {
     throw new Error('Order placement details API returned an invalid payload');
   }
@@ -687,6 +765,8 @@ export async function updateOrderPlacementBilling(
     throw new Error(result?.message || `Order billing update API returned ${response.status}`);
   }
 
+  invalidateCacheByPrefix('orders:');
+  invalidateCacheByPrefix(`order:${id}`);
   return result.data;
 }
 
@@ -716,12 +796,14 @@ export async function fetchEyeTests(input?: { mobileNumber?: string }): Promise<
     url.searchParams.set('mobileNumber', normalizedPhone);
   }
 
-  const response = await fetch(url.toString());
-  if (!response.ok) {
-    throw new Error(`Eye test list API returned ${response.status}`);
-  }
-
-  const result = (await response.json().catch(() => null)) as { data?: EyeTestRecord[] } | null;
+  const result = await fetchJsonWithCache<{ data?: EyeTestRecord[] } | null>(
+    url.toString(),
+    undefined,
+    {
+      cacheKey: `eye-tests:${normalizedPhone ?? 'all'}`,
+      ttlMs: normalizedPhone ? SEARCH_CACHE_TTL_MS : DEFAULT_CACHE_TTL_MS,
+    }
+  );
   return result?.data ?? [];
 }
 

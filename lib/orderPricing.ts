@@ -30,15 +30,27 @@ export function getLensPriceFromBand(band?: string) {
   return LENS_PRICE_BY_BAND[band] ?? 0;
 }
 
+function parseCurrencyLike(value?: string | number) {
+  const numericValue = typeof value === 'number' ? value : Number(value || 0);
+  if (!Number.isFinite(numericValue)) {
+    return 0;
+  }
+
+  return numericValue;
+}
+
 export function getOrderAmounts(draft: DraftLike) {
-  const framePrice = Number(draft.price || 0);
-  const discount = Number(draft.billingDiscount || 0);
+  const framePrice = Math.max(parseCurrencyLike(draft.price), 0);
   const powerType = draft.lensSelection?.powerType?.toLowerCase() ?? '';
-  const lensPrice = powerType === 'frame only' ? 0 : Number(draft.lensSelection?.lensPrice || 0);
+  const lensPrice = powerType === 'frame only' ? 0 : Math.max(parseCurrencyLike(draft.lensSelection?.lensPrice), 0);
   const subtotal = framePrice + lensPrice;
+  const rawDiscount = Math.max(parseCurrencyLike(draft.billingDiscount), 0);
+  const discount = Math.min(rawDiscount, subtotal);
   const totalPayable = Math.max(subtotal - discount, 0);
-  const paidAmount = draft.partialPaymentEnabled
-    ? Math.min(Math.max(Number(draft.partialPaymentAmount || 0), 0), totalPayable)
+  const rawPartialAmount = Math.max(parseCurrencyLike(draft.partialPaymentAmount), 0);
+  const partialPaymentEnabled = Boolean(draft.partialPaymentEnabled);
+  const paidAmount = partialPaymentEnabled
+    ? Math.min(rawPartialAmount, totalPayable)
     : totalPayable;
   const remainingAmount = Math.max(totalPayable - paidAmount, 0);
 
@@ -46,8 +58,11 @@ export function getOrderAmounts(draft: DraftLike) {
     framePrice,
     lensPrice,
     discount,
+    rawDiscount,
     subtotal,
     totalPayable,
+    partialPaymentEnabled,
+    rawPartialAmount,
     paidAmount,
     remainingAmount,
   };

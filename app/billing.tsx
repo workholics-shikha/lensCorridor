@@ -18,6 +18,7 @@ import {
 import { ArrowLeft, ChevronRight, FileText, X } from 'lucide-react-native';
 import { useOrderFlow } from '@/context/OrderFlowContext';
 import { createOrderPlacement } from '@/lib/api';
+import { getOrderAmounts } from '@/lib/orderPricing';
 import { formatPersonName } from '@/lib/textFormat';
 import { Shadow } from '@/lib/theme';
 import { useResponsiveMetrics } from '@/lib/responsive';
@@ -70,17 +71,23 @@ export default function BillingScreen() {
     320,
     Math.min(height - (modalVerticalInset * 2), isTablet ? Math.min(height * 0.82, 760) : 560)
   );
-  const framePrice = Number(draft.price || 0);
-  const lensPrice = draft.lensSelection.powerType.toLowerCase() === 'frame only' ? 0 : draft.lensSelection.lensPrice;
-  const subtotal = framePrice + lensPrice;
-  const discountValue = Number(discount || 0);
-  const totalPayable = Math.max(subtotal - discountValue, 0);
-  const rawPartialAmount = Number(partialPaymentAmount || 0);
+  const {
+    framePrice,
+    lensPrice,
+    subtotal,
+    discount: discountValue,
+    rawDiscount,
+    totalPayable,
+    rawPartialAmount,
+    paidAmount,
+    remainingAmount,
+  } = getOrderAmounts({
+    ...draft,
+    billingDiscount: discount,
+    partialPaymentEnabled,
+    partialPaymentAmount,
+  });
   const partialAmountExceedsTotal = partialPaymentEnabled && rawPartialAmount > totalPayable;
-  const paidAmount = partialPaymentEnabled
-    ? Math.min(Math.max(rawPartialAmount, 0), totalPayable)
-    : totalPayable;
-  const remainingAmount = Math.max(totalPayable - paidAmount, 0);
   const primaryFrame = getPreferredFrameImage(draft.frameImages);
 
   const productSubtitle = useMemo(() => {
@@ -111,11 +118,21 @@ export default function BillingScreen() {
   }, []);
 
   useEffect(() => {
+    const normalizedDiscount = String(discountValue);
+    const shouldClearDiscount = discount === '' && totalPayable > 0 && rawDiscount === 0;
+
+    if (!shouldClearDiscount && discount !== normalizedDiscount) {
+      setDiscount(normalizedDiscount);
+      updateDraft({ billingDiscount: normalizedDiscount });
+    }
+  }, [discount, discountValue, rawDiscount, totalPayable, updateDraft]);
+
+  useEffect(() => {
     if (!partialPaymentEnabled) {
       return;
     }
 
-    const normalizedPartialAmount = String(Math.min(Math.max(rawPartialAmount, 0), totalPayable));
+    const normalizedPartialAmount = String(paidAmount);
 
     if ((partialPaymentAmount || '0') !== normalizedPartialAmount) {
       setPartialPaymentAmount(normalizedPartialAmount === '0' && totalPayable === 0 ? '' : normalizedPartialAmount);
@@ -241,7 +258,7 @@ export default function BillingScreen() {
               onChangeText={(value) => {
                 const sanitized = value.replace(/[^0-9]/g, '');
                 setDiscount(sanitized);
-                updateDraft({ billingDiscount: sanitized || '0' });
+                updateDraft({ billingDiscount: sanitized });
               }}
               placeholder="Enter Discount"
               placeholderTextColor="#9095A0"

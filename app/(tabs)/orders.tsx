@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -13,7 +13,7 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { History, Phone, Search } from 'lucide-react-native';
 import { fetchOrderPlacements, type OrderPlacementRecord } from '@/lib/api';
 import { Colors, FontSize, Radius, Shadow, Spacing } from '@/lib/theme';
@@ -38,8 +38,13 @@ export default function OrdersScreen() {
   const [error, setError] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
 
-  useEffect(() => {
+  const loadOrders = useCallback((showLoader: boolean) => {
     let active = true;
+
+    if (showLoader) {
+      setLoading(true);
+    }
+    setError('');
 
     fetchOrderPlacements()
       .then((items) => {
@@ -64,6 +69,13 @@ export default function OrdersScreen() {
       active = false;
     };
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      const cleanup = loadOrders(orders.length === 0);
+      return cleanup;
+    }, [loadOrders, orders.length])
+  );
 
   useEffect(() => {
     const trimmedQuery = searchValue.trim();

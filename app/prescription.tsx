@@ -53,6 +53,15 @@ type SavedPowerItem = {
   createdAt: string;
 };
 
+const PLACEHOLDER_CUSTOMER_NAMES = new Set([
+  'john doe',
+  'henry doe',
+  'heny doe',
+  'demo customer',
+  'test user',
+  'sample customer',
+]);
+
 export default function PrescriptionScreen() {
   const { user } = useAuth();
   const { draft, updateLensDetail } = useOrderFlow();
@@ -131,7 +140,11 @@ export default function PrescriptionScreen() {
           return;
         }
 
-        setSavedPowers(items.map(mapEyeTestToSavedPower));
+        const filteredItems = items.filter((item) => (
+          isUsableSavedEyePower(item, normalizedParentPhone)
+        ));
+
+        setSavedPowers(filteredItems.map(mapEyeTestToSavedPower));
       })
       .catch(() => {
         if (!active) {
@@ -758,6 +771,28 @@ function mapEyeTestToSavedPower(item: EyeTestRecord): SavedPowerItem {
       year: 'numeric',
     }),
   };
+}
+
+function isUsableSavedEyePower(item: EyeTestRecord, normalizedPhone: string) {
+  const itemPhone = item.mobileNumber.replace(/\D/g, '').slice(-10);
+  const normalizedName = item.name.trim().toLowerCase();
+
+  if (!itemPhone || itemPhone !== normalizedPhone) {
+    return false;
+  }
+
+  if (PLACEHOLDER_CUSTOMER_NAMES.has(normalizedName)) {
+    return false;
+  }
+
+  return Boolean(
+    item.spherical?.right !== null
+    || item.spherical?.left !== null
+    || item.cylindrical?.right !== null
+    || item.cylindrical?.left !== null
+    || item.axis?.right !== null
+    || item.axis?.left !== null
+  );
 }
 
 function formatEyePowerValue(value: number | null | undefined) {

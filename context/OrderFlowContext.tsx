@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
 
 export type LensSelection = {
   lensType: string;
@@ -99,33 +99,40 @@ const OrderFlowContext = createContext<OrderFlowContextType | null>(null);
 
 export function OrderFlowProvider({ children }: { children: React.ReactNode }) {
   const [draft, setDraft] = useState<OrderDraft>(defaultDraft);
+  const updateDraft = useCallback((patch: Partial<OrderDraft>) => {
+    setDraft((current) => ({ ...current, ...patch }));
+  }, []);
+
+  const updateLensSelection = useCallback((patch: Partial<LensSelection>) => {
+    setDraft((current) => ({
+      ...current,
+      lensSelection: {
+        ...current.lensSelection,
+        ...patch,
+      },
+    }));
+  }, []);
+
+  const updateLensDetail = useCallback((id: string, patch: Partial<LensDetail>) => {
+    setDraft((current) => ({
+      ...current,
+      lensDetails: current.lensDetails.map((item) => (
+        item.id === id ? { ...item, ...patch } : item
+      )),
+    }));
+  }, []);
+
+  const resetDraft = useCallback(() => {
+    setDraft(defaultDraft);
+  }, []);
 
   const value = useMemo<OrderFlowContextType>(() => ({
     draft,
-    updateDraft: (patch) => {
-      setDraft((current) => ({ ...current, ...patch }));
-    },
-    updateLensSelection: (patch) => {
-      setDraft((current) => ({
-        ...current,
-        lensSelection: {
-          ...current.lensSelection,
-          ...patch,
-        },
-      }));
-    },
-    updateLensDetail: (id, patch) => {
-      setDraft((current) => ({
-        ...current,
-        lensDetails: current.lensDetails.map((item) => (
-          item.id === id ? { ...item, ...patch } : item
-        )),
-      }));
-    },
-    resetDraft: () => {
-      setDraft(defaultDraft);
-    },
-  }), [draft]);
+    updateDraft,
+    updateLensSelection,
+    updateLensDetail,
+    resetDraft,
+  }), [draft, resetDraft, updateDraft, updateLensDetail, updateLensSelection]);
 
   return (
     <OrderFlowContext.Provider value={value}>
