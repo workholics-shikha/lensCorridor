@@ -12,10 +12,10 @@ import {
   View,
 } from 'react-native';
 
-const TABLET_MIN_WIDTH = 768;
+const TABLET_MIN_WIDTH = 600;
 const LARGE_TABLET_MIN_WIDTH = 1180;
-const TABLET_FONT_SCALE = 1.38;
-const LARGE_TABLET_FONT_SCALE = 1.46;
+const TABLET_FONT_SCALE = 1.22;
+const LARGE_TABLET_FONT_SCALE = 1.3;
 
 let installed = false;
 let originalCreateElement: typeof React.createElement | null = null;

@@ -1861,6 +1861,22 @@ const AdminPanel = ({ user, onLogout }) => {
     }))
   }
 
+  const handleEmployeeFieldFocus = (event) => {
+    if (typeof window === 'undefined' || window.innerWidth > 1024) {
+      return
+    }
+
+    const target = event.currentTarget
+
+    window.setTimeout(() => {
+      target?.scrollIntoView?.({
+        behavior: 'smooth',
+        block: 'center',
+        inline: 'nearest',
+      })
+    }, 180)
+  }
+
   const refreshEmployees = async () => {
     const token = localStorage.getItem('adminToken')
     if (!token) {
@@ -2476,6 +2492,7 @@ const AdminPanel = ({ user, onLogout }) => {
                           <input
                             className="input filled"
                             readOnly
+                            onFocus={handleEmployeeFieldFocus}
                             type="text"
                             placeholder={employeeMode === 'edit' ? '' : 'Auto-generated on save'}
                             value={employeeForm.salesmanId}
@@ -2487,6 +2504,7 @@ const AdminPanel = ({ user, onLogout }) => {
                           <input
                             className="input filled"
                             onChange={(event) => handleEmployeeFieldChange('name', event.target.value)}
+                            onFocus={handleEmployeeFieldFocus}
                             type="text"
                             value={employeeForm.name}
                           />
@@ -2498,6 +2516,7 @@ const AdminPanel = ({ user, onLogout }) => {
                           <input
                             className="input filled"
                             onChange={(event) => handleEmployeeFieldChange('phone', event.target.value)}
+                            onFocus={handleEmployeeFieldFocus}
                             type="text"
                             value={employeeForm.phone}
                           />
@@ -2507,6 +2526,7 @@ const AdminPanel = ({ user, onLogout }) => {
                           <input
                             className="input filled"
                             onChange={(event) => handleEmployeeFieldChange('email', event.target.value)}
+                            onFocus={handleEmployeeFieldFocus}
                             type="email"
                             value={employeeForm.email}
                           />
@@ -2517,6 +2537,7 @@ const AdminPanel = ({ user, onLogout }) => {
                         <input
                           className="input filled"
                           onChange={(event) => handleEmployeeFieldChange('pin', event.target.value.replace(/[^0-9]/g, '').slice(0, 6))}
+                          onFocus={handleEmployeeFieldFocus}
                           type="password"
                           value={employeeForm.pin}
                         />
@@ -2529,6 +2550,7 @@ const AdminPanel = ({ user, onLogout }) => {
                         <select
                           className="input filled"
                           onChange={(event) => handleEmployeeFieldChange('role', event.target.value)}
+                          onFocus={handleEmployeeFieldFocus}
                           value={employeeForm.role}
                         >
                           <option value="Salesman">Salesman</option>
@@ -2542,6 +2564,7 @@ const AdminPanel = ({ user, onLogout }) => {
                         <select
                           className="input filled"
                           onChange={(event) => handleEmployeeFieldChange('store', event.target.value)}
+                          onFocus={handleEmployeeFieldFocus}
                           value={employeeForm.store}
                         >
                           <option value="">No store selected</option>
@@ -2557,6 +2580,7 @@ const AdminPanel = ({ user, onLogout }) => {
                         <select
                           className="input filled"
                           onChange={(event) => handleEmployeeFieldChange('status', event.target.value)}
+                          onFocus={handleEmployeeFieldFocus}
                           value={employeeForm.status}
                         >
                           <option value="Active">Active</option>

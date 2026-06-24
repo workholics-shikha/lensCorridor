@@ -273,6 +273,8 @@ export interface EyeTestRecord extends EyeTestPayload {
 
 const DEFAULT_CACHE_TTL_MS = 30 * 1000;
 const SEARCH_CACHE_TTL_MS = 10 * 1000;
+const DEFAULT_REQUEST_TIMEOUT_MS = 12 * 1000;
+const MUTATION_REQUEST_TIMEOUT_MS = 20 * 1000;
 
 const responseCache = new Map<string, { expiresAt: number; value: unknown }>();
 const inFlightRequests = new Map<string, Promise<unknown>>();
@@ -311,6 +313,49 @@ function resolveApiAssetUrl(path?: string) {
   return `${getApiBaseUrl()}${normalizedPath}`;
 }
 
+function isAbortError(error: unknown) {
+  return error instanceof Error && (
+    error.name === 'AbortError'
+    || error.message.toLowerCase().includes('timed out')
+  );
+}
+
+async function fetchWithTimeout(
+  url: string,
+  init?: RequestInit,
+  timeoutMs?: number
+) {
+  const controller = new AbortController();
+  const method = (init?.method ?? 'GET').toUpperCase();
+  const effectiveTimeout = timeoutMs ?? (method === 'GET' ? DEFAULT_REQUEST_TIMEOUT_MS : MUTATION_REQUEST_TIMEOUT_MS);
+  const externalSignal = init?.signal;
+
+  if (externalSignal?.aborted) {
+    controller.abort();
+  } else if (externalSignal) {
+    externalSignal.addEventListener('abort', () => controller.abort(), { once: true });
+  }
+
+  const timeoutHandle = setTimeout(() => {
+    controller.abort();
+  }, effectiveTimeout);
+
+  try {
+    return await fetch(url, {
+      ...init,
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (isAbortError(error)) {
+      throw new Error('The server took too long to respond. Please try again.');
+    }
+
+    throw error;
+  } finally {
+    clearTimeout(timeoutHandle);
+  }
+}
+
 async function fetchJsonWithCache<T>(
   url: string,
   init?: RequestInit,
@@ -318,6 +363,7 @@ async function fetchJsonWithCache<T>(
     cacheKey?: string;
     ttlMs?: number;
     bypassCache?: boolean;
+    timeoutMs?: number;
   }
 ): Promise<T> {
   const method = (init?.method ?? 'GET').toUpperCase();
@@ -337,7 +383,7 @@ async function fetchJsonWithCache<T>(
     }
   }
 
-  const request = fetch(url, init).then(async (response) => {
+  const request = fetchWithTimeout(url, init, options?.timeoutMs).then(async (response) => {
     if (!response.ok) {
       throw new Error(`API returned ${response.status}`);
     }
@@ -455,7 +501,7 @@ export async function fetchSalespeople(storeId?: string): Promise<Salesperson[]>
 }
 
 export async function verifySalespersonPin(input: { salesmanId: string; pin: string }): Promise<boolean> {
-  const response = await fetch(`${getApiBaseUrl()}/api/salesmen/verify-pin`, {
+  const response = await fetchWithTimeout(`${getApiBaseUrl()}/api/salesmen/verify-pin`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -757,7 +803,7 @@ export async function fetchLensCategories(powerTypeId?: string): Promise<LensCat
 }
 
 export async function createOrderPlacement(payload: OrderPlacementPayload): Promise<OrderPlacementResponse> {
-  const response = await fetch(`${getApiBaseUrl()}/api/order-placement`, {
+  const response = await fetchWithTimeout(`${getApiBaseUrl()}/api/order-placement`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -840,7 +886,7 @@ export async function updateOrderPlacementBilling(
   id: string,
   payload: OrderBillingUpdatePayload
 ): Promise<OrderPlacementRecord> {
-  const response = await fetch(`${getApiBaseUrl()}/api/order-placement/${id}/billing`, {
+  const response = await fetchWithTimeout(`${getApiBaseUrl()}/api/order-placement/${id}/billing`, {
     method: 'PATCH',
     headers: {
       'Content-Type': 'application/json',
@@ -861,7 +907,7 @@ export async function updateOrderPlacementBilling(
 }
 
 export async function createEyeTestRecord(payload: EyeTestPayload): Promise<EyeTestRecord> {
-  const response = await fetch(`${getApiBaseUrl()}/api/eye-tests`, {
+  const response = await fetchWithTimeout(`${getApiBaseUrl()}/api/eye-tests`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -899,7 +945,7 @@ export async function fetchEyeTests(input?: { mobileNumber?: string }): Promise<
 }
 
 export async function createReturnExchangeRequest(payload: ReturnExchangePayload): Promise<ReturnExchangeRecord> {
-  const response = await fetch(`${getApiBaseUrl()}/api/returns`, {
+  const response = await fetchWithTimeout(`${getApiBaseUrl()}/api/returns`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

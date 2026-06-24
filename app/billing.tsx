@@ -325,7 +325,7 @@ export default function BillingScreen() {
           </View>
         </View>
 
-        <View style={[styles.topInputRow, isCompact && styles.topInputRowCompact]}>
+        <View style={[styles.topInputRow, !isTablet && isCompact && styles.topInputRowCompact]}>
           <TouchableOpacity
             style={[styles.inlineInputCard, styles.addressCard]}
             activeOpacity={0.88}
@@ -337,7 +337,13 @@ export default function BillingScreen() {
             <ChevronRight size={16} color="#8D9098" />
           </TouchableOpacity>
 
-          <View style={[styles.inlineInputCard, styles.discountCard, isCompact && styles.discountCardCompact]}>
+          <View
+            style={[
+              styles.inlineInputCard,
+              styles.discountCard,
+              !isTablet && isCompact && styles.discountCardCompact,
+            ]}
+          >
             <Text style={styles.discountLabel}>Discount</Text>
             <View style={styles.discountInputShell}>
               <View style={styles.discountPrefixChip}>

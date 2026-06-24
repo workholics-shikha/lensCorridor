@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ActivityIndicator,
-  Platform, Image, ImageBackground, ScrollView, TextInput, useWindowDimensions,
+  KeyboardAvoidingView, Platform, Image, ImageBackground, ScrollView, TextInput, useWindowDimensions,
 } from 'react-native';
 import { router } from 'expo-router';
 import { ChevronDown } from 'lucide-react-native';
@@ -32,6 +32,7 @@ export default function SplashScreen() {
   const [salespersonDropdownOpen, setSalespersonDropdownOpen] = useState(false);
   const [selectionError, setSelectionError] = useState('');
   const [verifyingPin, setVerifyingPin] = useState(false);
+  const scrollRef = useRef<ScrollView | null>(null);
   const capitalizeWords = (text: string) => {
     return text
       ?.toLowerCase()
@@ -155,14 +156,21 @@ export default function SplashScreen() {
       imageStyle={styles.backgroundImage}
       resizeMode="cover"
     >
-      <ScrollView
-        bounces={false}
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-        style={styles.scroll}
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 24 : 0}
       >
-        <View style={styles.contentWrap}>
+        <ScrollView
+          ref={scrollRef}
+          bounces={false}
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+          showsVerticalScrollIndicator={false}
+          style={styles.scroll}
+        >
+          <View style={styles.contentWrap}>
           <View style={styles.logoSection}>
             <View style={styles.logoContainer}>
               <Image
@@ -280,12 +288,16 @@ export default function SplashScreen() {
             </View>
 
             <View style={[styles.pinShell, styles.secondaryDropdown]}>
-              <Text style={styles.pinLabel}>Staff PIN</Text>
               <TextInput
                 value={staffPin}
                 onChangeText={(value) => {
                   setStaffPin(value.replace(/[^0-9]/g, '').slice(0, 6));
                   setSelectionError('');
+                }}
+                onFocus={() => {
+                  globalThis.setTimeout(() => {
+                    scrollRef.current?.scrollToEnd({ animated: true });
+                  }, 140);
                 }}
                 placeholder="Enter PIN"
                 placeholderTextColor={Colors.gray400}
@@ -310,8 +322,9 @@ export default function SplashScreen() {
               </TouchableOpacity>
             </View>
           </View>
-        </View>
-      </ScrollView> 
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </ImageBackground>
   );
 }

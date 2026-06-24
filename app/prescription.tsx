@@ -962,7 +962,7 @@ const styles = StyleSheet.create({
   },
   cardTitle: {
     marginLeft: 8,
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '500',
     color: '#1F2430',
   },
@@ -980,7 +980,7 @@ const styles = StyleSheet.create({
     borderColor: '#D9E8FF',
   },
   parentMobileText: {
-    fontSize: 12.5,
+    fontSize: 14,
     color: '#34506C',
   },
   parentMobileValue: {
@@ -1015,7 +1015,7 @@ const styles = StyleSheet.create({
   },
   checkLabel: {
     marginLeft: 8,
-    fontSize: 13,
+    fontSize: 15,
     color: '#313744',
   },
   rxSelectionBlock: {
@@ -1032,7 +1032,7 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
   rxHeaderLabel: {
-    fontSize: 13.5,
+    fontSize: 15,
     color: '#8D94A3',
   },
   rxEyeHeadings: {
@@ -1043,7 +1043,7 @@ const styles = StyleSheet.create({
   eyeHeading: {
     flex: 1,
     textAlign: 'center',
-    fontSize: 12.5,
+    fontSize: 14,
     color: '#8D94A3',
   },
   selectorRow: {
@@ -1056,7 +1056,7 @@ const styles = StyleSheet.create({
   selectorRowLabel: {
     flex: 1,
     paddingRight: 12,
-    fontSize: 14.5,
+    fontSize: 16.5,
     fontWeight: '500',
     color: '#2D3441',
   },
@@ -1081,7 +1081,7 @@ const styles = StyleSheet.create({
     opacity: 0.55,
   },
   selectTriggerText: {
-    fontSize: 14,
+    fontSize: 15.5,
     fontWeight: '500',
     color: '#2D3441',
   },
@@ -1091,7 +1091,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     marginTop: 18,
     marginBottom: 10,
-    fontSize: 17,
+    fontSize: 19,
     fontWeight: '500',
     color: '#1F2430',
   },
@@ -1105,7 +1105,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   errorText: {
-    fontSize: 12.5,
+    fontSize: 14,
     color: Colors.error,
   },
   formGrid: {
@@ -1125,7 +1125,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E4E7EE',
     paddingHorizontal: 12,
-    fontSize: 13,
+    fontSize: 15,
     color: '#1F2430',
     ...Shadow.sm,
   },
@@ -1147,7 +1147,7 @@ const styles = StyleSheet.create({
   },
   saveBtnText: {
     color: Colors.white,
-    fontSize: 14,
+    fontSize: 15.5,
     fontWeight: '700',
   },
   inlineSelectorWrap: {
@@ -1174,7 +1174,7 @@ const styles = StyleSheet.create({
     borderBottomColor: '#EEF1F5',
   },
   selectorTitle: {
-    fontSize: 11.5,
+    fontSize: 13,
     fontWeight: '600',
     color: '#263042',
   },
@@ -1186,7 +1186,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F7F8FD',
   },
   selectorLegendText: {
-    fontSize: 10,
+    fontSize: 11.5,
     color: '#8A91A1',
   },
   selectorList: {
@@ -1238,7 +1238,7 @@ const styles = StyleSheet.create({
     borderColor: Colors.primary,
   },
   optionText: {
-    fontSize: 12,
+    fontSize: 13.5,
     color: '#455066',
     fontWeight: '600',
   },
@@ -1264,19 +1264,19 @@ const styles = StyleSheet.create({
     borderBottomColor: '#EEF1F5',
   },
   savedPowersTitle: {
-    fontSize: 15,
+    fontSize: 16.5,
     fontWeight: '700',
     color: '#1F2430',
   },
   savedPowersPhone: {
     marginTop: 4,
-    fontSize: 12,
+    fontSize: 13.5,
     color: Colors.primary,
     fontWeight: '600',
   },
   savedPowersLink: {
     marginTop: 8,
-    fontSize: 12.5,
+    fontSize: 13.5,
     color: Colors.primary,
     fontWeight: '700',
   },
@@ -1291,14 +1291,14 @@ const styles = StyleSheet.create({
   },
   savedPowersStateText: {
     marginTop: 10,
-    fontSize: 12.5,
-    lineHeight: 18,
+    fontSize: 14,
+    lineHeight: 20,
     textAlign: 'center',
     color: '#667085',
   },
   savedPowersErrorText: {
-    fontSize: 12.5,
-    lineHeight: 18,
+    fontSize: 14,
+    lineHeight: 20,
     textAlign: 'center',
     color: Colors.error,
   },
@@ -1312,25 +1312,25 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   savedPowerName: {
-    fontSize: 13.5,
+    fontSize: 15,
     fontWeight: '700',
     color: '#1F2430',
   },
   savedPowerDate: {
     marginTop: 4,
     marginBottom: 8,
-    fontSize: 11.5,
+    fontSize: 12.5,
     color: '#667085',
   },
   savedPowerRow: {
-    fontSize: 12.5,
-    lineHeight: 18,
+    fontSize: 14,
+    lineHeight: 20,
     color: '#344054',
     marginBottom: 4,
   },
   savedPowerAction: {
     marginTop: 8,
-    fontSize: 11.5,
+    fontSize: 12.5,
     color: Colors.primary,
     fontWeight: '700',
   },

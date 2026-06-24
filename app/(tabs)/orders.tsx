@@ -183,19 +183,19 @@ export default function OrdersScreen() {
   }, [currentPage, totalPages]);
 
   const paginationItems = useMemo(() => {
-    if (totalPages <= 5) {
+    if (totalPages <= 6) {
       return Array.from({ length: totalPages }, (_, index) => index + 1);
     }
 
     if (currentPage <= 3) {
-      return [1, 2, 3, '...', totalPages] as const;
+      return [1, 2, 3, 4, '...', totalPages] as const;
     }
 
     if (currentPage >= totalPages - 2) {
-      return [1, '...', totalPages - 2, totalPages - 1, totalPages] as const;
+      return [1, '...', totalPages - 3, totalPages - 2, totalPages - 1, totalPages] as const;
     }
 
-    return [1, '...', currentPage, '...', totalPages] as const;
+    return [1, '...', currentPage - 1, currentPage, currentPage + 1, '...', totalPages] as const;
   }, [currentPage, totalPages]);
 
   return (
