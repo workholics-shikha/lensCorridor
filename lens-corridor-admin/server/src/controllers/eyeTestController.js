@@ -3,6 +3,7 @@ const Customer = require('../models/Customer');
 
 const normalizePhone = (value = '') => String(value).replace(/\D/g, '').slice(-10);
 const normalizeName = (value = '') => String(value).trim().replace(/\s+/g, ' ').toLowerCase();
+const escapeRegex = (value = '') => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 const syncCustomerFromEyeTest = async ({
   name,
@@ -38,7 +39,7 @@ const syncCustomerFromEyeTest = async ({
 
   const existingCustomer = await Customer.findOne({
     phone,
-    ...(normalizedName ? { name: { $regex: new RegExp(`^${trimmedName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') } } : {}),
+    ...(normalizedName ? { name: { $regex: new RegExp(`^${escapeRegex(trimmedName)}$`, 'i') } } : {}),
   });
 
   if (existingCustomer) {
@@ -108,8 +109,10 @@ const createEyeTest = async (req, res) => {
     } = req.body;
 
     const normalizedMobileNumber = normalizePhone(mobileNumber);
+    const trimmedName = String(name ?? '').trim();
+    const normalizedName = normalizeName(trimmedName);
 
-    if (!name?.trim() || !normalizedMobileNumber) {
+    if (!trimmedName || !normalizedMobileNumber) {
       return res.status(400).json({
         success: false,
         message: 'Customer name and valid mobile number are required',
@@ -142,7 +145,7 @@ const createEyeTest = async (req, res) => {
       : null;
 
     const customer = await syncCustomerFromEyeTest({
-      name,
+      name: trimmedName,
       mobileNumber: normalizedMobileNumber,
       email,
       address,
@@ -151,22 +154,38 @@ const createEyeTest = async (req, res) => {
       axis: finalAxis,
     });
 
-    const eyeTest = await EyeTest.create({
+    const eyeTestPayload = {
       samePowerBothEyes: Boolean(samePowerBothEyes),
       hasCylindricalPower: Boolean(hasCylindricalPower),
       spherical: finalSpherical,
       cylindrical: finalCylindrical,
       axis: finalAxis,
-      name: String(name).trim(),
+      name: trimmedName,
       mobileNumber: normalizedMobileNumber,
       email: String(email ?? '').trim().toLowerCase(),
       address: String(address ?? '').trim(),
       customer: customer?._id ?? null,
-    });
+    };
 
-    res.status(201).json({
+    const existingEyeTest = await EyeTest.findOne({
+      mobileNumber: normalizedMobileNumber,
+      ...(normalizedName ? { name: { $regex: new RegExp(`^${escapeRegex(trimmedName)}$`, 'i') } } : {}),
+    }).sort({ updatedAt: -1, createdAt: -1 });
+
+    let eyeTest;
+    let statusCode = 201;
+
+    if (existingEyeTest) {
+      existingEyeTest.set(eyeTestPayload);
+      eyeTest = await existingEyeTest.save();
+      statusCode = 200;
+    } else {
+      eyeTest = await EyeTest.create(eyeTestPayload);
+    }
+
+    res.status(statusCode).json({
       success: true,
-      message: 'Eye test saved successfully',
+      message: existingEyeTest ? 'Eye test updated successfully' : 'Eye test saved successfully',
       data: eyeTest,
     });
   } catch (err) {
@@ -182,8 +201,22 @@ const getAllEyeTests = async (req, res) => {
       ? { mobileNumber: { $regex: `${normalizedMobileNumber}$` } }
       : {};
 
-    const eyeTests = await EyeTest.find(filter).sort({ createdAt: -1 });
-    res.json({ success: true, data: eyeTests });
+    const eyeTests = await EyeTest.find(filter).sort({ createdAt: -1, updatedAt: -1 });
+    const dedupedEyeTests = [];
+    const seenKeys = new Set();
+
+    for (const item of eyeTests) {
+      const key = `${normalizePhone(item.mobileNumber)}::${normalizeName(item.name)}`;
+
+      if (seenKeys.has(key)) {
+        continue;
+      }
+
+      seenKeys.add(key);
+      dedupedEyeTests.push(item);
+    }
+
+    res.json({ success: true, data: dedupedEyeTests });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
