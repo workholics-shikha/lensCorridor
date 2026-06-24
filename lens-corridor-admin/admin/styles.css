@@ -950,6 +950,26 @@ canvas {
   line-height: 1.45;
 }
 
+.task-item-error {
+  border-color: rgba(239, 68, 68, 0.2);
+  background: rgba(254, 242, 242, 0.92);
+}
+
+.task-item-error strong,
+.task-item-error small {
+  color: #b91c1c;
+}
+
+.task-item-success {
+  border-color: rgba(34, 197, 94, 0.16);
+  background: rgba(240, 253, 244, 0.92);
+}
+
+.task-item-success strong,
+.task-item-success small {
+  color: #166534;
+}
+
 .order-row,
 .store-card,
 .ghost-btn,

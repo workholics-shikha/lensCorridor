@@ -257,9 +257,24 @@ const createEmployeeForm = () => ({
   phone: '',
   role: 'Salesman',
   store: '',
-  password: '',
+  pin: '',
   status: 'Active',
 })
+
+const getNextEmployeeId = (employees = []) => {
+  const maxSequence = employees.reduce((highest, employee) => {
+    const match = String(employee?.salesmanId || '').match(/^LC(\d+)$/i)
+
+    if (!match) {
+      return highest
+    }
+
+    const sequence = Number.parseInt(match[1], 10)
+    return Number.isNaN(sequence) ? highest : Math.max(highest, sequence)
+  }, 100)
+
+  return `LC${maxSequence + 1}`
+}
 
 const createStoreForm = () => ({
   storeName: '',
@@ -630,6 +645,7 @@ const AdminPanel = ({ user, onLogout }) => {
   const [employeeMode, setEmployeeMode] = useState('create')
   const [employeeSaving, setEmployeeSaving] = useState(false)
   const [employeeMessage, setEmployeeMessage] = useState('')
+  const employeeMessageTone = /failed|error|invalid|required|at least/i.test(employeeMessage) ? 'error' : 'success'
   const [stores, setStores] = useState([])
   const [selectedStoreId, setSelectedStoreId] = useState('')
   const [storeForm, setStoreForm] = useState(createStoreForm)
@@ -644,7 +660,7 @@ const AdminPanel = ({ user, onLogout }) => {
 
   const currentMaster = masterSections.find((section) => section.key === masterSection) || masterSections[0]
   const currentStore = stores.find((store) => store.id === selectedStoreId) || stores[0] || null
-  const routeState = getRouteState(location.pathname)
+  const routeState = useMemo(() => getRouteState(location.pathname), [location.pathname])
   const lensCategoryEditorId = routeState?.lensCategoryEditorId || ''
   const isLensCategoryEditorOpen = masterSection === 'lens-category' && Boolean(lensCategoryEditorId)
 
@@ -1207,10 +1223,10 @@ const AdminPanel = ({ user, onLogout }) => {
       phone: employee.phone || '',
       role: employee.role || 'Salesman',
       store: employee.store?.id || '',
-      password: '',
+      pin: '',
       status: employee.status || 'Active',
     })
-  }, [employees, routeState])
+  }, [employees, routeState?.employeeId, routeState?.screen])
 
   useEffect(() => {
     if (routeState?.screen !== 'edit-store' || !routeState.storeId) {
@@ -1870,6 +1886,14 @@ const AdminPanel = ({ user, onLogout }) => {
     const isEdit = employeeMode === 'edit'
 
     try {
+      if ((!employeeMode || employeeMode === 'create') && employeeForm.pin.replace(/\D/g, '').length < 4) {
+        throw new Error('PIN must be at least 4 digits')
+      }
+
+      if (employeeMode === 'edit' && employeeForm.pin && employeeForm.pin.replace(/\D/g, '').length < 4) {
+        throw new Error('PIN must be at least 4 digits')
+      }
+
       const payload = {
         salesmanId: employeeForm.salesmanId,
         name: employeeForm.name,
@@ -1880,8 +1904,8 @@ const AdminPanel = ({ user, onLogout }) => {
         status: employeeForm.status,
       }
 
-      if (!isEdit || employeeForm.password) {
-        payload.password = employeeForm.password
+      if (!isEdit || employeeForm.pin) {
+        payload.pin = employeeForm.pin
       }
 
       const response = await fetch(
@@ -2350,7 +2374,7 @@ const AdminPanel = ({ user, onLogout }) => {
                     <MiniCard label="Stores Available" value={`${storeOptions.length}`} />
                   </div>
                   {employeeMessage ? (
-                    <div className="task-item" style={{ marginBottom: '14px' }}>
+                    <div className={`task-item ${employeeMessageTone === 'error' ? 'task-item-error' : 'task-item-success'}`} style={{ marginBottom: '14px' }}>
                       <strong>Employee status</strong>
                       <small>{employeeMessage}</small>
                     </div>
@@ -2438,7 +2462,7 @@ const AdminPanel = ({ user, onLogout }) => {
                   </div>
 
                   {employeeMessage ? (
-                    <div className="task-item" style={{ marginBottom: '14px' }}>
+                    <div className={`task-item ${employeeMessageTone === 'error' ? 'task-item-error' : 'task-item-success'}`} style={{ marginBottom: '14px' }}>
                       <strong>Employee status</strong>
                       <small>{employeeMessage}</small>
                     </div>
@@ -2451,10 +2475,12 @@ const AdminPanel = ({ user, onLogout }) => {
                           <label>Salesman ID</label>
                           <input
                             className="input filled"
-                            onChange={(event) => handleEmployeeFieldChange('salesmanId', event.target.value.toUpperCase())}
+                            readOnly
                             type="text"
+                            placeholder={employeeMode === 'edit' ? '' : 'Auto-generated on save'}
                             value={employeeForm.salesmanId}
                           />
+                          <small>{employeeMode === 'edit' ? 'Employee ID is auto-generated and cannot be changed.' : 'Employee ID will be generated automatically when you save.'}</small>
                         </div>
                         <div>
                           <label>Employee Name</label>
@@ -2487,12 +2513,12 @@ const AdminPanel = ({ user, onLogout }) => {
                         </div>
                       </div>
                       <div className="field">
-                        <label>Password {employeeMode === 'edit' ? '(leave blank to keep current password)' : ''}</label>
+                        <label>PIN {employeeMode === 'edit' ? '(leave blank to keep current PIN)' : ''}</label>
                         <input
                           className="input filled"
-                          onChange={(event) => handleEmployeeFieldChange('password', event.target.value)}
+                          onChange={(event) => handleEmployeeFieldChange('pin', event.target.value.replace(/[^0-9]/g, '').slice(0, 6))}
                           type="password"
-                          value={employeeForm.password}
+                          value={employeeForm.pin}
                         />
                       </div>
                     </div>

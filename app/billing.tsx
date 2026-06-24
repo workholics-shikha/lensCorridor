@@ -16,8 +16,8 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { ArrowLeft, ChevronRight, FileText, X } from 'lucide-react-native';
-import { useOrderFlow } from '@/context/OrderFlowContext';
-import { createOrderPlacement } from '@/lib/api';
+import { type LensDetail, useOrderFlow } from '@/context/OrderFlowContext';
+import { createEyeTestRecord, createOrderPlacement } from '@/lib/api';
 import { getOrderAmounts } from '@/lib/orderPricing';
 import { formatPersonName } from '@/lib/textFormat';
 import { Shadow } from '@/lib/theme';
@@ -34,6 +34,92 @@ const createFallbackOrderNumber = () => {
   const day = `${now.getDate()}`.padStart(2, '0');
   const sequence = `${Math.floor(Math.random() * 10000)}`.padStart(4, '0');
   return `LC-${year}${month}${day}-${sequence}`;
+};
+
+const findLensDetailByEye = (lensDetails: LensDetail[], eye: 'left' | 'right') => (
+  lensDetails.find((item) => item.eye === eye)
+);
+
+const parseDecimalValue = (value?: string) => {
+  if (!value?.trim()) {
+    return null;
+  }
+
+  const parsed = Number.parseFloat(value);
+  return Number.isNaN(parsed) ? null : parsed;
+};
+
+const parseAxisValue = (value?: string) => {
+  if (!value?.trim()) {
+    return null;
+  }
+
+  const parsed = Number.parseInt(value, 10);
+  return Number.isNaN(parsed) ? null : parsed;
+};
+
+const buildEyeTestPayloadFromOrder = ({
+  lensDetails,
+  customerName,
+  customerPhone,
+  customerAddress,
+}: {
+  lensDetails: LensDetail[];
+  customerName: string;
+  customerPhone: string;
+  customerAddress: string;
+}) => {
+  const rightEye = findLensDetailByEye(lensDetails, 'right');
+  const leftEye = findLensDetailByEye(lensDetails, 'left');
+  const normalizedMobileNumber = customerPhone.replace(/\D/g, '').slice(-10);
+  const sphericalRight = parseDecimalValue(rightEye?.sph);
+  const sphericalLeft = parseDecimalValue(leftEye?.sph);
+  const cylindricalRight = parseDecimalValue(rightEye?.cyl);
+  const cylindricalLeft = parseDecimalValue(leftEye?.cyl);
+  const axisRight = parseAxisValue(rightEye?.axis);
+  const axisLeft = parseAxisValue(leftEye?.axis);
+  const hasAnyPower = [
+    sphericalRight,
+    sphericalLeft,
+    cylindricalRight,
+    cylindricalLeft,
+    axisRight,
+    axisLeft,
+  ].some((value) => value !== null);
+
+  if (!customerName.trim() || normalizedMobileNumber.length < 10 || !hasAnyPower) {
+    return null;
+  }
+
+  const samePowerBothEyes = (
+    (rightEye?.sph || '') === (leftEye?.sph || '')
+    && (rightEye?.cyl || '') === (leftEye?.cyl || '')
+    && (rightEye?.axis || '') === (leftEye?.axis || '')
+  );
+  const hasCylindricalPower = cylindricalRight !== null
+    || cylindricalLeft !== null
+    || axisRight !== null
+    || axisLeft !== null;
+
+  return {
+    samePowerBothEyes,
+    hasCylindricalPower,
+    spherical: {
+      right: sphericalRight,
+      left: sphericalLeft,
+    },
+    cylindrical: {
+      right: cylindricalRight,
+      left: cylindricalLeft,
+    },
+    axis: {
+      right: axisRight,
+      left: axisLeft,
+    },
+    name: customerName.trim(),
+    mobileNumber: normalizedMobileNumber,
+    address: customerAddress.trim(),
+  };
 };
 
 export default function BillingScreen() {
@@ -253,19 +339,25 @@ export default function BillingScreen() {
 
           <View style={[styles.inlineInputCard, styles.discountCard, isCompact && styles.discountCardCompact]}>
             <Text style={styles.discountLabel}>Discount</Text>
-            <TextInput
-              value={discount}
-              onChangeText={(value) => {
-                const sanitized = value.replace(/[^0-9]/g, '');
-                setDiscount(sanitized);
-                updateDraft({ billingDiscount: sanitized });
-              }}
-              placeholder="Enter Discount"
-              placeholderTextColor="#9095A0"
-              style={styles.inlineInput}
-            />
+            <View style={styles.discountInputShell}>
+              <View style={styles.discountPrefixChip}>
+                <Text style={styles.discountPrefixText}>Rs.</Text>
+              </View>
+              <TextInput
+                value={discount}
+                onChangeText={(value) => {
+                  const sanitized = value.replace(/[^0-9]/g, '');
+                  setDiscount(sanitized);
+                  updateDraft({ billingDiscount: sanitized });
+                }}
+                placeholder="Enter discount"
+                placeholderTextColor="#9095A0"
+                keyboardType="numeric"
+                style={styles.discountInput}
+              />
+            </View>
             <Text style={styles.discountHelperText}>
-              Final: Rs. {totalPayable.toLocaleString('en-IN')}
+              Final payable: Rs. {totalPayable.toLocaleString('en-IN')}
             </Text>
           </View>
         </View>
@@ -430,6 +522,15 @@ export default function BillingScreen() {
               frameImages: draft.frameImages,
               selectedShape: draft.selectedShape || 'Frame',
             });
+            const finalCustomerName = formatPersonName(customerName) || draft.customerName || '';
+            const finalCustomerPhone = customerPhone.trim() || draft.phone || '';
+            const finalCustomerAddress = customerAddress.trim() || address || '';
+            const eyeTestPayload = buildEyeTestPayloadFromOrder({
+              lensDetails: draft.lensDetails,
+              customerName: finalCustomerName,
+              customerPhone: finalCustomerPhone,
+              customerAddress: finalCustomerAddress,
+            });
 
             updateDraft(nextDraftPatch);
             setSubmitting(true);
@@ -437,9 +538,9 @@ export default function BillingScreen() {
             try {
               const placedOrder = await createOrderPlacement({
                 customer: {
-                  name: formatPersonName(customerName) || draft.customerName || '',
-                  phone: customerPhone.trim() || draft.phone || '',
-                  billingAddress: customerAddress.trim() || address || '',
+                  name: finalCustomerName,
+                  phone: finalCustomerPhone,
+                  billingAddress: finalCustomerAddress,
                 },
                 frame: {
                   selectedShape: draft.selectedShape || '',
@@ -472,6 +573,10 @@ export default function BillingScreen() {
                   salesperson: draft.salesperson ?? undefined,
                 },
               });
+
+              if (eyeTestPayload) {
+                createEyeTestRecord(eyeTestPayload).catch(() => null);
+              }
 
               router.replace({
                 pathname: '/order-success',
@@ -807,13 +912,16 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   discountCard: {
-    flex: 0.42,
-    minWidth: 124,
-    maxWidth: 220,
-    justifyContent: 'center',
+    flex: 0.52,
+    minWidth: 178,
+    maxWidth: 280,
+    justifyContent: 'flex-start',
+    paddingTop: 10,
+    paddingBottom: 10,
   },
   discountCardCompact: {
     marginTop: 10,
+    maxWidth: '100%',
   },
   inlineInputText: {
     flex: 1,
@@ -833,14 +941,45 @@ const styles = StyleSheet.create({
   },
   discountLabel: {
     fontSize: 12,
-    fontWeight: '500',
-    color: '#7A7F88',
-    marginTop: 6,
-    marginBottom: 2,
+    fontWeight: '700',
+    color: '#555D6D',
+    marginBottom: 8,
+  },
+  discountInputShell: {
+    minHeight: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#DCE2EC',
+    backgroundColor: '#F8FAFD',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+  },
+  discountPrefixChip: {
+    minWidth: 42,
+    height: 30,
+    borderRadius: 8,
+    backgroundColor: '#E9F1FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8,
+  },
+  discountPrefixText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#0D6CF5',
+  },
+  discountInput: {
+    flex: 1,
+    minHeight: 40,
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1F2430',
+    paddingTop: 0,
+    paddingBottom: 0,
   },
   discountHelperText: {
-    marginTop: 4,
-    marginBottom: 6,
+    marginTop: 8,
     fontSize: 11.5,
     fontWeight: '600',
     color: '#1C71D8',

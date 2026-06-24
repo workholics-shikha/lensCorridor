@@ -134,6 +134,7 @@ export default function ProfileScreen() {
             <Text style={styles.sectionTitle}>My Account</Text>
             <MenuItem icon={<FileText size={18} color={Colors.primary} />} label="My Orders" onPress={() => router.push('/(tabs)/orders')} />
             <MenuItem icon={<Shield size={18} color={Colors.primary} />} label="Prescriptions" onPress={() => router.push('/prescription')} />
+            <MenuItem icon={<FileText size={18} color={Colors.primary} />} label="Eye Test History" onPress={() => router.push('/eye-test-history')} />
             <MenuItem icon={<Star size={18} color={Colors.primary} />} label="Wishlist" onPress={() => router.push('/(tabs)/wishlist')} />
           </View>
 

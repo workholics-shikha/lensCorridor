@@ -41,6 +41,7 @@ type CustomerSuggestion = {
 };
 
 const SELECT_FRAME_ICON = require('@/assets/images/healthicons_eyeglasses-24px.png');
+const TABLET_FRAME_UPLOAD_LIMIT = 5;
 
 export default function CheckoutScreen() {
   const { width } = useWindowDimensions();
@@ -58,6 +59,7 @@ export default function CheckoutScreen() {
   const [price, setPrice] = useState(draft.price);
   const [error, setError] = useState('');
   const [framePreviews, setFramePreviews] = useState<FramePreviewItem[]>(draft.frameImages);
+  const hasReachedTabletUploadLimit = isTablet && framePreviews.length >= TABLET_FRAME_UPLOAD_LIMIT;
   const customerSearchDigits = customerSearch.replace(/\D/g, '').slice(-10);
   const isNumericCustomerSearch = /^\d+$/.test(customerSearch.trim().replace(/\s+/g, ''));
   const customerSearchValidationMessage = customerSearch.trim() && isNumericCustomerSearch && customerSearchDigits.length < 10
@@ -173,6 +175,11 @@ export default function CheckoutScreen() {
       return;
     }
 
+    if (isTablet && framePreviews.length >= TABLET_FRAME_UPLOAD_LIMIT) {
+      setError(`You can upload up to ${TABLET_FRAME_UPLOAD_LIMIT} frame photos on tablet.`);
+      return;
+    }
+
     setFramePreviews((current) => ([
       ...current,
       {
@@ -184,6 +191,11 @@ export default function CheckoutScreen() {
   };
 
   const handleUploadPress = async (source: 'camera' | 'gallery') => {
+    if (isTablet && framePreviews.length >= TABLET_FRAME_UPLOAD_LIMIT) {
+      setError(`You can upload up to ${TABLET_FRAME_UPLOAD_LIMIT} frame photos on tablet.`);
+      return;
+    }
+
     if (Platform.OS !== 'web') {
       try {
         if (source === 'camera') {
@@ -286,7 +298,8 @@ export default function CheckoutScreen() {
 
     updateDraft({
       phone: customerSearch,
-      customerName: matchedCustomer?.name ?? draft.customerName,
+      customerName: matchedCustomer?.name
+        ?? (!isNumericCustomerSearch ? customerSearch.trim() : draft.customerName),
       billingAddress: matchedCustomer?.billingAddress ?? draft.billingAddress,
       price,
       selectedShape: shape ?? draft.selectedShape,
@@ -378,17 +391,6 @@ export default function CheckoutScreen() {
               </View>
             ) : null}
 
-            {matchedCustomer ? (
-              <View style={styles.customerMatchCard}>
-                <Text style={styles.customerMatchTitle}>Matched Customer</Text>
-                <Text style={styles.customerMatchText}>
-                  {matchedCustomer.name || 'Customer'} • {matchedCustomer.phone}
-                </Text>
-                {matchedCustomer.billingAddress ? (
-                  <Text style={styles.customerMatchSub}>{matchedCustomer.billingAddress}</Text>
-                ) : null}
-              </View>
-            ) : null}
           </View>
 
           <View style={[styles.frameRow, isTablet ? styles.frameRowTablet : styles.frameRowMobile, { gap: viewport.cardGap }]}>
@@ -417,6 +419,7 @@ export default function CheckoutScreen() {
                     tint="warm"
                     icon={<Camera size={22} color="#FFAB12" strokeWidth={2.2} />}
                     onPress={() => handleUploadPress('camera')}
+                    disabled={hasReachedTabletUploadLimit}
                   />
                   <Text style={styles.orLabel}>Or</Text>
                   <UploadButton
@@ -424,10 +427,15 @@ export default function CheckoutScreen() {
                     tint="cool"
                     icon={<ImageIcon size={22} color="#1B73DE" strokeWidth={2.2} />}
                     onPress={() => handleUploadPress('gallery')}
+                    disabled={hasReachedTabletUploadLimit}
                   />
                 </View>
 
-                <Text style={styles.uploadCaption}>Upload to camera & gallery</Text>
+                <Text style={styles.uploadCaption}>
+                  {isTablet
+                    ? `Upload to camera & gallery • ${framePreviews.length}/${TABLET_FRAME_UPLOAD_LIMIT} photos`
+                    : 'Upload to camera & gallery'}
+                </Text>
               </View>
             </View>
 
@@ -523,17 +531,24 @@ function UploadButton({
   label,
   tint,
   onPress,
+  disabled = false,
 }: {
   icon: ReactNode;
   label: string;
   tint: 'warm' | 'cool';
   onPress: () => void;
+  disabled?: boolean;
 }) {
   return (
     <TouchableOpacity
-      style={[styles.uploadButton, tint === 'warm' ? styles.uploadButtonWarm : styles.uploadButtonCool]}
+      style={[
+        styles.uploadButton,
+        tint === 'warm' ? styles.uploadButtonWarm : styles.uploadButtonCool,
+        disabled && styles.uploadButtonDisabled,
+      ]}
       onPress={onPress}
       activeOpacity={0.88}
+      disabled={disabled}
     >
       {icon}
       <Text style={styles.uploadButtonText}>{label}</Text>
@@ -862,6 +877,9 @@ const styles = StyleSheet.create({
   },
   uploadButtonCool: {
     backgroundColor: '#DCEBFF',
+  },
+  uploadButtonDisabled: {
+    opacity: 0.45,
   },
   uploadButtonText: {
     marginTop: 8,

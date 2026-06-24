@@ -1,4 +1,6 @@
 const Employee = require('../models/Employee');
+const bcrypt = require('bcryptjs');
+const STAFF_LOGIN_ROLES = ['Salesman', 'Staff', 'Manager'];
 
 const sanitizeEmployee = (employee) => ({
     id: employee._id,
@@ -22,7 +24,7 @@ const listSalesmen = async (req, res) => {
         const { storeId } = req.query;
 
         const filter = {
-            role: 'Salesman',
+            role: { $in: STAFF_LOGIN_ROLES },
         };
 
         if (storeId) {
@@ -39,5 +41,36 @@ const listSalesmen = async (req, res) => {
     }
 };
 
-module.exports = { listSalesmen };
+const verifySalesmanPin = async (req, res) => {
+    try {
+        const salesmanId = String(req.body?.salesmanId || '').trim().toUpperCase();
+        const pin = String(req.body?.pin || '').trim();
+
+        if (!salesmanId || !pin) {
+            return res.status(400).json({ error: 'Salesman ID and PIN are required' });
+        }
+
+        const employee = await Employee.findOne({
+            salesmanId,
+            role: { $in: STAFF_LOGIN_ROLES },
+            status: 'Active',
+        });
+
+        if (!employee) {
+            return res.status(404).json({ error: 'Salesman not found' });
+        }
+
+        const isValidPin = await bcrypt.compare(pin, employee.pin);
+
+        if (!isValidPin) {
+            return res.status(401).json({ error: 'Invalid PIN' });
+        }
+
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to verify PIN' });
+    }
+};
+
+module.exports = { listSalesmen, verifySalesmanPin };
 

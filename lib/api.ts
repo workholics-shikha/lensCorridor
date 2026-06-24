@@ -234,6 +234,11 @@ export interface ReturnExchangePayload {
   } | null;
 }
 
+interface SalesmanPinVerificationResponse {
+  success?: boolean;
+  error?: string;
+}
+
 export interface OrderBillingUpdatePayload {
   additionalCollectedAmount: number;
   paymentMode: 'Online' | 'Card' | 'Cash';
@@ -256,8 +261,8 @@ export interface EyeTestPayload {
   };
   name: string;
   mobileNumber: string;
-  email: string;
-  address: string;
+  email?: string;
+  address?: string;
 }
 
 export interface EyeTestRecord extends EyeTestPayload {
@@ -447,6 +452,27 @@ export async function fetchSalespeople(storeId?: string): Promise<Salesperson[]>
   } catch (_error) {
     return getSalespeople();
   }
+}
+
+export async function verifySalespersonPin(input: { salesmanId: string; pin: string }): Promise<boolean> {
+  const response = await fetch(`${getApiBaseUrl()}/api/salesmen/verify-pin`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      salesmanId: input.salesmanId,
+      pin: input.pin,
+    }),
+  });
+
+  const result = (await response.json().catch(() => null)) as SalesmanPinVerificationResponse | null;
+
+  if (!response.ok || !result?.success) {
+    throw new Error(result?.error || 'Invalid PIN');
+  }
+
+  return true;
 }
 
 export async function fetchStores(): Promise<StoreOption[]> {
@@ -849,6 +875,7 @@ export async function createEyeTestRecord(payload: EyeTestPayload): Promise<EyeT
     throw new Error(result?.message || `Eye test API returned ${response.status}`);
   }
 
+  invalidateCacheByPrefix('eye-tests:');
   return result.data;
 }
 

@@ -122,6 +122,61 @@ export default function PrescriptionScreen() {
     ? rightEye[selector.field]
     : leftEye[selector.field];
 
+  const openEyeTestHistory = () => {
+    if (normalizedParentPhone) {
+      router.push({
+        pathname: '/eye-test-history',
+        params: { mobileNumber: normalizedParentPhone },
+      });
+      return;
+    }
+
+    router.push('/eye-test-history');
+  };
+
+  const buildEyeTestPayload = (normalizedMobileValue: string) => ({
+    samePowerBothEyes: samePower,
+    hasCylindricalPower,
+    spherical: {
+      right: rightEye.sph ? parseFloat(rightEye.sph) : null,
+      left: leftEye.sph ? parseFloat(leftEye.sph) : null,
+    },
+    cylindrical: {
+      right: hasCylindricalPower && rightEye.cyl ? parseFloat(rightEye.cyl) : null,
+      left: hasCylindricalPower && leftEye.cyl ? parseFloat(leftEye.cyl) : null,
+    },
+    axis: {
+      right: hasCylindricalPower && rightEye.axis ? parseInt(rightEye.axis, 10) : null,
+      left: hasCylindricalPower && leftEye.axis ? parseInt(leftEye.axis, 10) : null,
+    },
+    name: customerName.trim() || user?.email?.trim() || 'Customer',
+    mobileNumber: normalizedMobileValue,
+    email: email.trim(),
+    address: address.trim(),
+  });
+
+  const persistEyeTest = async (normalizedMobileValue: string) => {
+    const payload = buildEyeTestPayload(normalizedMobileValue);
+
+    await createEyeTestRecord(payload);
+    await savePrescription(user?.id ?? 'guest-eye-test', {
+      notes: [
+        `Customer: ${payload.name}`,
+        `Mobile: ${normalizedMobileValue}`,
+        email.trim() ? `Email: ${email.trim()}` : '',
+        address.trim() ? `Address: ${address.trim()}` : '',
+        isOrderFlow ? 'Source: Order flow' : '',
+      ].filter(Boolean).join(' | '),
+      order_id: undefined,
+      right_eye_sph: payload.spherical.right,
+      right_eye_cyl: payload.cylindrical.right,
+      right_eye_axis: payload.axis.right,
+      left_eye_sph: payload.spherical.left,
+      left_eye_cyl: payload.cylindrical.left,
+      left_eye_axis: payload.axis.left,
+    });
+  };
+
   useEffect(() => {
     if (!normalizedParentPhone || normalizedParentPhone.length < 10) {
       setSavedPowers([]);
@@ -268,6 +323,7 @@ export default function PrescriptionScreen() {
 
   const handleSave = async () => {
     setError('');
+    const normalizedMobileNumber = mobileNumber.replace(/\D/g, '').slice(-10);
 
     if (!rightEye.sph && !leftEye.sph) {
       setError('Please select at least one spherical power value.');
@@ -298,59 +354,24 @@ export default function PrescriptionScreen() {
       return;
     }
 
-    if (!mobileNumber.trim() || mobileNumber.trim().length < 10) {
+    if (normalizedMobileNumber.length < 10) {
       setError('Please enter a valid mobile number.');
       return;
     }
 
     setSaving(true);
 
-    const payload = {
-      samePowerBothEyes: samePower,
-      hasCylindricalPower,
-      spherical: {
-        right: rightEye.sph ? parseFloat(rightEye.sph) : null,
-        left: leftEye.sph ? parseFloat(leftEye.sph) : null,
-      },
-      cylindrical: {
-        right: hasCylindricalPower && rightEye.cyl ? parseFloat(rightEye.cyl) : null,
-        left: hasCylindricalPower && leftEye.cyl ? parseFloat(leftEye.cyl) : null,
-      },
-      axis: {
-        right: hasCylindricalPower && rightEye.axis ? parseInt(rightEye.axis, 10) : null,
-        left: hasCylindricalPower && leftEye.axis ? parseInt(leftEye.axis, 10) : null,
-      },
-      name: customerName.trim(),
-      mobileNumber: mobileNumber.trim(),
-      email: email.trim(),
-      address: address.trim(),
-    };
+    const payload = buildEyeTestPayload(normalizedMobileNumber);
 
     try {
-      await createEyeTestRecord(payload);
-      await savePrescription(user?.id ?? 'guest-eye-test', {
-        notes: [
-          `Customer: ${customerName.trim()}`,
-          `Mobile: ${mobileNumber.trim()}`,
-          email.trim() ? `Email: ${email.trim()}` : '',
-          address.trim() ? `Address: ${address.trim()}` : '',
-        ].filter(Boolean).join(' | '),
-        order_id: undefined,
-        right_eye_sph: payload.spherical.right,
-        right_eye_cyl: payload.cylindrical.right,
-        right_eye_axis: payload.axis.right,
-        left_eye_sph: payload.spherical.left,
-        left_eye_cyl: payload.cylindrical.left,
-        left_eye_axis: payload.axis.left,
-      });
-
+      await persistEyeTest(normalizedMobileNumber);
       setSaved(true);
     } catch (_error) {
       try {
         await savePrescription(user?.id ?? 'guest-eye-test', {
           notes: [
             `Customer: ${customerName.trim()}`,
-            `Mobile: ${mobileNumber.trim()}`,
+            `Mobile: ${normalizedMobileNumber}`,
             email.trim() ? `Email: ${email.trim()}` : '',
             address.trim() ? `Address: ${address.trim()}` : '',
           ].filter(Boolean).join(' | '),
@@ -401,6 +422,11 @@ export default function PrescriptionScreen() {
           <ArrowLeft size={18} color={Colors.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{isOrderFlow ? 'Power Selection' : 'Eye Test'}</Text>
+        {!isOrderFlow ? (
+          <TouchableOpacity onPress={openEyeTestHistory} style={styles.historyBtn} activeOpacity={0.86}>
+            <Text style={styles.historyBtnText}>History</Text>
+          </TouchableOpacity>
+        ) : <View style={styles.headerSpacer} />}
       </View>
 
       <ScrollView
@@ -557,6 +583,9 @@ export default function PrescriptionScreen() {
                   {normalizedParentPhone ? (
                     <Text style={styles.savedPowersPhone}>Customer mobile: {normalizedParentPhone}</Text>
                   ) : null}
+                  <TouchableOpacity onPress={openEyeTestHistory} activeOpacity={0.86}>
+                    <Text style={styles.savedPowersLink}>View full history</Text>
+                  </TouchableOpacity>
                 </View>
 
                 {loadingSavedPowers ? (
@@ -871,9 +900,28 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   headerTitle: {
+    flex: 1,
     fontSize: 18,
     fontWeight: '500',
     color: Colors.text,
+    textAlign: 'center',
+  },
+  headerSpacer: {
+    width: 62,
+  },
+  historyBtn: {
+    minWidth: 62,
+    minHeight: 34,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.primaryLight,
+    paddingHorizontal: 10,
+  },
+  historyBtnText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: Colors.primary,
   },
   body: {
     flexGrow: 1,
@@ -1225,6 +1273,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.primary,
     fontWeight: '600',
+  },
+  savedPowersLink: {
+    marginTop: 8,
+    fontSize: 12.5,
+    color: Colors.primary,
+    fontWeight: '700',
   },
   savedPowersList: {
     maxHeight: 470,

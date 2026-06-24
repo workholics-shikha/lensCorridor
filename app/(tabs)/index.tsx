@@ -51,8 +51,11 @@ export default function HomeScreen() {
   const isLargeTablet = viewport.isLargeTablet;
   const { cartCount } = useCart();
   const bottomSafeSpace = useTabScreenBottomSpace(isTablet ? 28 : 20);
+  const [headerHeight, setHeaderHeight] = useState(0);
   const [selectedShape, setSelectedShape] = useState('rectangle');
   const [frameShapes, setFrameShapes] = useState<FrameShape[]>([]);
+  const availableScrollHeight = Math.max(0, height - headerHeight);
+  const surfaceMinHeight = Math.max(metricsFallbackMinHeight(width, height, isTablet), availableScrollHeight);
 
   const metrics = useMemo(() => {
     const contentWidth = viewport.contentMaxWidth;
@@ -150,6 +153,9 @@ const shapeCardHeight =
             alignItems: 'center',
           },
         ]}
+        onLayout={(event) => {
+          setHeaderHeight(event.nativeEvent.layout.height);
+        }}
       >
         <LinearGradient
           colors={['#1A6FD4', '#1A6FD4']}
@@ -196,9 +202,11 @@ const shapeCardHeight =
 
       <ScrollView
         showsVerticalScrollIndicator={false}
+        bounces={false}
+        overScrollMode="never"
+        style={styles.scrollView}
         contentContainerStyle={[
           styles.scrollContent,
-          { minHeight: height },
           { paddingBottom: bottomSafeSpace },
         ]}
       >
@@ -211,7 +219,7 @@ const shapeCardHeight =
               borderCurve: 'continuous',
               paddingTop: metrics.sectionTopPadding,
               width: '100%',
-              minHeight: metrics.surfaceMinHeight + bottomSafeSpace,
+              minHeight: surfaceMinHeight,
               overflow: 'hidden',
             },
           ]}
@@ -359,6 +367,11 @@ const shapeCardHeight =
       </ScrollView>
     </View>
   );
+}
+
+function metricsFallbackMinHeight(width: number, height: number, isTablet: boolean) {
+  const isTabletLandscape = isTablet && width > height;
+  return isTabletLandscape ? 420 : 360;
 }
 
 function SectionTitle({
@@ -629,6 +642,10 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
+  },
+  scrollView: {
+    flex: 1,
+    backgroundColor: '#FBFBFE',
   },
   scrollContentTablet: {
     alignItems: 'center',

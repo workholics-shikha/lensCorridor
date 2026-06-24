@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ActivityIndicator,
-  Platform, Image, ImageBackground, ScrollView, useWindowDimensions,
+  Platform, Image, ImageBackground, ScrollView, TextInput, useWindowDimensions,
 } from 'react-native';
 import { router } from 'expo-router';
 import { ChevronDown } from 'lucide-react-native';
 import { useAuth } from '@/context/AuthContext';
 import { useOrderFlow } from '@/context/OrderFlowContext';
-import { fetchSalespeople, fetchStores, StoreOption } from '@/lib/api';
+import { fetchSalespeople, fetchStores, StoreOption, verifySalespersonPin } from '@/lib/api';
 import { Salesperson } from '@/lib/types';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '@/lib/theme';
 import { useResponsiveMetrics } from '@/lib/responsive';
@@ -27,9 +27,11 @@ export default function SplashScreen() {
   const [selectedStore, setSelectedStore] = useState<StoreOption | null>(null);
   const [salespeople, setSalespeople] = useState<Salesperson[]>([]);
   const [selectedSalesperson, setSelectedSalesperson] = useState<Salesperson | null>(null);
+  const [staffPin, setStaffPin] = useState('');
   const [storeDropdownOpen, setStoreDropdownOpen] = useState(false);
   const [salespersonDropdownOpen, setSalespersonDropdownOpen] = useState(false);
   const [selectionError, setSelectionError] = useState('');
+  const [verifyingPin, setVerifyingPin] = useState(false);
   const capitalizeWords = (text: string) => {
     return text
       ?.toLowerCase()
@@ -55,6 +57,7 @@ export default function SplashScreen() {
     fetchSalespeople(selectedStore.id).then((items) => {
       setSalespeople(items);
       setSelectedSalesperson(null);
+      setStaffPin('');
     });
   }, [selectedStore]);
 
@@ -64,9 +67,37 @@ export default function SplashScreen() {
     }
   }, [user, loading]);
 
-  const handleNewOrder = () => {
+  const validateSelection = async () => {
     if (!selectedStore || !selectedSalesperson) {
       setSelectionError('Please select both a store and a salesman before continuing.');
+      return false;
+    }
+
+    if (staffPin.trim().length < 4) {
+      setSelectionError('Please enter staff PIN.');
+      return false;
+    }
+
+    try {
+      setVerifyingPin(true);
+      await verifySalespersonPin({
+        salesmanId: selectedSalesperson.employee_id,
+        pin: staffPin.trim(),
+      });
+      setSelectionError('');
+      return true;
+    } catch (error) {
+      setSelectionError(error instanceof Error ? error.message : 'Invalid PIN.');
+      return false;
+    } finally {
+      setVerifyingPin(false);
+    }
+  };
+
+  const handleNewOrder = async () => {
+    const valid = await validateSelection();
+
+    if (!valid || !selectedStore || !selectedSalesperson) {
       return;
     }
 
@@ -86,9 +117,10 @@ export default function SplashScreen() {
     router.push('/(tabs)');
   };
 
-  const handleReturnExchange = () => {
-    if (!selectedStore || !selectedSalesperson) {
-      setSelectionError('Please select both a store and a salesman before continuing.');
+  const handleReturnExchange = async () => {
+    const valid = await validateSelection();
+
+    if (!valid || !selectedStore || !selectedSalesperson) {
       return;
     }
 
@@ -234,6 +266,7 @@ export default function SplashScreen() {
                       style={styles.dropdownItem}
                       onPress={() => {
                         setSelectedSalesperson(sp);
+                        setStaffPin('');
                         setSalespersonDropdownOpen(false);
                         setSelectionError('');
                       }}
@@ -246,6 +279,22 @@ export default function SplashScreen() {
               )}
             </View>
 
+            <View style={[styles.pinShell, styles.secondaryDropdown]}>
+              <Text style={styles.pinLabel}>Staff PIN</Text>
+              <TextInput
+                value={staffPin}
+                onChangeText={(value) => {
+                  setStaffPin(value.replace(/[^0-9]/g, '').slice(0, 6));
+                  setSelectionError('');
+                }}
+                placeholder="Enter PIN"
+                placeholderTextColor={Colors.gray400}
+                keyboardType="number-pad"
+                secureTextEntry
+                style={styles.pinInput}
+              />
+            </View>
+
             {selectionError ? (
               <View style={styles.errorBox}>
                 <Text style={styles.errorText}>{selectionError}</Text>
@@ -253,11 +302,11 @@ export default function SplashScreen() {
             ) : null}
 
             <View style={[styles.buttonsRow, isTablet && styles.buttonsRowTablet]}>
-              <TouchableOpacity style={[styles.btnPrimary, styles.actionButton]} onPress={handleNewOrder} activeOpacity={0.85}>
-                <Text style={styles.btnPrimaryText}>New Order</Text>
+              <TouchableOpacity style={[styles.btnPrimary, styles.actionButton, verifyingPin && styles.actionButtonDisabled]} onPress={handleNewOrder} activeOpacity={0.85} disabled={verifyingPin}>
+                <Text style={styles.btnPrimaryText}>{verifyingPin ? 'Verifying...' : 'New Order'}</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.btnSecondary, styles.actionButton]} onPress={handleReturnExchange} activeOpacity={0.85}>
-                <Text style={styles.btnSecondaryText}>Return / Exchange</Text>
+              <TouchableOpacity style={[styles.btnSecondary, styles.actionButton, verifyingPin && styles.actionButtonDisabled]} onPress={handleReturnExchange} activeOpacity={0.85} disabled={verifyingPin}>
+                <Text style={styles.btnSecondaryText}>{verifyingPin ? 'Verifying...' : 'Return / Exchange'}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -356,6 +405,31 @@ const styles = StyleSheet.create({
     zIndex: 40,
     elevation: 8,
   },
+  pinShell: {
+    width: '100%',
+    backgroundColor: Colors.white,
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.md,
+    paddingTop: 10,
+    paddingBottom: 8,
+    ...Shadow.sm,
+  },
+  pinLabel: {
+    fontSize: FontSize.sm,
+    fontWeight: '700',
+    color: Colors.text,
+    marginBottom: 6,
+  },
+  pinInput: {
+    minHeight: 42,
+    borderWidth: 1,
+    borderColor: Colors.gray200,
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.md,
+    fontSize: FontSize.md,
+    color: Colors.text,
+    backgroundColor: Colors.gray50,
+  },
   errorBox: {
     width: '100%',
     backgroundColor: '#FEE2E2',
@@ -414,6 +488,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     flex: 1,
+  },
+  actionButtonDisabled: {
+    opacity: 0.7,
   },
   btnPrimary: {
     backgroundColor: Colors.accent,

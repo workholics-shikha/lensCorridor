@@ -34,6 +34,7 @@ export default function RootLayout() {
                 <Stack.Screen name="invoice" options={{ presentation: 'card' }} />
                 <Stack.Screen name="order-details" options={{ presentation: 'card' }} />
                 <Stack.Screen name="prescription" options={{ presentation: 'card' }} />
+                <Stack.Screen name="eye-test-history" options={{ presentation: 'card' }} />
                 <Stack.Screen name="return-exchange-search" options={{ presentation: 'card' }} />
                 <Stack.Screen name="return-exchange-return" options={{ presentation: 'card' }} />
                 <Stack.Screen name="return-exchange-exchange" options={{ presentation: 'card' }} />

@@ -27,8 +27,9 @@ const eyeTestSchema = new mongoose.Schema(
     // Customer Details
     name:         { type: String, required: true, trim: true },
     mobileNumber: { type: String, required: true, trim: true },
-    email:        { type: String, required: true, trim: true },
-    address:      { type: String, required: true, trim: true },
+    email:        { type: String, default: '', trim: true },
+    address:      { type: String, default: '', trim: true },
+    customer:     { type: mongoose.Schema.Types.ObjectId, ref: 'Customer', default: null },
   },
   { timestamps: true }
 );

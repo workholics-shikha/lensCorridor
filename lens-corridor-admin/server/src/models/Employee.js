@@ -8,6 +8,7 @@ const employeeSchema = new mongoose.Schema({
   role: { type: String, enum: ['Admin', 'Manager', 'Salesman', 'Staff'], default: 'Salesman' },
   store: { type: mongoose.Schema.Types.ObjectId, ref: 'Store' },
   password: { type: String, required: true },
+  pin: { type: String, required: true },
   status: { type: String, enum: ['Active', 'Inactive'], default: 'Active' },
 }, { timestamps: true });
 
