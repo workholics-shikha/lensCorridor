@@ -31,7 +31,7 @@ export default function SplashScreen() {
   const [storeDropdownOpen, setStoreDropdownOpen] = useState(false);
   const [salespersonDropdownOpen, setSalespersonDropdownOpen] = useState(false);
   const [selectionError, setSelectionError] = useState('');
-  const [verifyingPin, setVerifyingPin] = useState(false);
+  const [verifyingAction, setVerifyingAction] = useState<'new-order' | 'return-exchange' | null>(null);
   const scrollRef = useRef<ScrollView | null>(null);
   const capitalizeWords = (text: string) => {
     return text
@@ -68,7 +68,7 @@ export default function SplashScreen() {
     }
   }, [user, loading]);
 
-  const validateSelection = async () => {
+  const validateSelection = async (action: 'new-order' | 'return-exchange') => {
     if (!selectedStore || !selectedSalesperson) {
       setSelectionError('Please select both a store and a salesman before continuing.');
       return false;
@@ -80,7 +80,7 @@ export default function SplashScreen() {
     }
 
     try {
-      setVerifyingPin(true);
+      setVerifyingAction(action);
       await verifySalespersonPin({
         salesmanId: selectedSalesperson.employee_id,
         pin: staffPin.trim(),
@@ -91,12 +91,12 @@ export default function SplashScreen() {
       setSelectionError(error instanceof Error ? error.message : 'Invalid PIN.');
       return false;
     } finally {
-      setVerifyingPin(false);
+      setVerifyingAction(null);
     }
   };
 
   const handleNewOrder = async () => {
-    const valid = await validateSelection();
+    const valid = await validateSelection('new-order');
 
     if (!valid || !selectedStore || !selectedSalesperson) {
       return;
@@ -119,7 +119,7 @@ export default function SplashScreen() {
   };
 
   const handleReturnExchange = async () => {
-    const valid = await validateSelection();
+    const valid = await validateSelection('return-exchange');
 
     if (!valid || !selectedStore || !selectedSalesperson) {
       return;
@@ -314,11 +314,21 @@ export default function SplashScreen() {
             ) : null}
 
             <View style={[styles.buttonsRow, isTablet && styles.buttonsRowTablet]}>
-              <TouchableOpacity style={[styles.btnPrimary, styles.actionButton, verifyingPin && styles.actionButtonDisabled]} onPress={handleNewOrder} activeOpacity={0.85} disabled={verifyingPin}>
-                <Text style={styles.btnPrimaryText}>{verifyingPin ? 'Verifying...' : 'New Order'}</Text>
+              <TouchableOpacity
+                style={[styles.btnPrimary, styles.actionButton, verifyingAction && styles.actionButtonDisabled]}
+                onPress={handleNewOrder}
+                activeOpacity={0.85}
+                disabled={Boolean(verifyingAction)}
+              >
+                <Text style={styles.btnPrimaryText}>{verifyingAction === 'new-order' ? 'Verifying...' : 'New Order'}</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.btnSecondary, styles.actionButton, verifyingPin && styles.actionButtonDisabled]} onPress={handleReturnExchange} activeOpacity={0.85} disabled={verifyingPin}>
-                <Text style={styles.btnSecondaryText}>{verifyingPin ? 'Verifying...' : 'Return / Exchange'}</Text>
+              <TouchableOpacity
+                style={[styles.btnSecondary, styles.actionButton, verifyingAction && styles.actionButtonDisabled]}
+                onPress={handleReturnExchange}
+                activeOpacity={0.85}
+                disabled={Boolean(verifyingAction)}
+              >
+                <Text style={styles.btnSecondaryText}>{verifyingAction === 'return-exchange' ? 'Verifying...' : 'Return / Exchange'}</Text>
               </TouchableOpacity>
             </View>
           </View>

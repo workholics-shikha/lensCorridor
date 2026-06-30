@@ -14,6 +14,7 @@ const lensDetailSchema = new mongoose.Schema({
   cyl: { type: String, default: '' },
   axis: { type: String, default: '' },
   add: { type: String, default: '' },
+  pd: { type: String, default: '' },
 }, { _id: false });
 
 const paymentEntrySchema = new mongoose.Schema({
@@ -32,6 +33,7 @@ const appOrderPlacementSchema = new mongoose.Schema({
     name: { type: String, default: '' },
     phone: { type: String, default: '' },
     billingAddress: { type: String, default: '' },
+    dateOfBirth: { type: String, default: '' },
   },
   frame: {
     selectedShape: { type: String, default: '' },

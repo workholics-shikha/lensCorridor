@@ -8,6 +8,7 @@ import StoresPage from './admin/StoresPage'
 import { InfoCard, MetricCard, MiniCard, StatusBadge } from './admin/AdminUiPrimitives'
 import { buildApiUrl } from '../lib/api'
 import { buildInvoicePdf } from '../lib/invoicePdf'
+import { buildRepairInvoicePdf } from '../lib/repairInvoicePdf'
 import invoiceLogo from '../../../assets/images/blueLogo.png'
 
 const adminBaseUrl = buildApiUrl('')
@@ -257,6 +258,7 @@ const createEmployeeForm = () => ({
   phone: '',
   role: 'Salesman',
   store: '',
+  password: '',
   pin: '',
   status: 'Active',
 })
@@ -309,8 +311,12 @@ const getStatusTone = (status = '') => {
     return 'positive'
   }
 
-  if (normalized === 'review' || normalized === 'inactive' || normalized === 'finance approval' || normalized === 'processing' || normalized === 'ready') {
+  if (normalized === 'review' || normalized === 'inactive' || normalized === 'finance approval' || normalized === 'processing' || normalized === 'ready' || normalized === 'in progress') {
     return 'neutral'
+  }
+
+  if (normalized === 'requested') {
+    return 'warning'
   }
 
   return 'warning'
@@ -500,6 +506,41 @@ const downloadOrderInvoice = async (order) => {
   window.URL.revokeObjectURL(url)
 }
 
+const buildRepairInvoice = async (repair) => (
+  buildRepairInvoicePdf({
+    referenceNumber: repair?.referenceNumber || '-',
+    invoiceDate: formatOrderDate(repair?.createdAt),
+    customerName: repair?.customerName || 'Customer',
+    phone: repair?.customerPhone || 'Phone not added',
+    orderNumber: repair?.orderNumber || '-',
+    storeName: repair?.storeName || 'Store not assigned',
+    repairScope: String(repair?.repairScope || 'full-product').replace(/-/g, ' '),
+    issueType: repair?.issueType || '-',
+    remarks: repair?.remarks || '',
+    estimatedAmount: Number(repair?.estimatedAmount ?? 0),
+    advanceAmount: Number(repair?.advanceAmount ?? 0),
+    remainingAmount: Number(repair?.remainingAmount ?? 0),
+    expectedDeliveryDate: repair?.expectedDeliveryDate ? formatOrderDate(repair.expectedDeliveryDate) : '-',
+    status: repair?.status || 'Requested',
+    logoUri: invoiceLogo,
+  })
+)
+
+const downloadRepairInvoice = async (repair) => {
+  if (!repair || typeof window === 'undefined') {
+    return
+  }
+
+  const pdfBytes = await buildRepairInvoice(repair)
+  const blob = new Blob([pdfBytes], { type: 'application/pdf' })
+  const url = window.URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = `${repair.referenceNumber || 'repair-invoice'}.pdf`
+  anchor.click()
+  window.URL.revokeObjectURL(url)
+}
+
 const getUploadedOrderImages = (order) => {
   const frameImages = Array.isArray(order?.frame?.images) ? order.frame.images : []
   const uploadedImages = frameImages.filter((item) => (
@@ -652,6 +693,7 @@ const AdminPanel = ({ user, onLogout }) => {
   const [storeSaving, setStoreSaving] = useState(false)
   const [storeMessage, setStoreMessage] = useState('')
   const [salesRange, setSalesRange] = useState('weekly')
+  const [dashboardStoreFilter, setDashboardStoreFilter] = useState('')
   const [fromDate, setFromDate] = useState(defaultFromDateValue)
   const [toDate, setToDate] = useState(defaultToDateValue)
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -674,6 +716,9 @@ const AdminPanel = ({ user, onLogout }) => {
   const [returnRequests, setReturnRequests] = useState([])
   const [returnRequestsLoading, setReturnRequestsLoading] = useState(false)
   const [returnRequestsError, setReturnRequestsError] = useState('')
+  const [repairRequests, setRepairRequests] = useState([])
+  const [repairRequestsLoading, setRepairRequestsLoading] = useState(false)
+  const [repairRequestsError, setRepairRequestsError] = useState('')
   const [selectedAppOrderId, setSelectedAppOrderId] = useState('')
   const [orderStoreFilter, setOrderStoreFilter] = useState('')
   const [orderIdSearch, setOrderIdSearch] = useState('')
@@ -702,6 +747,8 @@ const AdminPanel = ({ user, onLogout }) => {
     : (screenTitles[activeScreen] || 'Admin Panel')
 
   const isMastersActive = activeScreen === 'masters'
+  const normalizedUserRole = String(user?.role || '').trim().toLowerCase()
+  const isReadOnlyUser = normalizedUserRole === 'manager'
   const adminName = user?.name || 'Super Admin'
   const profileMeta = user?.role ? `${user.role} access` : 'Multi-store access'
   const initials = useMemo(() => {
@@ -806,40 +853,90 @@ const AdminPanel = ({ user, onLogout }) => {
 
     return statusCounts
   }, [returnRequests])
+  const repairSummary = useMemo(() => {
+    return repairRequests.reduce((summary, request) => {
+      const normalizedStatus = String(request?.status || 'Requested').toLowerCase()
+
+      if (normalizedStatus === 'requested') {
+        summary.requested += 1
+      } else if (normalizedStatus === 'in progress') {
+        summary.inProgress += 1
+      } else if (normalizedStatus === 'ready') {
+        summary.ready += 1
+      } else if (normalizedStatus === 'delivered') {
+        summary.delivered += 1
+      } else {
+        summary.cancelled += 1
+      }
+
+      summary.estimatedAmount += Number(request?.estimatedAmount ?? 0)
+      summary.remainingAmount += Number(request?.remainingAmount ?? 0)
+      return summary
+    }, {
+      requested: 0,
+      inProgress: 0,
+      ready: 0,
+      delivered: 0,
+      cancelled: 0,
+      estimatedAmount: 0,
+      remainingAmount: 0,
+    })
+  }, [repairRequests])
   const dashboardOrders = useMemo(() => (
     appOrders.filter((order) => Boolean(parseDateValue(order.createdAt)))
   ), [appOrders])
+  const dashboardStoreOptions = useMemo(() => [
+    { id: '', name: 'All Stores' },
+    ...stores.map((store) => ({
+      id: store.id,
+      name: store.code ? `${store.name} (${store.code})` : store.name,
+    })),
+  ], [stores])
+  const selectedDashboardStore = useMemo(
+    () => stores.find((store) => store.id === dashboardStoreFilter) || null,
+    [dashboardStoreFilter, stores]
+  )
+  const filteredDashboardOrders = useMemo(() => {
+    if (!dashboardStoreFilter) {
+      return dashboardOrders
+    }
+
+    return dashboardOrders.filter((order) => {
+      const orderStoreId = order.storeId || order.meta?.store?.id || ''
+      return orderStoreId === dashboardStoreFilter
+    })
+  }, [dashboardOrders, dashboardStoreFilter])
   const todayOrderCount = useMemo(() => {
     const today = new Date()
-    return dashboardOrders.filter((order) => {
+    return filteredDashboardOrders.filter((order) => {
       const createdAt = parseDateValue(order.createdAt)
       return createdAt && isSameDay(createdAt, today)
     }).length
-  }, [dashboardOrders])
+  }, [filteredDashboardOrders])
   const yesterdayOrderCount = useMemo(() => {
     const yesterday = new Date()
     yesterday.setDate(yesterday.getDate() - 1)
-    return dashboardOrders.filter((order) => {
+    return filteredDashboardOrders.filter((order) => {
       const createdAt = parseDateValue(order.createdAt)
       return createdAt && isSameDay(createdAt, yesterday)
     }).length
-  }, [dashboardOrders])
+  }, [filteredDashboardOrders])
   const weeklyRevenue = useMemo(() => {
     const today = new Date()
     const weekStart = startOfDay(new Date(today.getFullYear(), today.getMonth(), today.getDate() - 6))
     const weekEnd = endOfDay(today)
-    return dashboardOrders.reduce((sum, order) => {
+    return filteredDashboardOrders.reduce((sum, order) => {
       const createdAt = parseDateValue(order.createdAt)
       if (!createdAt || createdAt < weekStart || createdAt > weekEnd) {
         return sum
       }
       return sum + Number(order.billing?.totalPayable ?? 0)
     }, 0)
-  }, [dashboardOrders])
+  }, [filteredDashboardOrders])
   const topStoreSnapshot = useMemo(() => {
     const totals = new Map()
 
-    dashboardOrders.forEach((order) => {
+    filteredDashboardOrders.forEach((order) => {
       const key = order.storeId || order.meta?.store?.id || 'unassigned'
       const name = order.meta?.store?.name || 'Store not assigned'
       const entry = totals.get(key) || { name, amount: 0, orders: 0 }
@@ -849,10 +946,10 @@ const AdminPanel = ({ user, onLogout }) => {
     })
 
     return [...totals.values()].sort((a, b) => b.amount - a.amount)[0] || null
-  }, [dashboardOrders])
+  }, [filteredDashboardOrders])
   const dashboardHero = useMemo(() => {
     const today = new Date()
-    const revenueToday = dashboardOrders.reduce((sum, order) => {
+    const revenueToday = filteredDashboardOrders.reduce((sum, order) => {
       const createdAt = parseDateValue(order.createdAt)
       if (!createdAt || !isSameDay(createdAt, today)) {
         return sum
@@ -862,26 +959,26 @@ const AdminPanel = ({ user, onLogout }) => {
 
     return {
       revenueToday: formatCurrency(revenueToday),
-      pendingOrders: String(dashboardOrders.filter((order) => order.status === 'Pending').length),
+      pendingOrders: String(filteredDashboardOrders.filter((order) => order.status === 'Pending').length),
     }
-  }, [dashboardOrders])
+  }, [filteredDashboardOrders])
   const monthlyRevenue = useMemo(() => {
     const today = new Date()
     const monthStart = startOfDay(new Date(today.getFullYear(), today.getMonth(), 1))
     const monthEnd = endOfDay(new Date(today.getFullYear(), today.getMonth() + 1, 0))
-    return dashboardOrders.reduce((sum, order) => {
+    return filteredDashboardOrders.reduce((sum, order) => {
       const createdAt = parseDateValue(order.createdAt)
       if (!createdAt || createdAt < monthStart || createdAt > monthEnd) {
         return sum
       }
       return sum + Number(order.billing?.totalPayable ?? 0)
     }, 0)
-  }, [dashboardOrders])
+  }, [filteredDashboardOrders])
   const dashboardMetrics = useMemo(() => {
-    const paidOrders = dashboardOrders.filter((order) => Number(order.billing?.remainingAmount ?? 0) <= 0).length
-    const partialOrders = dashboardOrders.filter((order) => Number(order.billing?.remainingAmount ?? 0) > 0).length
-    const averageOrderValue = dashboardOrders.length
-      ? dashboardOrders.reduce((sum, order) => sum + Number(order.billing?.totalPayable ?? 0), 0) / dashboardOrders.length
+    const paidOrders = filteredDashboardOrders.filter((order) => Number(order.billing?.remainingAmount ?? 0) <= 0).length
+    const partialOrders = filteredDashboardOrders.filter((order) => Number(order.billing?.remainingAmount ?? 0) > 0).length
+    const averageOrderValue = filteredDashboardOrders.length
+      ? filteredDashboardOrders.reduce((sum, order) => sum + Number(order.billing?.totalPayable ?? 0), 0) / filteredDashboardOrders.length
       : 0
 
     return [
@@ -898,7 +995,7 @@ const AdminPanel = ({ user, onLogout }) => {
       {
         label: 'Fully Paid Orders',
         value: String(paidOrders),
-        hint: `${countPercentage(paidOrders, dashboardOrders.length)} of total orders`,
+        hint: `${countPercentage(paidOrders, filteredDashboardOrders.length)} of total orders`,
       },
       {
         label: 'Partial Payments',
@@ -906,7 +1003,7 @@ const AdminPanel = ({ user, onLogout }) => {
         hint: `AOV ${formatCurrency(Math.round(averageOrderValue))}`,
       },
     ]
-  }, [dashboardOrders, todayOrderCount, yesterdayOrderCount, topStoreSnapshot, weeklyRevenue])
+  }, [filteredDashboardOrders, todayOrderCount, yesterdayOrderCount, topStoreSnapshot, weeklyRevenue])
   const dashboardRevenueCards = useMemo(() => {
     const todayRevenueValue = dashboardHero.revenueToday
     const weeklyAverage = todayOrderCount > 0 ? Math.round(weeklyRevenue / Math.max(7, todayOrderCount)) : Math.round(weeklyRevenue / 7)
@@ -937,7 +1034,7 @@ const AdminPanel = ({ user, onLogout }) => {
       return date
     })
     const weeklyLabels = weeklyDates.map((date) => date.toLocaleDateString('en-GB', { weekday: 'short' }))
-    const weeklyTotals = weeklyDates.map((date) => dashboardOrders.reduce((sum, order) => {
+    const weeklyTotals = weeklyDates.map((date) => filteredDashboardOrders.reduce((sum, order) => {
       const createdAt = parseDateValue(order.createdAt)
       if (!createdAt || !isSameDay(createdAt, date)) {
         return sum
@@ -953,7 +1050,7 @@ const AdminPanel = ({ user, onLogout }) => {
       const rangeEnd = new Date(rangeStart)
       rangeEnd.setDate(rangeStart.getDate() + 6)
 
-      return dashboardOrders.reduce((sum, order) => {
+      return filteredDashboardOrders.reduce((sum, order) => {
         const createdAt = parseDateValue(order.createdAt)
         if (!createdAt || createdAt < startOfDay(rangeStart) || createdAt > endOfDay(rangeEnd)) {
           return sum
@@ -981,9 +1078,9 @@ const AdminPanel = ({ user, onLogout }) => {
         values: normalizeValues(monthlyTotals),
       },
     }
-  }, [dashboardOrders])
+  }, [filteredDashboardOrders])
   const salesData = salesDataByRange[salesRange]
-  const salesCaption = `${salesData.caption} Based on live app orders.`
+  const salesCaption = `${salesData.caption} ${selectedDashboardStore ? `Filtered for ${selectedDashboardStore.name}.` : 'Based on live app orders across all stores.'}`
   const storePerformance = useMemo(() => {
     const storeMap = new Map()
 
@@ -998,7 +1095,7 @@ const AdminPanel = ({ user, onLogout }) => {
       })
     })
 
-    dashboardOrders.forEach((order) => {
+    filteredDashboardOrders.forEach((order) => {
       const key = order.storeId || order.meta?.store?.id || 'unassigned'
       if (!storeMap.has(key)) {
         storeMap.set(key, {
@@ -1022,7 +1119,7 @@ const AdminPanel = ({ user, onLogout }) => {
     return [...storeMap.values()]
       .filter((store) => store.orderCount > 0)
       .sort((a, b) => b.revenueAmount - a.revenueAmount)
-      .slice(0, 5)
+      .slice(0, dashboardStoreFilter ? 1 : 5)
       .map((store, index) => ({
         id: store.id,
         name: store.name,
@@ -1032,11 +1129,11 @@ const AdminPanel = ({ user, onLogout }) => {
         status: index === 0 ? 'Top Performer' : (store.pendingCount ? 'Follow-up Needed' : 'Stable'),
         tone: index === 0 ? 'positive' : (store.pendingCount ? 'warning' : 'neutral'),
       }))
-  }, [dashboardOrders, stores])
+  }, [dashboardStoreFilter, filteredDashboardOrders, stores])
   const operationalQueue = useMemo(() => {
-    const pendingOrders = dashboardOrders.filter((order) => order.status === 'Pending')
-    const completedOrders = dashboardOrders.filter((order) => order.status === 'Completed')
-    const outstandingAmount = dashboardOrders.reduce((sum, order) => sum + Number(order.billing?.remainingAmount ?? 0), 0)
+    const pendingOrders = filteredDashboardOrders.filter((order) => order.status === 'Pending')
+    const completedOrders = filteredDashboardOrders.filter((order) => order.status === 'Completed')
+    const outstandingAmount = filteredDashboardOrders.reduce((sum, order) => sum + Number(order.billing?.remainingAmount ?? 0), 0)
 
     return [
       {
@@ -1045,21 +1142,21 @@ const AdminPanel = ({ user, onLogout }) => {
       },
       {
         title: `${formatCurrency(outstandingAmount)} outstanding in partial payments`,
-        meta: dashboardOrders.some((order) => Number(order.billing?.remainingAmount ?? 0) > 0)
+        meta: filteredDashboardOrders.some((order) => Number(order.billing?.remainingAmount ?? 0) > 0)
           ? 'Collect the remaining balances before final closure.'
           : 'All current app orders are fully settled.',
       },
       {
         title: `${completedOrders.length} orders already completed`,
-        meta: `${dashboardOrders.length - completedOrders.length} still active across the live app order queue.`,
+        meta: `${filteredDashboardOrders.length - completedOrders.length} still active across the live app order queue.`,
       },
     ]
-  }, [dashboardOrders])
+  }, [filteredDashboardOrders])
   const productInsights = useMemo(() => {
     const lensCounts = new Map()
     const paymentCounts = new Map()
 
-    dashboardOrders.forEach((order) => {
+    filteredDashboardOrders.forEach((order) => {
       const lensKey = order.lensSelection?.lensCategory || order.lensSelection?.powerType || 'Frame Only'
       lensCounts.set(lensKey, (lensCounts.get(lensKey) || 0) + 1)
 
@@ -1069,18 +1166,18 @@ const AdminPanel = ({ user, onLogout }) => {
 
     const topLens = [...lensCounts.entries()].sort((a, b) => b[1] - a[1])[0]
     const topPayment = [...paymentCounts.entries()].sort((a, b) => b[1] - a[1])[0]
-    const totalRevenue = dashboardOrders.reduce((sum, order) => sum + Number(order.billing?.totalPayable ?? 0), 0)
-    const averageOrderValue = dashboardOrders.length ? totalRevenue / dashboardOrders.length : 0
+    const totalRevenue = filteredDashboardOrders.reduce((sum, order) => sum + Number(order.billing?.totalPayable ?? 0), 0)
+    const averageOrderValue = filteredDashboardOrders.length ? totalRevenue / filteredDashboardOrders.length : 0
 
     return [
       { label: 'Top Lens', value: topLens ? topLens[0] : '-' },
       {
         label: 'Top Payment Mode',
-        value: topPayment ? `${topPayment[0]} ${countPercentage(topPayment[1], dashboardOrders.length)}` : '-',
+        value: topPayment ? `${topPayment[0]} ${countPercentage(topPayment[1], filteredDashboardOrders.length)}` : '-',
       },
       { label: 'AOV', value: formatCurrency(Math.round(averageOrderValue)) },
     ]
-  }, [dashboardOrders])
+  }, [filteredDashboardOrders])
   const paymentDateRangePayments = useMemo(() => {
     const from = parseDateValue(fromDate)
     const to = parseDateValue(toDate)
@@ -1443,7 +1540,9 @@ const AdminPanel = ({ user, onLogout }) => {
         assertAuthorizedResponse(storeResponse, storeDataResponse, 'Failed to fetch stores')
 
         setEmployees(Array.isArray(employeeData) ? employeeData : [])
-        const normalizedStores = Array.isArray(storeDataResponse) ? storeDataResponse : []
+        const normalizedStores = Array.isArray(storeDataResponse?.data)
+          ? storeDataResponse.data
+          : (Array.isArray(storeDataResponse) ? storeDataResponse : [])
         setStores(normalizedStores)
         setSelectedStoreId((current) => (
           normalizedStores.some((store) => store.id === current) ? current : (normalizedStores[0]?.id || '')
@@ -1460,6 +1559,46 @@ const AdminPanel = ({ user, onLogout }) => {
     }
 
     fetchEmployeeData()
+
+    return () => controller.abort()
+  }, [])
+
+  useEffect(() => {
+    const controller = new AbortController()
+
+    const fetchRepairs = async () => {
+      setRepairRequestsLoading(true)
+      setRepairRequestsError('')
+
+      try {
+        const response = await fetch(`${adminBaseUrl}/api/repairs`, {
+          signal: controller.signal,
+        })
+
+        const data = await response.json().catch(() => null)
+
+        if (!response.ok) {
+          throw new Error(data?.message || 'Failed to fetch repairs')
+        }
+
+        setRepairRequests(
+          Array.isArray(data?.data)
+            ? data.data
+            : (Array.isArray(data) ? data : [])
+        )
+      } catch (error) {
+        if (error.name === 'AbortError') {
+          return
+        }
+
+        setRepairRequests([])
+        setRepairRequestsError(error.message || 'Failed to fetch repairs')
+      } finally {
+        setRepairRequestsLoading(false)
+      }
+    }
+
+    fetchRepairs()
 
     return () => controller.abort()
   }, [])
@@ -1707,6 +1846,11 @@ const AdminPanel = ({ user, onLogout }) => {
   }
 
   const handleOrderStatusUpdate = async (order, status) => {
+    if (isReadOnlyUser) {
+      setAppOrdersError('Managers have view-only access.')
+      return
+    }
+
     if (!order?.id || !status || order.status === status) {
       return
     }
@@ -1740,6 +1884,11 @@ const AdminPanel = ({ user, onLogout }) => {
   }
 
   const handleOrderPaymentCollection = async (order) => {
+    if (isReadOnlyUser) {
+      setPaymentCollectionMessage('Managers have view-only access.')
+      return
+    }
+
     const additionalCollectedAmount = Number(paymentCollectionAmount || 0)
 
     if (!order?.id) {
@@ -1895,6 +2044,11 @@ const AdminPanel = ({ user, onLogout }) => {
   }
 
   const handleEmployeeSubmit = async () => {
+    if (isReadOnlyUser) {
+      setEmployeeMessage('Managers have view-only access.')
+      return
+    }
+
     setEmployeeSaving(true)
     setEmployeeMessage('')
 
@@ -1902,6 +2056,14 @@ const AdminPanel = ({ user, onLogout }) => {
     const isEdit = employeeMode === 'edit'
 
     try {
+      if ((!employeeMode || employeeMode === 'create') && employeeForm.password.trim().length < 6) {
+        throw new Error('Password must be at least 6 characters')
+      }
+
+      if (employeeMode === 'edit' && employeeForm.password && employeeForm.password.trim().length < 6) {
+        throw new Error('Password must be at least 6 characters')
+      }
+
       if ((!employeeMode || employeeMode === 'create') && employeeForm.pin.replace(/\D/g, '').length < 4) {
         throw new Error('PIN must be at least 4 digits')
       }
@@ -1918,6 +2080,10 @@ const AdminPanel = ({ user, onLogout }) => {
         role: employeeForm.role,
         store: employeeForm.store || null,
         status: employeeForm.status,
+      }
+
+      if (!isEdit || employeeForm.password) {
+        payload.password = employeeForm.password
       }
 
       if (!isEdit || employeeForm.pin) {
@@ -1952,6 +2118,11 @@ const AdminPanel = ({ user, onLogout }) => {
   }
 
   const handleEmployeeDelete = async (employee) => {
+    if (isReadOnlyUser) {
+      setEmployeeMessage('Managers have view-only access.')
+      return
+    }
+
     const confirmed = window.confirm(`Delete employee ${employee.name}?`)
     if (!confirmed) {
       return
@@ -1986,7 +2157,9 @@ const AdminPanel = ({ user, onLogout }) => {
 
     assertAuthorizedResponse(response, data, 'Failed to fetch stores')
 
-    const normalizedStores = Array.isArray(data) ? data : []
+    const normalizedStores = Array.isArray(data?.data)
+      ? data.data
+      : (Array.isArray(data) ? data : [])
     setStores(normalizedStores)
     setSelectedStoreId((current) => (
       normalizedStores.some((store) => store.id === current) ? current : (normalizedStores[0]?.id || '')
@@ -2027,6 +2200,11 @@ const AdminPanel = ({ user, onLogout }) => {
   }
 
   const handleStoreSubmit = async () => {
+    if (isReadOnlyUser) {
+      setStoreMessage('Managers have view-only access.')
+      return
+    }
+
     setStoreSaving(true)
     setStoreMessage('')
 
@@ -2059,6 +2237,11 @@ const AdminPanel = ({ user, onLogout }) => {
   }
 
   const handleStoreUpdate = async () => {
+    if (isReadOnlyUser) {
+      setStoreMessage('Managers have view-only access.')
+      return
+    }
+
     if (!currentStore?.id) {
       setStoreMessage('Select a store before updating it')
       return
@@ -2095,6 +2278,11 @@ const AdminPanel = ({ user, onLogout }) => {
   }
 
   const handleStoreDelete = async (store) => {
+    if (isReadOnlyUser) {
+      setStoreMessage('Managers have view-only access.')
+      return
+    }
+
     const confirmed = window.confirm(`Delete store ${store.name}?`)
     if (!confirmed) {
       return
@@ -2220,23 +2408,34 @@ const AdminPanel = ({ user, onLogout }) => {
                   <span className="avatar">{initials}</span>
                   <div>
                     <strong>{adminName}</strong>
-                    {/* <small>{profileMeta}</small> */}
+                    <small>{isReadOnlyUser ? 'Manager view only' : profileMeta}</small>
                   </div>
                 </div>
               </div>
             </header>
+
+            {isReadOnlyUser ? (
+              <div className="task-item" style={{ margin: '0 20px 14px' }}>
+                <strong>Manager access</strong>
+                <small>You can view dashboard data, orders, customers, employees, and stores, but editing is disabled.</small>
+              </div>
+            ) : null}
 
             <Screen active={activeScreen === 'dashboard'} id="dashboard">
               <DashboardPage
                 dashboardHero={dashboardHero}
                 dashboardMetrics={dashboardMetrics}
                 dashboardRevenueCards={dashboardRevenueCards}
+                dashboardStoreFilter={dashboardStoreFilter}
+                dashboardStoreLabel={selectedDashboardStore ? selectedDashboardStore.name : 'all stores'}
+                dashboardStoreOptions={dashboardStoreOptions}
                 operationalQueue={operationalQueue}
                 productInsights={productInsights}
                 salesCaption={salesCaption}
                 salesData={salesData}
                 salesRange={salesRange}
                 salesRanges={['weekly', 'monthly']}
+                setDashboardStoreFilter={setDashboardStoreFilter}
                 storePerformance={storePerformance}
                 setSalesRange={setSalesRange}
               />
@@ -2256,6 +2455,7 @@ const AdminPanel = ({ user, onLogout }) => {
                   normalizedMasterItems={normalizedMasterItems}
                   openLensCategoryEditor={openLensCategoryEditor}
                   refreshMasterItems={refreshMasterItems}
+                  isReadOnlyUser={isReadOnlyUser}
                   selectedMaster={selectedMaster}
                   selectedMasterIndex={selectedMasterIndex}
                   setSelectedMasterIndex={setSelectedMasterIndex}
@@ -2272,6 +2472,7 @@ const AdminPanel = ({ user, onLogout }) => {
                 activateScreen={activateScreen}
                 currentStore={currentStore}
                 handleStoreDelete={handleStoreDelete}
+                isReadOnlyUser={isReadOnlyUser}
                 openStoreEditor={openStoreEditor}
                 resetStoreForm={resetStoreForm}
                 selectedStoreId={selectedStoreId}
@@ -2291,8 +2492,8 @@ const AdminPanel = ({ user, onLogout }) => {
                     </div>
                     <div className="filter-pills">
                       <button className="ghost-btn" onClick={() => activateScreen('stores')} type="button">Back To Stores</button>
-                      <button className="primary-btn soft-btn" disabled={storeSaving} onClick={handleStoreSubmit} type="button">
-                        {storeSaving ? 'Saving...' : 'Save Store'}
+                      <button className="primary-btn soft-btn" disabled={isReadOnlyUser || storeSaving} onClick={handleStoreSubmit} type="button">
+                        {isReadOnlyUser ? 'View Only' : storeSaving ? 'Saving...' : 'Save Store'}
                       </button>
                     </div>
                   </div>
@@ -2309,17 +2510,18 @@ const AdminPanel = ({ user, onLogout }) => {
                       <div className="field split">
                         <div>
                           <label>Store Name</label>
-                          <input className="input filled" onChange={(event) => handleStoreFieldChange('storeName', event.target.value)} type="text" value={storeForm.storeName} />
+                          <input className="input filled" disabled={isReadOnlyUser} onChange={(event) => handleStoreFieldChange('storeName', event.target.value)} type="text" value={storeForm.storeName} />
                         </div>
                         <div>
                           <label>Store Code</label>
-                          <input className="input filled" onChange={(event) => handleStoreFieldChange('storeCode', event.target.value.toUpperCase())} type="text" value={storeForm.storeCode} />
+                          <input className="input filled" disabled={isReadOnlyUser} onChange={(event) => handleStoreFieldChange('storeCode', event.target.value.toUpperCase())} type="text" value={storeForm.storeCode} />
                         </div>
                       </div>
                       <div className="field">
                         <label>Street Address</label>
                         <textarea
                           className="input filled"
+                          disabled={isReadOnlyUser}
                           onChange={(event) => handleStoreFieldChange('street', event.target.value)}
                           value={storeForm.street}
                         />
@@ -2327,15 +2529,15 @@ const AdminPanel = ({ user, onLogout }) => {
                       <div className="field split three">
                         <div>
                           <label>City</label>
-                          <input className="input filled" onChange={(event) => handleStoreFieldChange('city', event.target.value)} type="text" value={storeForm.city} />
+                          <input className="input filled" disabled={isReadOnlyUser} onChange={(event) => handleStoreFieldChange('city', event.target.value)} type="text" value={storeForm.city} />
                         </div>
                         <div>
                           <label>State</label>
-                          <input className="input filled" onChange={(event) => handleStoreFieldChange('state', event.target.value)} type="text" value={storeForm.state} />
+                          <input className="input filled" disabled={isReadOnlyUser} onChange={(event) => handleStoreFieldChange('state', event.target.value)} type="text" value={storeForm.state} />
                         </div>
                         <div>
                           <label>Pincode</label>
-                          <input className="input filled" onChange={(event) => handleStoreFieldChange('pincode', event.target.value)} type="text" value={storeForm.pincode} />
+                          <input className="input filled" disabled={isReadOnlyUser} onChange={(event) => handleStoreFieldChange('pincode', event.target.value)} type="text" value={storeForm.pincode} />
                         </div>
                       </div>
                     </div>
@@ -2343,19 +2545,19 @@ const AdminPanel = ({ user, onLogout }) => {
                     <div className="form-wire">
                       <div className="field">
                         <label>Primary Contact Number</label>
-                        <input className="input filled" onChange={(event) => handleStoreFieldChange('phone', event.target.value)} type="text" value={storeForm.phone} />
+                        <input className="input filled" disabled={isReadOnlyUser} onChange={(event) => handleStoreFieldChange('phone', event.target.value)} type="text" value={storeForm.phone} />
                       </div>
                       <div className="field">
                         <label>Store Email</label>
-                        <input className="input filled" onChange={(event) => handleStoreFieldChange('email', event.target.value)} type="email" value={storeForm.email} />
+                        <input className="input filled" disabled={isReadOnlyUser} onChange={(event) => handleStoreFieldChange('email', event.target.value)} type="email" value={storeForm.email} />
                       </div>
                       <div className="field">
                         <label>Store Manager</label>
-                        <input className="input filled" onChange={(event) => handleStoreFieldChange('managerName', event.target.value)} type="text" value={storeForm.managerName} />
+                        <input className="input filled" disabled={isReadOnlyUser} onChange={(event) => handleStoreFieldChange('managerName', event.target.value)} type="text" value={storeForm.managerName} />
                       </div>
                       <div className="field">
                         <label>Status</label>
-                        <select className="input filled" onChange={(event) => handleStoreFieldChange('status', event.target.value)} value={storeForm.status}>
+                        <select className="input filled" disabled={isReadOnlyUser} onChange={(event) => handleStoreFieldChange('status', event.target.value)} value={storeForm.status}>
                           <option value="Active">Active</option>
                           <option value="Inactive">Inactive</option>
                         </select>
@@ -2376,13 +2578,18 @@ const AdminPanel = ({ user, onLogout }) => {
                     </div>
                     <button
                       className="ghost-btn link-btn"
+                      disabled={isReadOnlyUser}
                       onClick={() => {
+                        if (isReadOnlyUser) {
+                          setEmployeeMessage('Managers have view-only access.')
+                          return
+                        }
                         resetEmployeeForm()
                         activateScreen('create-employee')
                       }}
                       type="button"
                     >
-                      Add Employee
+                      {isReadOnlyUser ? 'View Only' : 'Add Employee'}
                     </button>
                   </div>
                   <div className="mini-grid" style={{ marginBottom: '14px' }}>
@@ -2446,8 +2653,8 @@ const AdminPanel = ({ user, onLogout }) => {
                             </td>
                             <td>
                               <div className="filter-pills">
-                                <button className="ghost-btn" onClick={() => selectEmployee(employee)} type="button">Edit</button>
-                                <button className="ghost-btn" onClick={() => handleEmployeeDelete(employee)} type="button">Delete</button>
+                                <button className="ghost-btn" disabled={isReadOnlyUser} onClick={() => selectEmployee(employee)} type="button">{isReadOnlyUser ? 'View' : 'Edit'}</button>
+                                <button className="ghost-btn" disabled={isReadOnlyUser} onClick={() => handleEmployeeDelete(employee)} type="button">Delete</button>
                                 <StatusBadge tone={getStatusTone(employee.status)}>{employee.status}</StatusBadge>
                               </div>
                             </td>
@@ -2471,8 +2678,8 @@ const AdminPanel = ({ user, onLogout }) => {
                     </div>
                     <div className="filter-pills">
                       <button className="ghost-btn" onClick={() => activateScreen('employees')} type="button">Back To Employees</button>
-                      <button className="primary-btn soft-btn" disabled={employeeSaving} onClick={handleEmployeeSubmit} type="button">
-                        {employeeSaving ? 'Saving...' : employeeMode === 'edit' ? 'Update Employee' : 'Save Employee'}
+                      <button className="primary-btn soft-btn" disabled={isReadOnlyUser || employeeSaving} onClick={handleEmployeeSubmit} type="button">
+                        {isReadOnlyUser ? 'View Only' : employeeSaving ? 'Saving...' : employeeMode === 'edit' ? 'Update Employee' : 'Save Employee'}
                       </button>
                     </div>
                   </div>
@@ -2503,6 +2710,7 @@ const AdminPanel = ({ user, onLogout }) => {
                           <label>Employee Name</label>
                           <input
                             className="input filled"
+                            disabled={isReadOnlyUser}
                             onChange={(event) => handleEmployeeFieldChange('name', event.target.value)}
                             onFocus={handleEmployeeFieldFocus}
                             type="text"
@@ -2515,6 +2723,7 @@ const AdminPanel = ({ user, onLogout }) => {
                           <label>Mobile Number</label>
                           <input
                             className="input filled"
+                            disabled={isReadOnlyUser}
                             onChange={(event) => handleEmployeeFieldChange('phone', event.target.value)}
                             onFocus={handleEmployeeFieldFocus}
                             type="text"
@@ -2525,6 +2734,7 @@ const AdminPanel = ({ user, onLogout }) => {
                           <label>Email Address</label>
                           <input
                             className="input filled"
+                            disabled={isReadOnlyUser}
                             onChange={(event) => handleEmployeeFieldChange('email', event.target.value)}
                             onFocus={handleEmployeeFieldFocus}
                             type="email"
@@ -2533,9 +2743,21 @@ const AdminPanel = ({ user, onLogout }) => {
                         </div>
                       </div>
                       <div className="field">
+                        <label>Password {employeeMode === 'edit' ? '(leave blank to keep current password)' : ''}</label>
+                        <input
+                          className="input filled"
+                          disabled={isReadOnlyUser}
+                          onChange={(event) => handleEmployeeFieldChange('password', event.target.value)}
+                          onFocus={handleEmployeeFieldFocus}
+                          type="password"
+                          value={employeeForm.password}
+                        />
+                      </div>
+                      <div className="field">
                         <label>PIN {employeeMode === 'edit' ? '(leave blank to keep current PIN)' : ''}</label>
                         <input
                           className="input filled"
+                          disabled={isReadOnlyUser}
                           onChange={(event) => handleEmployeeFieldChange('pin', event.target.value.replace(/[^0-9]/g, '').slice(0, 6))}
                           onFocus={handleEmployeeFieldFocus}
                           type="password"
@@ -2549,6 +2771,7 @@ const AdminPanel = ({ user, onLogout }) => {
                         <label>Role</label>
                         <select
                           className="input filled"
+                          disabled={isReadOnlyUser}
                           onChange={(event) => handleEmployeeFieldChange('role', event.target.value)}
                           onFocus={handleEmployeeFieldFocus}
                           value={employeeForm.role}
@@ -2563,6 +2786,7 @@ const AdminPanel = ({ user, onLogout }) => {
                         <label>Select Store</label>
                         <select
                           className="input filled"
+                          disabled={isReadOnlyUser}
                           onChange={(event) => handleEmployeeFieldChange('store', event.target.value)}
                           onFocus={handleEmployeeFieldFocus}
                           value={employeeForm.store}
@@ -2579,6 +2803,7 @@ const AdminPanel = ({ user, onLogout }) => {
                         <label>Status</label>
                         <select
                           className="input filled"
+                          disabled={isReadOnlyUser}
                           onChange={(event) => handleEmployeeFieldChange('status', event.target.value)}
                           onFocus={handleEmployeeFieldFocus}
                           value={employeeForm.status}
@@ -2588,7 +2813,7 @@ const AdminPanel = ({ user, onLogout }) => {
                         </select>
                       </div>
                       <div className="form-actions-inline">
-                        <button className="ghost-btn" onClick={resetEmployeeForm} type="button">
+                        <button className="ghost-btn" disabled={isReadOnlyUser} onClick={resetEmployeeForm} type="button">
                           Clear Form
                         </button>
                       </div>
@@ -2862,6 +3087,7 @@ const AdminPanel = ({ user, onLogout }) => {
                                 {order.status !== 'Completed' ? (
                                   <button
                                     className="table-action-pill"
+                                    disabled={isReadOnlyUser}
                                     onClick={(event) => {
                                       event.stopPropagation()
                                       handleOrderStatusUpdate(order, 'Completed')
@@ -2951,6 +3177,7 @@ const AdminPanel = ({ user, onLogout }) => {
                       {selectedAppOrder?.status !== 'Completed' ? (
                         <button
                           className="ghost-btn"
+                          disabled={isReadOnlyUser}
                           onClick={() => handleOrderStatusUpdate(selectedAppOrder, 'Completed')}
                           type="button"
                         >
@@ -3391,7 +3618,12 @@ const AdminPanel = ({ user, onLogout }) => {
                             </td>
                             <td>
                               <strong className="table-cell-primary">{request.orderNumber || '-'}</strong>
-                              <small className="table-cell-secondary">{request.itemCount} item{request.itemCount === 1 ? '' : 's'}</small>
+                              <small className="table-cell-secondary">
+                                {[
+                                  request.orderDate || formatOrderDate(request.orderCreatedAt),
+                                  `${request.itemCount} item${request.itemCount === 1 ? '' : 's'}`,
+                                ].filter(Boolean).join(' | ')}
+                              </small>
                             </td>
                             <td>
                               <strong className="table-cell-primary">{request.customerName || 'Customer'}</strong>
@@ -3439,6 +3671,122 @@ const AdminPanel = ({ user, onLogout }) => {
                   </div>
                 </section>
               </div>
+
+              <div className="section-grid two-col" style={{ marginTop: '18px' }}>
+                <section className="panel">
+                  <div className="panel-head">
+                    <div>
+                      <p className="eyebrow">Repair management</p>
+                      <h4>Repair tickets</h4>
+                    </div>
+                  </div>
+                  <div className="orders-table-shell">
+                    <table className="orders-table listing-table listing-table--repair">
+                      <thead>
+                        <tr>
+                          <th>Ticket</th>
+                          <th>Order</th>
+                          <th>Customer / Store</th>
+                          <th>Issue</th>
+                          <th>Estimate / Status</th>
+                          <th>Invoice</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {repairRequestsLoading ? (
+                          <tr>
+                            <td colSpan="6">
+                              <strong className="table-cell-primary">Loading repair tickets...</strong>
+                            </td>
+                          </tr>
+                        ) : null}
+                        {!repairRequestsLoading && repairRequestsError ? (
+                          <tr>
+                            <td colSpan="5">
+                              <strong className="table-cell-primary">{repairRequestsError}</strong>
+                              <small className="table-cell-secondary">We could not load repair requests right now.</small>
+                            </td>
+                            <td><StatusBadge tone="warning">Error</StatusBadge></td>
+                          </tr>
+                        ) : null}
+                        {!repairRequestsLoading && !repairRequestsError && repairRequests.length === 0 ? (
+                          <tr>
+                            <td colSpan="5">
+                              <strong className="table-cell-primary">No repair tickets yet</strong>
+                              <small className="table-cell-secondary">Repair requests from the app will appear here.</small>
+                            </td>
+                            <td><StatusBadge tone="neutral">Empty</StatusBadge></td>
+                          </tr>
+                        ) : null}
+                        {!repairRequestsLoading && !repairRequestsError && repairRequests.map((request) => (
+                          <tr className="orders-data-row" key={request.id}>
+                            <td>
+                              <strong className="table-cell-primary">{request.referenceNumber || request.id.slice(-8).toUpperCase()}</strong>
+                              <small className="table-cell-secondary">{formatOrderDate(request.createdAt)}</small>
+                            </td>
+                            <td>
+                              <strong className="table-cell-primary">{request.orderNumber || '-'}</strong>
+                              <small className="table-cell-secondary">{request.orderDate || formatOrderDate(request.orderCreatedAt)}</small>
+                            </td>
+                            <td>
+                              <strong className="table-cell-primary">{request.customerName || 'Customer'}</strong>
+                              <small className="table-cell-secondary">{request.storeName || 'Store not assigned'}</small>
+                            </td>
+                            <td>
+                              <strong className="table-cell-primary">{request.issueType || '-'}</strong>
+                              <small className="table-cell-secondary">
+                                {`${String(request.repairScope || 'full-product').replace('-', ' ')}${request.expectedDeliveryDate ? ` | ETA ${formatOrderDate(request.expectedDeliveryDate)}` : ''}`}
+                              </small>
+                            </td>
+                            <td>
+                              <strong className="table-cell-primary">
+                                {`Est. ${formatCurrency(request.estimatedAmount)} | Bal. ${formatCurrency(request.remainingAmount)}`}
+                              </strong>
+                              <small className="table-cell-secondary">
+                                <StatusBadge tone={getStatusTone(request.status)}>{request.status}</StatusBadge>
+                              </small>
+                            </td>
+                            <td>
+                              <button
+                                className="ghost-btn"
+                                onClick={() => downloadRepairInvoice(request)}
+                                type="button"
+                              >
+                                Generate Invoice
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
+
+                <section className="panel detail-panel">
+                  <p className="eyebrow">Repair analytics</p>
+                  <h4>Current repair snapshot</h4>
+                  <div className="mini-grid">
+                    <MiniCard label="Requested" value={String(repairSummary.requested)} />
+                    <MiniCard label="In Progress" value={String(repairSummary.inProgress)} />
+                    <MiniCard label="Ready" value={String(repairSummary.ready)} />
+                    <MiniCard label="Delivered" value={String(repairSummary.delivered)} />
+                  </div>
+                  <div className="task-list" style={{ marginTop: '18px' }}>
+                    <div className="task-item">
+                      <strong>Total estimated value</strong>
+                      <small>{formatCurrency(repairSummary.estimatedAmount)}</small>
+                    </div>
+                    <div className="task-item">
+                      <strong>Pending collection</strong>
+                      <small>{formatCurrency(repairSummary.remainingAmount)}</small>
+                    </div>
+                    <div className="task-item">
+                      <strong>Total tickets</strong>
+                      <small>{repairRequests.length} ticket{repairRequests.length === 1 ? '' : 's'}</small>
+                    </div>
+                  </div>
+                </section>
+              </div>
             </Screen>
 
             <Screen active={activeScreen === 'edit-store'} id="edit-store">
@@ -3451,9 +3799,9 @@ const AdminPanel = ({ user, onLogout }) => {
                     </div>
                     <div className="filter-pills">
                       <button className="ghost-btn" onClick={() => activateScreen('stores')} type="button">Back To Stores</button>
-                      <button className="ghost-btn" onClick={resetStoreEditForm} type="button">Reset Changes</button>
-                      <button className="primary-btn soft-btn" disabled={storeSaving || !currentStore} onClick={handleStoreUpdate} type="button">
-                        {storeSaving ? 'Saving...' : 'Save Updates'}
+                      <button className="ghost-btn" disabled={isReadOnlyUser} onClick={resetStoreEditForm} type="button">Reset Changes</button>
+                      <button className="primary-btn soft-btn" disabled={isReadOnlyUser || storeSaving || !currentStore} onClick={handleStoreUpdate} type="button">
+                        {isReadOnlyUser ? 'View Only' : storeSaving ? 'Saving...' : 'Save Updates'}
                       </button>
                     </div>
                   </div>
@@ -3485,21 +3833,21 @@ const AdminPanel = ({ user, onLogout }) => {
                           <div className="field split compact-field-split">
                             <div className="field compact-field">
                               <label>Store Name</label>
-                              <input className="input filled" onChange={(event) => handleStoreFieldChange('storeName', event.target.value)} type="text" value={storeForm.storeName} />
+                              <input className="input filled" disabled={isReadOnlyUser} onChange={(event) => handleStoreFieldChange('storeName', event.target.value)} type="text" value={storeForm.storeName} />
                             </div>
                             <div className="field compact-field">
                               <label>Store Code</label>
-                              <input className="input filled" onChange={(event) => handleStoreFieldChange('storeCode', event.target.value.toUpperCase())} type="text" value={storeForm.storeCode} />
+                              <input className="input filled" disabled={isReadOnlyUser} onChange={(event) => handleStoreFieldChange('storeCode', event.target.value.toUpperCase())} type="text" value={storeForm.storeCode} />
                             </div>
                           </div>
                           <div className="field split compact-field-split">
                             <div className="field compact-field">
                               <label>Store Manager</label>
-                              <input className="input filled" onChange={(event) => handleStoreFieldChange('managerName', event.target.value)} type="text" value={storeForm.managerName} />
+                              <input className="input filled" disabled={isReadOnlyUser} onChange={(event) => handleStoreFieldChange('managerName', event.target.value)} type="text" value={storeForm.managerName} />
                             </div>
                             <div className="field compact-field">
                               <label>Status</label>
-                              <select className="input filled" onChange={(event) => handleStoreFieldChange('status', event.target.value)} value={storeForm.status}>
+                              <select className="input filled" disabled={isReadOnlyUser} onChange={(event) => handleStoreFieldChange('status', event.target.value)} value={storeForm.status}>
                                 <option value="Active">Active</option>
                                 <option value="Inactive">Inactive</option>
                               </select>
@@ -3517,17 +3865,18 @@ const AdminPanel = ({ user, onLogout }) => {
                           <div className="field split compact-field-split">
                             <div className="field compact-field">
                               <label>Primary Contact Number</label>
-                              <input className="input filled" onChange={(event) => handleStoreFieldChange('phone', event.target.value)} type="text" value={storeForm.phone} />
+                              <input className="input filled" disabled={isReadOnlyUser} onChange={(event) => handleStoreFieldChange('phone', event.target.value)} type="text" value={storeForm.phone} />
                             </div>
                             <div className="field compact-field">
                               <label>Store Email</label>
-                              <input className="input filled" onChange={(event) => handleStoreFieldChange('email', event.target.value)} type="email" value={storeForm.email} />
+                              <input className="input filled" disabled={isReadOnlyUser} onChange={(event) => handleStoreFieldChange('email', event.target.value)} type="email" value={storeForm.email} />
                             </div>
                           </div>
                           <div className="field compact-field">
                             <label>Street Address</label>
                             <textarea
                               className="input filled compact-textarea"
+                              disabled={isReadOnlyUser}
                               onChange={(event) => handleStoreFieldChange('street', event.target.value)}
                               value={storeForm.street}
                             />
@@ -3535,15 +3884,15 @@ const AdminPanel = ({ user, onLogout }) => {
                           <div className="field split compact-field-split compact-meta-grid">
                             <div className="field compact-field">
                               <label>City</label>
-                              <input className="input filled" onChange={(event) => handleStoreFieldChange('city', event.target.value)} type="text" value={storeForm.city} />
+                              <input className="input filled" disabled={isReadOnlyUser} onChange={(event) => handleStoreFieldChange('city', event.target.value)} type="text" value={storeForm.city} />
                             </div>
                             <div className="field compact-field">
                               <label>State</label>
-                              <input className="input filled" onChange={(event) => handleStoreFieldChange('state', event.target.value)} type="text" value={storeForm.state} />
+                              <input className="input filled" disabled={isReadOnlyUser} onChange={(event) => handleStoreFieldChange('state', event.target.value)} type="text" value={storeForm.state} />
                             </div>
                             <div className="field compact-field">
                               <label>Pincode</label>
-                              <input className="input filled" onChange={(event) => handleStoreFieldChange('pincode', event.target.value)} type="text" value={storeForm.pincode} />
+                              <input className="input filled" disabled={isReadOnlyUser} onChange={(event) => handleStoreFieldChange('pincode', event.target.value)} type="text" value={storeForm.pincode} />
                             </div>
                           </div>
                         </section>

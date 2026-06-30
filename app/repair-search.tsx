@@ -9,28 +9,18 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-  useWindowDimensions,
 } from 'react-native';
 import { router } from 'expo-router';
-import { ArrowLeft, FileSearch, Phone, RefreshCcw, Search } from 'lucide-react-native';
-import { useOrderFlow } from '@/context/OrderFlowContext';
-import { useReturnExchange } from '@/context/ReturnExchangeContext';
+import { ArrowLeft, FileSearch, Phone, Search, Wrench } from 'lucide-react-native';
+import { useRepair } from '@/context/RepairContext';
 import { fetchOrderPlacements, type OrderPlacementRecord } from '@/lib/api';
-import { buildDraftFromOrder } from '@/lib/orderFlow';
 import { Colors, Shadow } from '@/lib/theme';
 import { useResponsiveMetrics } from '@/lib/responsive';
 
-export default function ReturnExchangeSearchScreen() {
-  const { width } = useWindowDimensions();
+export default function RepairSearchScreen() {
   const viewport = useResponsiveMetrics();
-  const { draft, updateDraft } = useOrderFlow();
-  const {
-    selectedOrder,
-    setSelectedOrder,
-    setTransactionType,
-    reset,
-  } = useReturnExchange();
   const isTablet = viewport.isTablet;
+  const { selectedOrder, setSelectedOrder, reset } = useRepair();
   const [query, setQuery] = useState('');
   const [orders, setOrders] = useState<OrderPlacementRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -109,23 +99,12 @@ export default function ReturnExchangeSearchScreen() {
     ));
   }, [orders, query]);
 
-  const handleSelectOrder = (order: OrderPlacementRecord) => {
-    setSelectedOrder(order);
-    const nextDraft = buildDraftFromOrder(order, draft);
-    updateDraft({
-      ...nextDraft,
-      store: draft.store,
-      salesperson: draft.salesperson,
-    });
-  };
-
-  const handleStart = (type: 'return' | 'exchange') => {
+  const handleStartRepair = () => {
     if (!selectedOrder) {
       return;
     }
 
-    setTransactionType(type);
-    router.push(type === 'return' ? '/return-exchange-return' : '/return-exchange-exchange');
+    router.push('/repair-request');
   };
 
   if (loading) {
@@ -142,7 +121,7 @@ export default function ReturnExchangeSearchScreen() {
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()} activeOpacity={0.86}>
           <ArrowLeft size={20} color="#1C1D21" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Return & Exchange</Text>
+        <Text style={styles.headerTitle}>Repair Desk</Text>
         <Text style={styles.headerDate}>{headerDate}</Text>
       </View>
 
@@ -167,7 +146,7 @@ export default function ReturnExchangeSearchScreen() {
               <FileSearch size={16} color={Colors.primary} />
               <Text style={styles.panelTitle}>Search Existing Orders</Text>
             </View>
-            <Text style={styles.helperText}>Find by mobile number, invoice number, or order ID.</Text>
+            <Text style={styles.helperText}>Find the original order before creating a repair ticket.</Text>
 
             <View style={styles.searchBox}>
               <Search size={16} color="#9CA3AF" />
@@ -183,11 +162,7 @@ export default function ReturnExchangeSearchScreen() {
             {searching ? <Text style={styles.searchingText}>Searching orders...</Text> : null}
             {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
-            <ScrollView
-              style={styles.resultsScroll}
-              showsVerticalScrollIndicator={false}
-              nestedScrollEnabled
-            >
+            <ScrollView style={styles.resultsScroll} showsVerticalScrollIndicator={false} nestedScrollEnabled>
               {visibleOrders.length ? visibleOrders.map((order) => {
                 const frameImage = order.frame.images.find((item) => item.image)?.image;
                 const active = selectedOrder?.id === order.id;
@@ -202,7 +177,7 @@ export default function ReturnExchangeSearchScreen() {
                     key={order.id}
                     style={[styles.orderCard, active && styles.orderCardActive]}
                     activeOpacity={0.9}
-                    onPress={() => handleSelectOrder(order)}
+                    onPress={() => setSelectedOrder(order)}
                   >
                     <View style={styles.orderCardTop}>
                       <View style={styles.orderImageWrap}>
@@ -239,7 +214,7 @@ export default function ReturnExchangeSearchScreen() {
 
           <View style={[styles.panel, styles.detailPanel, isTablet && styles.detailPanelTablet]}>
             <View style={styles.panelHeader}>
-              <RefreshCcw size={16} color={Colors.primary} />
+              <Wrench size={16} color={Colors.primary} />
               <Text style={styles.panelTitle}>Selected Order</Text>
             </View>
 
@@ -249,34 +224,27 @@ export default function ReturnExchangeSearchScreen() {
                   <Text style={styles.selectedName}>{selectedOrder.customer.name || 'Customer'}</Text>
                   <Text style={styles.selectedMeta}>Mobile: {selectedOrder.customer.phone}</Text>
                   <Text style={styles.selectedMeta}>Invoice: {selectedOrder.orderNumber}</Text>
-                  <Text style={styles.selectedMeta}>Order ID: {selectedOrder.id}</Text>
+                  <Text style={styles.selectedMeta}>Order Date: {selectedOrder.invoiceDate || new Date(selectedOrder.createdAt).toLocaleDateString('en-GB')}</Text>
                   <Text style={styles.selectedMeta}>
                     Product: Frame + {selectedOrder.lensSelection.lensCategory || selectedOrder.lensSelection.powerType || 'Lens'}
                   </Text>
                   <Text style={styles.selectedAmount}>Order Value: Rs. {selectedOrder.billing.totalPayable}</Text>
                 </View>
 
-                <Text style={styles.choiceLabel}>Choose the next action</Text>
+                <Text style={styles.choiceLabel}>Create a repair ticket linked to this order.</Text>
                 <TouchableOpacity
-                  style={[styles.actionButton, styles.returnButton]}
+                  style={styles.actionButton}
                   activeOpacity={0.88}
-                  onPress={() => handleStart('return')}
+                  onPress={handleStartRepair}
                 >
-                  <Text style={styles.actionButtonText}>Start Return</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.actionButton, styles.exchangeButton]}
-                  activeOpacity={0.88}
-                  onPress={() => handleStart('exchange')}
-                >
-                  <Text style={[styles.actionButtonText, styles.exchangeButtonText]}>Start Exchange</Text>
+                  <Text style={styles.actionButtonText}>Start Repair</Text>
                 </TouchableOpacity>
               </>
             ) : (
               <View style={styles.placeholderCard}>
                 <Text style={styles.placeholderTitle}>Select an order to continue</Text>
                 <Text style={styles.placeholderText}>
-                  Order details and Return / Exchange actions will appear here.
+                  Order details and repair actions will appear here.
                 </Text>
               </View>
             )}
@@ -505,81 +473,66 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   selectedCard: {
-    marginTop: 10,
     borderRadius: 14,
-    backgroundColor: '#F7FAFF',
     borderWidth: 1,
-    borderColor: '#DCE9FF',
+    borderColor: '#DCE7F7',
+    backgroundColor: '#F8FBFF',
     padding: 14,
+    marginTop: 8,
   },
   selectedName: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
     color: '#1F2430',
     marginBottom: 6,
   },
   selectedMeta: {
-    fontSize: 12.5,
-    color: '#475569',
-    marginTop: 4,
+    fontSize: 12,
+    color: '#5B6475',
+    marginTop: 2,
   },
   selectedAmount: {
     marginTop: 10,
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '700',
     color: Colors.primary,
   },
   choiceLabel: {
-    marginTop: 18,
-    marginBottom: 10,
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#1F2430',
+    marginTop: 14,
+    marginBottom: 12,
+    fontSize: 12.5,
+    color: '#374151',
   },
   actionButton: {
-    minHeight: 44,
+    minHeight: 42,
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 10,
-  },
-  returnButton: {
     backgroundColor: Colors.primary,
   },
-  exchangeButton: {
-    backgroundColor: '#FFF7ED',
-    borderWidth: 1,
-    borderColor: '#F5C48B',
-  },
   actionButtonText: {
-    fontSize: 14,
+    fontSize: 13.5,
     fontWeight: '700',
     color: '#FFFFFF',
   },
-  exchangeButtonText: {
-    color: '#B45309',
-  },
   placeholderCard: {
-    flex: 1,
-    minHeight: 240,
-    borderRadius: 16,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#E6EAF2',
-    backgroundColor: '#FAFBFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 22,
+    borderStyle: 'dashed',
+    borderColor: '#D8E0EE',
+    padding: 18,
+    marginTop: 8,
+    backgroundColor: '#FBFCFF',
   },
   placeholderTitle: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '700',
     color: '#1F2430',
   },
   placeholderText: {
-    marginTop: 8,
+    marginTop: 6,
     fontSize: 12.5,
-    lineHeight: 18,
     color: '#6B7280',
-    textAlign: 'center',
+    lineHeight: 18,
   },
 });

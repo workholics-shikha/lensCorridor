@@ -42,6 +42,7 @@ const MasterSectionPage = ({
   powerTypesError,
   powerTypesLoading,
   refreshMasterItems,
+  isReadOnlyUser = false,
   selectedMaster,
   selectedMasterIndex,
   setSelectedMasterIndex,
@@ -132,6 +133,11 @@ const MasterSectionPage = ({
   }, [isLensCategoryMaster, page, selectedMasterIndex, setSelectedMasterIndex])
 
   const handleLensCategoryUpdate = async () => {
+    if (isReadOnlyUser) {
+      alert('Managers have view-only access.')
+      return
+    }
+
     const token = localStorage.getItem('adminToken')
     if (!token) {
       alert('Admin token missing')
@@ -211,11 +217,11 @@ const MasterSectionPage = ({
               <button className="ghost-btn" onClick={closeLensCategoryEditor} type="button">Back To Listing</button>
               <button
                 className="primary-btn soft-btn"
-                disabled={masterLoading || lensCategorySaving || !selectedMaster}
+                disabled={isReadOnlyUser || masterLoading || lensCategorySaving || !selectedMaster}
                 onClick={handleLensCategoryUpdate}
                 type="button"
               >
-                {lensCategorySaving ? 'Updating...' : 'Update Mapping'}
+                {isReadOnlyUser ? 'View Only' : lensCategorySaving ? 'Updating...' : 'Update Mapping'}
               </button>
             </div>
           </div>
@@ -248,7 +254,7 @@ const MasterSectionPage = ({
                   <input
                     className="input filled"
                     value={lensCategoryForm.categoryName}
-                    disabled={masterLoading || lensCategorySaving}
+                    disabled={isReadOnlyUser || masterLoading || lensCategorySaving}
                     onChange={(e) => {
                       setLensCategoryForm((current) => ({ ...current, categoryName: e.target.value }))
                     }}
@@ -259,7 +265,7 @@ const MasterSectionPage = ({
                   <input
                     className="input filled"
                     value={lensCategoryForm.displayLabel}
-                    disabled={masterLoading || lensCategorySaving}
+                    disabled={isReadOnlyUser || masterLoading || lensCategorySaving}
                     onChange={(e) => {
                       setLensCategoryForm((current) => ({ ...current, displayLabel: e.target.value }))
                     }}

@@ -18,19 +18,19 @@ export default defineConfig({
       "/api": {
         target:
           process.env.VITE_PROXY_TARGET ||
-          "https://lenscorridor-api.onrender.com",
+          "http://127.0.0.1:10000",
         changeOrigin: true,
       },
       "/admin": {
         target:
           process.env.VITE_PROXY_TARGET ||
-          "https://lenscorridor-api.onrender.com",
+          "http://127.0.0.1:10000",
         changeOrigin: true,
       },
       "/uploads": {
         target:
           process.env.VITE_PROXY_TARGET ||
-          "https://lenscorridor-api.onrender.com",
+          "http://127.0.0.1:10000",
         changeOrigin: true,
       },
     },

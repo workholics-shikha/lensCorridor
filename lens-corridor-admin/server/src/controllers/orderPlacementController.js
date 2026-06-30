@@ -102,6 +102,7 @@ const syncCustomerFromOrder = async (payload) => {
 
   const name = String(payload.customer?.name ?? '').trim();
   const billingAddress = String(payload.customer?.billingAddress ?? '').trim();
+  const dateOfBirth = String(payload.customer?.dateOfBirth ?? '').trim();
   const storeId = resolveStoreId(payload.meta?.store?.id);
 
   const existingCustomer = await Customer.findOne({ phone });
@@ -115,6 +116,9 @@ const syncCustomerFromOrder = async (payload) => {
       ...(existingCustomer.address || {}),
       street: billingAddress || existingCustomer.address?.street || '',
     };
+    if (dateOfBirth) {
+      existingCustomer.dateOfBirth = new Date(dateOfBirth);
+    }
     if (storeId) {
       existingCustomer.store = storeId;
     }
@@ -129,6 +133,7 @@ const syncCustomerFromOrder = async (payload) => {
     address: {
       street: billingAddress,
     },
+    dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : undefined,
     store: storeId,
     status: 'Active',
   });
@@ -202,6 +207,7 @@ const createOrderPlacement = async (req, res) => {
         name: payload.customer?.name ?? '',
         phone: normalizedPhone,
         billingAddress: payload.customer?.billingAddress ?? '',
+        dateOfBirth: payload.customer?.dateOfBirth ?? '',
       },
       frame: {
         selectedShape: payload.frame?.selectedShape ?? '',

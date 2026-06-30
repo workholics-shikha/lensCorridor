@@ -13,6 +13,8 @@ const syncCustomerFromEyeTest = async ({
   spherical,
   cylindrical,
   axis,
+  addition,
+  pupillaryDistance,
 }) => {
   const phone = normalizePhone(mobileNumber);
 
@@ -29,12 +31,15 @@ const syncCustomerFromEyeTest = async ({
       sphere: spherical?.left ?? null,
       cylinder: cylindrical?.left ?? null,
       axis: axis?.left ?? null,
+      addition: addition?.left ?? null,
     },
     right: {
       sphere: spherical?.right ?? null,
       cylinder: cylindrical?.right ?? null,
       axis: axis?.right ?? null,
+      addition: addition?.right ?? null,
     },
+    pupillaryDistance: pupillaryDistance ?? null,
   };
 
   const existingCustomer = await Customer.findOne({
@@ -102,6 +107,8 @@ const createEyeTest = async (req, res) => {
       spherical,
       cylindrical,
       axis,
+      addition,
+      pupillaryDistance,
       name,
       mobileNumber,
       email,
@@ -144,6 +151,15 @@ const createEyeTest = async (req, res) => {
         })
       : null;
 
+    const finalAddition = samePowerBothEyes
+      ? { right: addition?.right ?? null, left: addition?.right ?? null }
+      : {
+        right: addition?.right ?? null,
+        left: addition?.left ?? null,
+      };
+
+    const finalPupillaryDistance = pupillaryDistance ?? null;
+
     const customer = await syncCustomerFromEyeTest({
       name: trimmedName,
       mobileNumber: normalizedMobileNumber,
@@ -152,6 +168,8 @@ const createEyeTest = async (req, res) => {
       spherical: finalSpherical,
       cylindrical: finalCylindrical,
       axis: finalAxis,
+      addition: finalAddition,
+      pupillaryDistance: finalPupillaryDistance,
     });
 
     const eyeTestPayload = {
@@ -160,6 +178,8 @@ const createEyeTest = async (req, res) => {
       spherical: finalSpherical,
       cylindrical: finalCylindrical,
       axis: finalAxis,
+      addition: finalAddition,
+      pupillaryDistance: finalPupillaryDistance,
       name: trimmedName,
       mobileNumber: normalizedMobileNumber,
       email: String(email ?? '').trim().toLowerCase(),

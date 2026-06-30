@@ -5,6 +5,7 @@ const multer = require('multer')
 
 
 const auth = require('../middleware/auth')
+const requireWriteAccess = require('../middleware/requireWriteAccess')
 const {
     listFrameShapes,
     updateFrameShape,
@@ -17,7 +18,7 @@ const router = express.Router()
 router.get('/', listFrameShapes)
 
 // PUT /api/frame-shapes/:id (admin updates image/url/title/metadata)
-router.put('/:id', auth, updateFrameShape)
+router.put('/:id', auth, requireWriteAccess, updateFrameShape)
 
 // POST /api/frame-shapes/:id/image (admin uploads image)
 const storage = multer.diskStorage({
@@ -48,7 +49,7 @@ const upload = multer({
     },
 })
 
-router.post('/:id/image', auth, upload.single('image'), uploadFrameShapeImage)
+router.post('/:id/image', auth, requireWriteAccess, upload.single('image'), uploadFrameShapeImage)
 
 module.exports = router
 

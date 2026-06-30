@@ -5,6 +5,7 @@ const StoresPage = ({
   handleStoreDelete,
   openStoreEditor,
   resetStoreForm,
+  isReadOnlyUser,
   selectedStoreId,
   setSelectedStoreId,
   storeMessage,
@@ -21,13 +22,17 @@ const StoresPage = ({
           </div>
           <button
             className="ghost-btn link-btn"
+            disabled={isReadOnlyUser}
             onClick={() => {
+              if (isReadOnlyUser) {
+                return
+              }
               resetStoreForm()
               activateScreen('add-store')
             }}
             type="button"
           >
-            Add Store
+            {isReadOnlyUser ? 'View Only' : 'Add Store'}
           </button>
         </div>
         <div className="mini-grid" style={{ marginBottom: '14px' }}>
@@ -91,13 +96,17 @@ const StoresPage = ({
                   <td>
                     <button
                       className="ghost-btn"
+                      disabled={isReadOnlyUser}
                       onClick={(event) => {
                         event.stopPropagation()
+                        if (isReadOnlyUser) {
+                          return
+                        }
                         openStoreEditor(store.id)
                       }}
                       type="button"
                     >
-                      Update
+                      {isReadOnlyUser ? 'View' : 'Update'}
                     </button>
                   </td>
                 </tr>

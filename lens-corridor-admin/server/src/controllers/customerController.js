@@ -22,6 +22,7 @@ const buildCustomerSummary = (customer, orders) => {
       state: customer.address?.state || '',
       pincode: customer.address?.pincode || '',
     },
+    dateOfBirth: customer.dateOfBirth || null,
     createdAt: customer.createdAt,
     updatedAt: customer.updatedAt,
     orderCount: orders.length,

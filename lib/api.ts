@@ -3,6 +3,8 @@ import { getCategories, getFrameShapes, getSalespeople } from './localStore';
 import { Category, FrameShape, Salesperson } from './types';
 import type { ReturnExchangeRecord, ReturnExchangeType, ReturnExchangeItemScope, RefundType } from './returnExchange';
 
+export type RepairScope = 'frame' | 'lens' | 'full-product' | 'fitting' | 'other';
+
 export interface StoreOption {
   id: string;
   name: string;
@@ -73,6 +75,7 @@ export interface OrderPlacementPayload {
     name: string;
     phone: string;
     billingAddress: string;
+    dateOfBirth?: string;
   };
   frame: {
     selectedShape: string;
@@ -101,6 +104,7 @@ export interface OrderPlacementPayload {
     cyl: string;
     axis: string;
     add: string;
+    pd: string;
   }>;
   billing: {
     discount: number;
@@ -145,6 +149,7 @@ export interface OrderPlacementRecord extends OrderPlacementResponse {
     name: string;
     phone: string;
     billingAddress: string;
+    dateOfBirth?: string;
   };
   frame: {
     selectedShape: string;
@@ -173,6 +178,7 @@ export interface OrderPlacementRecord extends OrderPlacementResponse {
     cyl: string;
     axis: string;
     add: string;
+    pd: string;
   }>;
   billing: {
     discount: number;
@@ -234,6 +240,68 @@ export interface ReturnExchangePayload {
   } | null;
 }
 
+interface StoreApiResponse {
+  id?: string;
+  _id?: string;
+  name?: string;
+  storeName?: string;
+  code?: string;
+  storeCode?: string;
+  status?: string;
+}
+
+export interface RepairPayload {
+  orderId: string;
+  customerName: string;
+  customerPhone: string;
+  repairScope: RepairScope;
+  issueType: string;
+  remarks: string;
+  estimatedAmount: number;
+  advanceAmount: number;
+  expectedDeliveryDate?: string;
+  originalOrderSnapshot?: OrderPlacementRecord;
+  store?: {
+    id: string;
+    name: string;
+    code: string;
+  } | null;
+  salesperson?: {
+    id: string;
+    name: string;
+    employeeId: string;
+  } | null;
+}
+
+export interface RepairRecord {
+  id: string;
+  referenceNumber: string;
+  originalOrderId: string;
+  originalOrderNumber: string;
+  customerName: string;
+  customerPhone: string;
+  createdAt: string;
+  repairScope: RepairScope;
+  issueType: string;
+  remarks: string;
+  estimatedAmount: number;
+  advanceAmount: number;
+  remainingAmount: number;
+  expectedDeliveryDate?: string | null;
+  store?: {
+    id: string;
+    name: string;
+    code: string;
+  } | null;
+  salesperson?: {
+    id: string;
+    name: string;
+    employeeId: string;
+  } | null;
+  originalOrderSnapshot: OrderPlacementRecord;
+  status: string;
+}
+
 interface SalesmanPinVerificationResponse {
   success?: boolean;
   error?: string;
@@ -259,6 +327,11 @@ export interface EyeTestPayload {
     right: number | null;
     left: number | null;
   };
+  addition: {
+    right: number | null;
+    left: number | null;
+  };
+  pupillaryDistance: number | null;
   name: string;
   mobileNumber: string;
   email?: string;
@@ -275,29 +348,28 @@ const DEFAULT_CACHE_TTL_MS = 30 * 1000;
 const SEARCH_CACHE_TTL_MS = 10 * 1000;
 const DEFAULT_REQUEST_TIMEOUT_MS = 12 * 1000;
 const MUTATION_REQUEST_TIMEOUT_MS = 20 * 1000;
+const RENDER_API_BASE_URL = 'https://lenscorridor-api.onrender.com';
 
 const responseCache = new Map<string, { expiresAt: number; value: unknown }>();
 const inFlightRequests = new Map<string, Promise<unknown>>();
 const orderPlacementSubscribers = new Set<(order: OrderPlacementRecord) => void>();
 
 function getApiBaseUrl() {
-  const configuredBaseUrl =
-    process.env.EXPO_PUBLIC_API_BASE_URL?.trim();
+  const configuredBaseUrl = process.env.EXPO_PUBLIC_API_BASE_URL?.trim();
 
   if (configuredBaseUrl) {
-    return configuredBaseUrl.replace(/\/$/, '');
+    return configuredBaseUrl.replace(/\/+$/, '');
   }
 
-  const isExpoDevelopmentHost =
-    Constants.executionEnvironment === 'storeClient';
+  const configBaseUrl =
+    Constants.expoConfig?.extra?.apiBaseUrl
+    || Constants.expoConfig?.extra?.expoPublicApiBaseUrl;
 
-  const expoHostUri = Constants.expoConfig?.hostUri?.trim();
-
-  if (isExpoDevelopmentHost && expoHostUri) {
-    return 'https://lenscorridor-api.onrender.com';
+  if (typeof configBaseUrl === 'string' && configBaseUrl.trim()) {
+    return configBaseUrl.trim().replace(/\/+$/, '');
   }
 
-  return 'https://lenscorridor-api.onrender.com';
+  return RENDER_API_BASE_URL;
 }
 
 function resolveApiAssetUrl(path?: string) {
@@ -523,28 +595,23 @@ export async function verifySalespersonPin(input: { salesmanId: string; pin: str
 
 export async function fetchStores(): Promise<StoreOption[]> {
   try {
-    const data = await fetchJsonWithCache<SalesmanApiResponse[]>(
-      `${getApiBaseUrl()}/api/salesmen`,
+    const data = await fetchJsonWithCache<StoreApiResponse[]>(
+      `${getApiBaseUrl()}/api/stores`,
       undefined,
       {
-        cacheKey: 'salesmen:all',
+        cacheKey: 'stores:all',
       }
     );
-    const uniqueStores = new Map<string, StoreOption>();
 
-    for (const item of data) {
-      if (!item.store?.id) {
-        continue;
-      }
-
-      uniqueStores.set(item.store.id, {
-        id: item.store.id,
-        name: item.store.name,
-        code: item.store.code,
-      });
-    }
-
-    return [...uniqueStores.values()].sort((a, b) => a.name.localeCompare(b.name));
+    return data
+      .filter((item) => (item.status ?? 'Active') === 'Active')
+      .map((item, index) => ({
+        id: item.id ?? item._id ?? `store-${index}`,
+        name: item.name ?? item.storeName ?? '',
+        code: item.code ?? item.storeCode ?? '',
+      }))
+      .filter((item) => Boolean(item.id) && Boolean(item.name))
+      .sort((a, b) => a.name.localeCompare(b.name));
   } catch (_error) {
     return [];
   }
@@ -959,5 +1026,38 @@ export async function createReturnExchangeRequest(payload: ReturnExchangePayload
     throw new Error(result?.message || `Return API returned ${response.status}`);
   }
 
+  invalidateCacheByPrefix('returns:');
   return result.data;
+}
+
+export async function createRepairRequest(payload: RepairPayload): Promise<RepairRecord> {
+  const response = await fetchWithTimeout(`${getApiBaseUrl()}/api/repairs`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const result = (await response.json().catch(() => null)) as { data?: RepairRecord; message?: string } | null;
+
+  if (!response.ok || !result?.data) {
+    throw new Error(result?.message || `Repair API returned ${response.status}`);
+  }
+
+  invalidateCacheByPrefix('repairs:');
+  return result.data;
+}
+
+export async function fetchRepairRequests(): Promise<RepairRecord[]> {
+  const result = await fetchJsonWithCache<{ data?: RepairRecord[] } | null>(
+    `${getApiBaseUrl()}/api/repairs`,
+    undefined,
+    {
+      cacheKey: 'repairs:all',
+      ttlMs: DEFAULT_CACHE_TTL_MS,
+    }
+  );
+
+  return result?.data ?? [];
 }

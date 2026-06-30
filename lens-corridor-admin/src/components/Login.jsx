@@ -104,7 +104,7 @@ const Login = ({ onLogin }) => {
         >
           <p className="eyebrow uppercase tracking-wider text-xs font-bold mb-2">Sign in</p>
           <h2 className="text-2xl font-bold mb-1 text-[#1a1a2e]">Welcome back</h2>
-          <p className="mb-4 text-sm text-slate-500">Use your admin credentials to continue to the control center.</p>
+          <p className="mb-4 text-sm text-slate-500">Use your admin or manager credentials to continue to the control center.</p>
 
           {error ? (
             <div className="mb-4 rounded-xl border border-[rgba(239,68,68,0.22)] bg-[rgba(239,68,68,0.08)] text-[rgba(185,28,28,1)] px-4 py-3 text-sm font-bold">
@@ -119,7 +119,7 @@ const Login = ({ onLogin }) => {
                 className="input filled h-11 w-full px-4 rounded-2xl"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                type="email"
+                type="text"
                 autoComplete="username"
                 required
               />
@@ -143,7 +143,7 @@ const Login = ({ onLogin }) => {
                 className="primary-btn w-full rounded-2xl py-3.5 px-4 text-white font-bold shadow-lg hover:shadow-xl transition-all disabled:opacity-50"
                 disabled={loading}
               >
-                {loading ? 'Entering...' : 'Enter Admin Panel'}
+                {loading ? 'Entering...' : 'Enter Dashboard'}
               </button>
             </div>
           </form>

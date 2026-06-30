@@ -87,14 +87,6 @@ export default function SelectLensScreen() {
       return;
     }
 
-    if (normalizedName === 'progressive bifocals') {
-      router.push({
-        pathname: '/prescription',
-        params: { mode: 'order-flow', nextPath: '/lens-details' },
-      });
-      return;
-    }
-
     router.push('/lens-details');
   };
 

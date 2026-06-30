@@ -2,23 +2,21 @@ const mongoose = require('mongoose');
 
 const AppOrderPlacement = require('../models/AppOrderPlacement');
 const Customer = require('../models/Customer');
-const ReturnRequest = require('../models/Return');
+const RepairRequest = require('../models/Repair');
 const { normalizePhone } = require('./customerController');
 
 const padNumber = (value, size) => String(value).padStart(size, '0');
 
-const buildReferenceNumber = async (type) => {
+const buildReferenceNumber = async () => {
   const now = new Date();
-  const prefix = type === 'exchange' ? 'EXC' : 'RET';
   const dayCode = `${now.getFullYear()}${padNumber(now.getMonth() + 1, 2)}${padNumber(now.getDate(), 2)}`;
   const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
   const dayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
-  const count = await ReturnRequest.countDocuments({
-    type,
+  const count = await RepairRequest.countDocuments({
     createdAt: { $gte: dayStart, $lte: dayEnd },
   });
 
-  return `${prefix}-${dayCode}-${padNumber(count + 1, 4)}`;
+  return `REP-${dayCode}-${padNumber(count + 1, 4)}`;
 };
 
 const toObjectId = (value) => {
@@ -37,16 +35,22 @@ const clonePlain = (value) => {
   return JSON.parse(JSON.stringify(value));
 };
 
+const formatInvoiceDate = (value) => {
+  if (!value) {
+    return '';
+  }
+
+  return new Date(value).toLocaleDateString('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+};
+
 const mapOrderPlacement = (document) => ({
   id: document?._id ? document._id.toString() : '',
   orderNumber: document?.orderNumber || '',
-  invoiceDate: document?.invoiceDate
-    ? new Date(document.invoiceDate).toLocaleDateString('en-GB', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-    })
-    : '',
+  invoiceDate: formatInvoiceDate(document?.invoiceDate),
   customer: {
     name: document?.customer?.name || '',
     phone: document?.customer?.phone || '',
@@ -95,79 +99,6 @@ const mapOrderPlacement = (document) => ({
   updatedAt: document?.updatedAt || null,
 });
 
-const mapReturnRequestDetail = (document) => {
-  const orderDocument = document.order && document.order._id ? document.order : null;
-  const orderSnapshot = document.orderSnapshot || null;
-  const orderSource = orderDocument || orderSnapshot || {};
-  const storeSource = orderSource?.meta?.store || {};
-  const salespersonSource = document.salesperson || orderSource?.meta?.salesperson || {};
-
-  return {
-    id: document._id.toString(),
-    referenceNumber: document.referenceNumber || '',
-    type: document.type || 'return',
-    originalOrderId: orderDocument?._id
-      ? orderDocument._id.toString()
-      : (orderSnapshot?.id || document.order?.toString?.() || ''),
-    originalOrderNumber: orderSource?.orderNumber || '',
-    customerName: document.customerName || orderSource?.customer?.name || 'Customer',
-    customerPhone: document.customerPhone || orderSource?.customer?.phone || '',
-    createdAt: document.createdAt,
-    itemScope: document.itemScope || 'full-product',
-    reason: document.reason || '',
-    remarks: document.remarks || '',
-    refundType: document.refundType || undefined,
-    originalAmount: Number(document.originalAmount ?? 0),
-    revisedAmount: Number(document.revisedAmount ?? 0),
-    settlementAmount: Number(document.settlementAmount ?? document.totalRefundAmount ?? 0),
-    settlementType: document.settlementType || 'refund',
-    store: {
-      id: document.store?._id ? document.store._id.toString() : (storeSource?.id || ''),
-      name: document.store?.storeName || storeSource?.name || '',
-      code: document.store?.code || storeSource?.code || '',
-    },
-    salesperson: {
-      id: salespersonSource?.id || '',
-      name: salespersonSource?.name || '',
-      employeeId: salespersonSource?.employeeId || '',
-    },
-    originalOrderSnapshot: orderDocument ? mapOrderPlacement(orderDocument) : clonePlain(orderSnapshot),
-    replacementDraftSnapshot: clonePlain(document.replacementDraftSnapshot),
-    status: document.status || 'Requested',
-  };
-};
-
-const mapReturnRequestSummary = (document) => {
-  const detail = mapReturnRequestDetail(document);
-  const originalOrderSnapshot = detail.originalOrderSnapshot || {};
-
-  return {
-    id: detail.id,
-    referenceNumber: detail.referenceNumber,
-    type: detail.type,
-    orderId: detail.originalOrderId,
-    orderNumber: detail.originalOrderNumber || '-',
-    customerId: document.customer?._id ? document.customer._id.toString() : '',
-    customerName: detail.customerName,
-    customerPhone: detail.customerPhone,
-    storeId: detail.store?.id || '',
-    storeName: detail.store?.name || 'Store not assigned',
-    itemScope: detail.itemScope,
-    reason: detail.reason || '-',
-    remarks: detail.remarks || '',
-    status: detail.status,
-    refundType: detail.refundType || '',
-    settlementAmount: detail.settlementAmount,
-    settlementType: detail.settlementType,
-    totalRefundAmount: detail.settlementType === 'refund' ? detail.settlementAmount : 0,
-    itemCount: 1,
-    orderDate: originalOrderSnapshot.invoiceDate || '',
-    orderCreatedAt: originalOrderSnapshot.createdAt || null,
-    createdAt: detail.createdAt,
-    updatedAt: document.updatedAt,
-  };
-};
-
 const ensureCustomer = async ({ order, customerName, customerPhone, storeId }) => {
   const normalizedCustomerPhone = normalizePhone(customerPhone || order?.customer?.phone);
 
@@ -191,12 +122,81 @@ const ensureCustomer = async ({ order, customerName, customerPhone, storeId }) =
   });
 };
 
-const createReturn = async (req, res) => {
+const mapRepairDetail = (document) => {
+  const orderDocument = document.order && document.order._id ? document.order : null;
+  const orderSnapshot = document.orderSnapshot || null;
+  const orderSource = orderDocument || orderSnapshot || {};
+  const storeSource = orderSource?.meta?.store || {};
+  const salespersonSource = document.salesperson || orderSource?.meta?.salesperson || {};
+
+  return {
+    id: document._id.toString(),
+    referenceNumber: document.referenceNumber || '',
+    originalOrderId: orderDocument?._id
+      ? orderDocument._id.toString()
+      : (orderSnapshot?.id || document.order?.toString?.() || ''),
+    originalOrderNumber: orderSource?.orderNumber || '',
+    customerName: document.customerName || orderSource?.customer?.name || 'Customer',
+    customerPhone: document.customerPhone || orderSource?.customer?.phone || '',
+    createdAt: document.createdAt,
+    repairScope: document.repairScope || 'full-product',
+    issueType: document.issueType || '',
+    remarks: document.remarks || '',
+    estimatedAmount: Number(document.estimatedAmount ?? 0),
+    advanceAmount: Number(document.advanceAmount ?? 0),
+    remainingAmount: Number(document.remainingAmount ?? 0),
+    expectedDeliveryDate: document.expectedDeliveryDate,
+    store: {
+      id: document.store?._id ? document.store._id.toString() : (storeSource?.id || ''),
+      name: document.store?.storeName || storeSource?.name || '',
+      code: document.store?.code || storeSource?.code || '',
+    },
+    salesperson: {
+      id: salespersonSource?.id || '',
+      name: salespersonSource?.name || '',
+      employeeId: salespersonSource?.employeeId || '',
+    },
+    originalOrderSnapshot: orderDocument ? mapOrderPlacement(orderDocument) : clonePlain(orderSnapshot),
+    status: document.status || 'Requested',
+  };
+};
+
+const mapRepairSummary = (document) => {
+  const detail = mapRepairDetail(document);
+  const originalOrderSnapshot = detail.originalOrderSnapshot || {};
+
+  return {
+    id: detail.id,
+    referenceNumber: detail.referenceNumber,
+    orderId: detail.originalOrderId,
+    orderNumber: detail.originalOrderNumber || '-',
+    customerId: document.customer?._id ? document.customer._id.toString() : '',
+    customerName: detail.customerName,
+    customerPhone: detail.customerPhone,
+    storeId: detail.store?.id || '',
+    storeName: detail.store?.name || 'Store not assigned',
+    repairScope: detail.repairScope,
+    issueType: detail.issueType,
+    remarks: detail.remarks,
+    estimatedAmount: detail.estimatedAmount,
+    advanceAmount: detail.advanceAmount,
+    remainingAmount: detail.remainingAmount,
+    expectedDeliveryDate: detail.expectedDeliveryDate,
+    status: detail.status,
+    orderDate: originalOrderSnapshot.invoiceDate || '',
+    orderCreatedAt: originalOrderSnapshot.createdAt || null,
+    createdAt: detail.createdAt,
+    updatedAt: document.updatedAt,
+  };
+};
+
+const createRepair = async (req, res) => {
   try {
     const payload = req.body || {};
     const orderId = String(payload.orderId || '').trim();
-    const type = payload.type === 'exchange' ? 'exchange' : 'return';
-    const reason = String(payload.reason || '').trim();
+    const issueType = String(payload.issueType || '').trim();
+    const estimatedAmount = Number(payload.estimatedAmount ?? 0);
+    const advanceAmount = Number(payload.advanceAmount ?? 0);
 
     if (!orderId) {
       return res.status(400).json({
@@ -205,10 +205,24 @@ const createReturn = async (req, res) => {
       });
     }
 
-    if (!reason) {
+    if (!issueType) {
       return res.status(400).json({
         success: false,
-        message: 'Reason is required',
+        message: 'Repair issue is required',
+      });
+    }
+
+    if (!Number.isFinite(estimatedAmount) || estimatedAmount < 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Estimated amount is invalid',
+      });
+    }
+
+    if (!Number.isFinite(advanceAmount) || advanceAmount < 0 || advanceAmount > estimatedAmount) {
+      return res.status(400).json({
+        success: false,
+        message: 'Advance amount is invalid',
       });
     }
 
@@ -228,9 +242,12 @@ const createReturn = async (req, res) => {
       storeId,
     });
 
-    const document = await ReturnRequest.create({
-      type,
-      referenceNumber: await buildReferenceNumber(type),
+    const expectedDeliveryDate = payload.expectedDeliveryDate
+      ? new Date(payload.expectedDeliveryDate)
+      : null;
+
+    const document = await RepairRequest.create({
+      referenceNumber: await buildReferenceNumber(),
       order: order._id,
       customer: customer?._id || undefined,
       store: storeId || undefined,
@@ -241,42 +258,39 @@ const createReturn = async (req, res) => {
       },
       customerName: payload.customerName || order.customer?.name || customer?.name || 'Customer',
       customerPhone: normalizePhone(payload.customerPhone || order.customer?.phone || customer?.phone || ''),
-      itemScope: payload.itemScope || 'full-product',
-      reason,
+      repairScope: payload.repairScope || 'full-product',
+      issueType,
       remarks: String(payload.remarks || '').trim(),
-      refundType: type === 'return' ? (payload.refundType || '') : '',
-      originalAmount: Number(payload.originalAmount ?? 0),
-      revisedAmount: Number(payload.revisedAmount ?? 0),
-      settlementAmount: Number(payload.settlementAmount ?? 0),
-      settlementType: payload.settlementType || 'refund',
-      totalRefundAmount: payload.settlementType === 'refund'
-        ? Number(payload.settlementAmount ?? payload.originalAmount ?? 0)
-        : 0,
+      estimatedAmount,
+      advanceAmount,
+      remainingAmount: Math.max(0, estimatedAmount - advanceAmount),
+      expectedDeliveryDate: expectedDeliveryDate && !Number.isNaN(expectedDeliveryDate.getTime())
+        ? expectedDeliveryDate
+        : null,
       orderSnapshot: clonePlain(payload.originalOrderSnapshot) || mapOrderPlacement(order),
-      replacementDraftSnapshot: clonePlain(payload.replacementDraft) || null,
       status: 'Requested',
     });
 
-    const populatedDocument = await ReturnRequest.findById(document._id)
+    const populatedDocument = await RepairRequest.findById(document._id)
       .populate('order')
       .populate('customer')
       .populate('store');
 
     res.status(201).json({
       success: true,
-      data: mapReturnRequestDetail(populatedDocument),
+      data: mapRepairDetail(populatedDocument),
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: error.message || 'Failed to create return request',
+      message: error.message || 'Failed to create repair request',
     });
   }
 };
 
-const listReturns = async (req, res) => {
+const listRepairs = async (req, res) => {
   try {
-    const documents = await ReturnRequest.find({})
+    const documents = await RepairRequest.find({})
       .populate('order')
       .populate('customer')
       .populate('store')
@@ -284,17 +298,17 @@ const listReturns = async (req, res) => {
 
     res.json({
       success: true,
-      data: documents.map(mapReturnRequestSummary),
+      data: documents.map(mapRepairSummary),
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: error.message || 'Failed to fetch returns',
+      message: error.message || 'Failed to fetch repairs',
     });
   }
 };
 
 module.exports = {
-  createReturn,
-  listReturns,
+  createRepair,
+  listRepairs,
 };

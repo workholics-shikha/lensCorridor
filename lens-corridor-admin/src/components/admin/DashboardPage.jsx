@@ -6,6 +6,10 @@ const DashboardPage = ({
   salesRange,
   setSalesRange,
   salesRanges,
+  dashboardStoreFilter,
+  setDashboardStoreFilter,
+  dashboardStoreOptions,
+  dashboardStoreLabel,
   dashboardHero,
   dashboardRevenueCards,
   dashboardMetrics,
@@ -18,7 +22,30 @@ const DashboardPage = ({
       <div className="dashboard-hero-copy">
         <p className="eyebrow">Revenue overview</p>
         <h3>Track revenue performance across today, weekly, and monthly windows</h3>
-        <p className="muted">Designed for quick owner review, morning huddles, and easy daily follow-up with store teams.</p>
+        <p className="dashboard-scope-copy">Viewing revenue for {dashboardStoreLabel}.</p>
+        <div className="dashboard-filter-card">
+          <div className="dashboard-filter-copy">
+            <span className="dashboard-filter-kicker">Store Filter</span>
+            <p>Select a store to review its revenue, sales trend, and billing performance.</p>
+          </div>
+          <div className="dashboard-filter-group">
+            <label className="dashboard-filter-label" htmlFor="dashboard-store-filter">Choose Store</label>
+            <div className="dashboard-filter-select-wrap">
+              <select
+                className="input filled dashboard-filter-select"
+                id="dashboard-store-filter"
+                onChange={(event) => setDashboardStoreFilter(event.target.value)}
+                value={dashboardStoreFilter}
+              >
+                {dashboardStoreOptions.map((store) => (
+                  <option key={store.id} value={store.id}>
+                    {store.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
       </div>
       <div className="dashboard-hero-highlight">
         <span>Pending Orders</span>

@@ -38,6 +38,11 @@ type HistoryItem = {
     right: string;
     left: string;
   };
+  addition: {
+    right: string;
+    left: string;
+  };
+  pupillaryDistance: string;
   createdAt: string;
   normalizedName: string;
   normalizedPhone: string;
@@ -193,6 +198,16 @@ export default function EyeTestHistoryScreen() {
                   <PowerLine label="SPH" rightValue={item.spherical.right} leftValue={item.samePowerBothEyes ? item.spherical.right : item.spherical.left} />
                   <PowerLine label="CYL" rightValue={item.cylindrical.right} leftValue={item.samePowerBothEyes ? item.cylindrical.right : item.cylindrical.left} />
                   <PowerLine label="AXIS" rightValue={item.axis.right} leftValue={item.samePowerBothEyes ? item.axis.right : item.axis.left} />
+                  {(item.addition.right || item.addition.left) ? (
+                    <PowerLine label="ADD" rightValue={item.addition.right} leftValue={item.samePowerBothEyes ? item.addition.right : item.addition.left} />
+                  ) : null}
+                  {item.pupillaryDistance ? (
+                    <View style={styles.powerLine}>
+                      <Text style={styles.powerLabel}>PD</Text>
+                      <Text style={styles.powerValue}> {item.pupillaryDistance}</Text>
+                      <Text style={styles.powerValue} />
+                    </View>
+                  ) : null}
                 </View>
 
                 {item.address ? (
@@ -249,6 +264,11 @@ function mapEyeTestRecord(item: EyeTestRecord): HistoryItem {
       right: formatAxisValue(item.axis?.right),
       left: formatAxisValue(item.axis?.left),
     },
+    addition: {
+      right: formatEyePowerValue(item.addition?.right),
+      left: formatEyePowerValue(item.addition?.left),
+    },
+    pupillaryDistance: formatNumericValue(item.pupillaryDistance),
     createdAt: new Date(item.createdAt).toLocaleDateString('en-GB', {
       day: 'numeric',
       month: 'short',
@@ -269,6 +289,9 @@ function isValidHistoryItem(item: HistoryItem) {
       || item.cylindrical.left
       || item.axis.right
       || item.axis.left
+      || item.addition.right
+      || item.addition.left
+      || item.pupillaryDistance
     )
   );
 }
@@ -291,6 +314,14 @@ function formatAxisValue(value: number | null | undefined) {
   }
 
   return String(Math.trunc(value));
+}
+
+function formatNumericValue(value: number | null | undefined) {
+  if (typeof value !== 'number' || Number.isNaN(value)) {
+    return '';
+  }
+
+  return Number.isInteger(value) ? String(value) : value.toFixed(2);
 }
 
 const styles = StyleSheet.create({

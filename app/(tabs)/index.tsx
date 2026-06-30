@@ -35,7 +35,7 @@ const QUICK_CARDS = [
     body: 'Get Your Glasses Repaired\nQuickly And Hassle-Free.',
     titleIcon: repairTitleIcon,
     image: repairCardImage,
-    action: () => { },
+    action: () => router.push('/repair-search'),
   },
 ];
 

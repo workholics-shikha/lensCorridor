@@ -14,6 +14,7 @@ export function buildDraftFromOrder(order: OrderPlacementRecord, currentDraft: O
     ...currentDraft,
     phone: order.customer.phone || '',
     customerName: order.customer.name || '',
+    customerDateOfBirth: order.customer.dateOfBirth || '',
     billingAddress: order.customer.billingAddress || '',
     price: String(order.frame.price || order.billing.totalPayable || ''),
     billingDiscount: String(order.billing.discount ?? 0),
@@ -45,6 +46,7 @@ export function buildDraftFromOrder(order: OrderPlacementRecord, currentDraft: O
         cyl: item.cyl || '',
         axis: item.axis || '',
         add: item.add || '',
+        pd: item.pd || '',
       }))
       : currentDraft.lensDetails,
   };

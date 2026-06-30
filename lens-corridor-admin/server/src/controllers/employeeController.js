@@ -2,7 +2,6 @@ const bcrypt = require('bcryptjs');
 
 const Employee = require('../models/Employee');
 const normalizePin = (value = '') => String(value).replace(/\D/g, '').slice(0, 6);
-const generateTemporaryPassword = () => `lc-${Math.random().toString(36).slice(2, 12)}`;
 const generateSalesmanId = async () => {
   const existingEmployees = await Employee.find({}, 'salesmanId').lean();
   const maxSequence = existingEmployees.reduce((highest, employee) => {
@@ -50,19 +49,24 @@ const listEmployees = async (req, res) => {
 
 const createEmployee = async (req, res) => {
   try {
-    const { salesmanId, name, email, phone, role, store, pin, status } = req.body;
+    const { salesmanId, name, email, phone, role, store, password, pin, status } = req.body;
 
     const normalizedPin = normalizePin(pin);
+    const normalizedPassword = String(password ?? '').trim();
 
-    if (!name || !email || !normalizedPin) {
-      return res.status(400).json({ error: 'Name, email, and PIN are required' });
+    if (!name || !email || !normalizedPassword || !normalizedPin) {
+      return res.status(400).json({ error: 'Name, email, password, and PIN are required' });
     }
 
     if (normalizedPin.length < 4) {
       return res.status(400).json({ error: 'PIN must be at least 4 digits' });
     }
 
-    const hashedPassword = await bcrypt.hash(generateTemporaryPassword(), 10);
+    if (normalizedPassword.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    }
+
+    const hashedPassword = await bcrypt.hash(normalizedPassword, 10);
     const hashedPin = await bcrypt.hash(normalizedPin, 10);
     const generatedSalesmanId = salesmanId?.trim().toUpperCase() || await generateSalesmanId();
 
@@ -92,7 +96,7 @@ const createEmployee = async (req, res) => {
 const updateEmployee = async (req, res) => {
   try {
     const { id } = req.params;
-    const { salesmanId, name, email, phone, role, store, pin, status } = req.body;
+    const { salesmanId, name, email, phone, role, store, password, pin, status } = req.body;
 
     const employee = await Employee.findById(id);
     if (!employee) {
@@ -109,7 +113,16 @@ const updateEmployee = async (req, res) => {
     employee.store = store || null;
     employee.status = status || employee.status;
 
+    const normalizedPassword = String(password ?? '').trim();
     const normalizedPin = normalizePin(pin);
+
+    if (normalizedPassword) {
+      if (normalizedPassword.length < 6) {
+        return res.status(400).json({ error: 'Password must be at least 6 characters' });
+      }
+
+      employee.password = await bcrypt.hash(normalizedPassword, 10);
+    }
 
     if (normalizedPin) {
       if (normalizedPin.length < 4) {

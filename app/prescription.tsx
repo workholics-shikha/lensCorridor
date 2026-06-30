@@ -23,8 +23,9 @@ import { useResponsiveMetrics } from '@/lib/responsive';
 const SPH_VALUES = buildPowerOptions();
 const CYL_VALUES = ['0.00', '-0.25', '-0.50', '-0.75', '-1.00', '-1.25', '-1.50', '-1.75', '-2.00', '-2.25', '-2.50'];
 const AXIS_VALUES = ['10', '20', '30', '40', '50', '60', '70', '80', '90', '100', '110', '120', '130', '140', '150', '160', '170', '180'];
+const ADD_VALUES = buildAdditionOptions();
 
-type EyeField = 'sph' | 'cyl' | 'axis';
+type EyeField = 'sph' | 'cyl' | 'axis' | 'add';
 type EyeKey = 'right' | 'left';
 type SelectorState = {
   open: boolean;
@@ -50,6 +51,11 @@ type SavedPowerItem = {
     right: string;
     left: string;
   };
+  addition: {
+    right: string;
+    left: string;
+  };
+  pupillaryDistance: string;
   createdAt: string;
 };
 
@@ -74,6 +80,7 @@ export default function PrescriptionScreen() {
     Math.max(232, viewport.width * (isTablet ? (viewport.isLandscape ? 0.26 : 0.34) : 0.58))
   );
   const isOrderFlow = mode === 'order-flow';
+  const isProgressiveBifocal = isProgressivePowerType(draft.lensSelection.powerType);
   const resolvedNextPath = (
     nextPath === '/billing'
     || nextPath === '/lens-details'
@@ -86,12 +93,17 @@ export default function PrescriptionScreen() {
     sph: draft.lensDetails.find((item) => item.eye === 'right')?.sph ?? '',
     cyl: draft.lensDetails.find((item) => item.eye === 'right')?.cyl ?? '',
     axis: draft.lensDetails.find((item) => item.eye === 'right')?.axis ?? '',
+    add: draft.lensDetails.find((item) => item.eye === 'right')?.add ?? '',
   });
   const [leftEye, setLeftEye] = useState({
     sph: draft.lensDetails.find((item) => item.eye === 'left')?.sph ?? '',
     cyl: draft.lensDetails.find((item) => item.eye === 'left')?.cyl ?? '',
     axis: draft.lensDetails.find((item) => item.eye === 'left')?.axis ?? '',
+    add: draft.lensDetails.find((item) => item.eye === 'left')?.add ?? '',
   });
+  const [pupillaryDistance, setPupillaryDistance] = useState(
+    draft.lensDetails.find((item) => item.pd)?.pd ?? ''
+  );
   const [customerName, setCustomerName] = useState(draft.customerName);
   const [mobileNumber, setMobileNumber] = useState(draft.phone);
   const [email, setEmail] = useState(user?.email ?? '');
@@ -115,12 +127,21 @@ export default function PrescriptionScreen() {
       return CYL_VALUES;
     }
 
+    if (selector.field === 'add') {
+      return ADD_VALUES;
+    }
+
     return SPH_VALUES;
   }, [selector.field]);
 
   const currentValue = selector.eye === 'right'
     ? rightEye[selector.field]
     : leftEye[selector.field];
+  const selectorOverlayTop = getSelectorOverlayTop({
+    field: selector.field,
+    hasCylindricalPower,
+    isProgressiveBifocal,
+  });
 
   const openEyeTestHistory = () => {
     if (normalizedParentPhone) {
@@ -149,6 +170,11 @@ export default function PrescriptionScreen() {
       right: hasCylindricalPower && rightEye.axis ? parseInt(rightEye.axis, 10) : null,
       left: hasCylindricalPower && leftEye.axis ? parseInt(leftEye.axis, 10) : null,
     },
+    addition: {
+      right: isProgressiveBifocal && rightEye.add ? parseFloat(rightEye.add) : null,
+      left: isProgressiveBifocal && leftEye.add ? parseFloat(leftEye.add) : null,
+    },
+    pupillaryDistance: isProgressiveBifocal && pupillaryDistance ? parseFloat(pupillaryDistance) : null,
     name: customerName.trim() || user?.email?.trim() || 'Customer',
     mobileNumber: normalizedMobileValue,
     email: email.trim(),
@@ -230,7 +256,8 @@ export default function PrescriptionScreen() {
       sph: rightEye.sph,
       cyl: hasCylindricalPower ? rightEye.cyl : '',
       axis: hasCylindricalPower ? rightEye.axis : '',
-      add: rightEye.sph,
+      add: isProgressiveBifocal ? rightEye.add : '',
+      pd: isProgressiveBifocal ? pupillaryDistance : '',
     });
 
     updateLensDetail('lens-left', {
@@ -238,16 +265,21 @@ export default function PrescriptionScreen() {
       sph: samePower ? rightEye.sph : leftEye.sph,
       cyl: hasCylindricalPower ? (samePower ? rightEye.cyl : leftEye.cyl) : '',
       axis: hasCylindricalPower ? (samePower ? rightEye.axis : leftEye.axis) : '',
-      add: samePower ? rightEye.sph : leftEye.sph,
+      add: isProgressiveBifocal ? (samePower ? rightEye.add : leftEye.add) : '',
+      pd: isProgressiveBifocal ? pupillaryDistance : '',
     });
   }, [
     draft.lensSelection.powerType,
     hasCylindricalPower,
     isOrderFlow,
+    isProgressiveBifocal,
     leftEye.axis,
+    leftEye.add,
     leftEye.cyl,
     leftEye.sph,
+    pupillaryDistance,
     rightEye.axis,
+    rightEye.add,
     rightEye.cyl,
     rightEye.sph,
     samePower,
@@ -282,12 +314,15 @@ export default function PrescriptionScreen() {
       sph: item.spherical.right,
       cyl: item.cylindrical.right,
       axis: item.axis.right,
+      add: item.addition.right,
     });
     setLeftEye({
       sph: item.samePowerBothEyes ? item.spherical.right : item.spherical.left,
       cyl: item.samePowerBothEyes ? item.cylindrical.right : item.cylindrical.left,
       axis: item.samePowerBothEyes ? item.axis.right : item.axis.left,
+      add: item.samePowerBothEyes ? item.addition.right : item.addition.left,
     });
+    setPupillaryDistance(item.pupillaryDistance);
     setError('');
   };
 
@@ -301,6 +336,7 @@ export default function PrescriptionScreen() {
         sph: rightEye.sph,
         cyl: hasCylindricalPower ? rightEye.cyl : current.cyl,
         axis: hasCylindricalPower ? rightEye.axis : current.axis,
+        add: isProgressiveBifocal ? rightEye.add : current.add,
       }));
     }
   };
@@ -330,20 +366,34 @@ export default function PrescriptionScreen() {
       return;
     }
 
+    if (isProgressiveBifocal) {
+      if (!pupillaryDistance.trim()) {
+        setError('Please enter PD for progressive/bifocal lenses.');
+        return;
+      }
+
+      if (!rightEye.add || (!samePower && !leftEye.add)) {
+        setError('Please select ADD power for progressive/bifocal lenses.');
+        return;
+      }
+    }
+
     if (isOrderFlow) {
       updateLensDetail('lens-right', {
         label: draft.lensSelection.powerType || 'Distance Vision',
         sph: rightEye.sph,
         cyl: hasCylindricalPower ? rightEye.cyl : '',
         axis: hasCylindricalPower ? rightEye.axis : '',
-        add: rightEye.sph,
+        add: isProgressiveBifocal ? rightEye.add : '',
+        pd: isProgressiveBifocal ? pupillaryDistance : '',
       });
       updateLensDetail('lens-left', {
         label: draft.lensSelection.powerType || 'Distance Vision',
         sph: samePower ? rightEye.sph : leftEye.sph,
         cyl: hasCylindricalPower ? (samePower ? rightEye.cyl : leftEye.cyl) : '',
         axis: hasCylindricalPower ? (samePower ? rightEye.axis : leftEye.axis) : '',
-        add: samePower ? rightEye.sph : leftEye.sph,
+        add: isProgressiveBifocal ? (samePower ? rightEye.add : leftEye.add) : '',
+        pd: isProgressiveBifocal ? pupillaryDistance : '',
       });
       router.push(resolvedNextPath);
       return;
@@ -513,8 +563,43 @@ export default function PrescriptionScreen() {
                   </>
                 ) : null}
 
+                {isProgressiveBifocal ? (
+                  <>
+                    <SelectorRow
+                      label="ADD"
+                      rightValue={rightEye.add}
+                      leftValue={samePower ? rightEye.add : leftEye.add}
+                      onRightPress={() => setSelector({ open: true, eye: 'right', field: 'add' })}
+                      onLeftPress={() => setSelector({ open: true, eye: 'left', field: 'add' })}
+                      leftDisabled={samePower}
+                      controlsWidth={selectorControlsWidth}
+                    />
+                    <View style={styles.selectorRow}>
+                      <Text style={styles.selectorRowLabel}>PD</Text>
+                      <View style={[styles.selectorButtons, { width: selectorControlsWidth }]}>
+                        <TextInput
+                          value={pupillaryDistance}
+                          onChangeText={(value) => setPupillaryDistance(sanitizePdValue(value))}
+                          placeholder="Enter PD"
+                          placeholderTextColor={Colors.gray400}
+                          keyboardType="decimal-pad"
+                          style={[styles.input, styles.pdInput]}
+                        />
+                      </View>
+                    </View>
+                  </>
+                ) : null}
+
                 {selector.open ? (
-                  <View style={[styles.inlineSelectorWrap, { width: selectorControlsWidth }]}>
+                  <View
+                    style={[
+                      styles.inlineSelectorWrap,
+                      {
+                        width: selectorControlsWidth,
+                        top: selectorOverlayTop,
+                      },
+                    ]}
+                  >
                     <View style={styles.inlineSelectorPanel}>
                       <View style={styles.selectorHeader}>
                         <Text style={styles.selectorTitle}>
@@ -530,10 +615,10 @@ export default function PrescriptionScreen() {
 
                       <View style={styles.selectorLegend}>
                         <Text style={styles.selectorLegendText}>
-                          {selector.field === 'axis' ? 'Axis Values' : '(+)Positive'}
+                          {selector.field === 'axis' ? 'Axis Values' : selector.field === 'add' ? 'Additional Power' : '(+)Positive'}
                         </Text>
                         <Text style={styles.selectorLegendText}>
-                          {selector.field === 'axis' ? 'Select Value' : '(-)Negative'}
+                          {selector.field === 'axis' ? 'Select Value' : selector.field === 'add' ? 'Select Value' : '(-)Negative'}
                         </Text>
                       </View>
 
@@ -630,6 +715,16 @@ export default function PrescriptionScreen() {
                               Axis: R {item.axis.right || '-'} | L {item.samePowerBothEyes ? item.axis.right || '-' : item.axis.left || '-'}
                             </Text>
                           </>
+                        ) : null}
+                        {(item.addition.right || item.addition.left) ? (
+                          <Text style={styles.savedPowerRow}>
+                            ADD: R {item.addition.right || '-'} | L {item.samePowerBothEyes ? item.addition.right || '-' : item.addition.left || '-'}
+                          </Text>
+                        ) : null}
+                        {item.pupillaryDistance ? (
+                          <Text style={styles.savedPowerRow}>
+                            PD: {item.pupillaryDistance}
+                          </Text>
                         ) : null}
                         <Text style={styles.savedPowerAction}>Tap to use this power</Text>
                       </TouchableOpacity>
@@ -794,6 +889,11 @@ function mapEyeTestToSavedPower(item: EyeTestRecord): SavedPowerItem {
       right: formatAxisValue(item.axis?.right),
       left: formatAxisValue(item.axis?.left),
     },
+    addition: {
+      right: formatEyePowerValue(item.addition?.right),
+      left: formatEyePowerValue(item.addition?.left),
+    },
+    pupillaryDistance: formatNumericValue(item.pupillaryDistance),
     createdAt: new Date(item.createdAt).toLocaleDateString('en-GB', {
       day: 'numeric',
       month: 'short',
@@ -821,6 +921,9 @@ function isUsableSavedEyePower(item: EyeTestRecord, normalizedPhone: string) {
     || item.cylindrical?.left !== null
     || item.axis?.right !== null
     || item.axis?.left !== null
+    || item.addition?.right != null
+    || item.addition?.left != null
+    || item.pupillaryDistance != null
   );
 }
 
@@ -853,7 +956,47 @@ function getFieldLabel(field: EyeField) {
     return 'Axis';
   }
 
+  if (field === 'add') {
+    return 'Addition Power';
+  }
+
   return 'Spherical';
+}
+
+function getSelectorOverlayTop({
+  field,
+  hasCylindricalPower,
+  isProgressiveBifocal,
+}: {
+  field: EyeField;
+  hasCylindricalPower: boolean;
+  isProgressiveBifocal: boolean;
+}) {
+  const rowsBeforeCurrentField = (() => {
+    if (field === 'sph') {
+      return 0;
+    }
+
+    if (field === 'cyl') {
+      return 1;
+    }
+
+    if (field === 'axis') {
+      return hasCylindricalPower ? 2 : 1;
+    }
+
+    if (field === 'add') {
+      return 1 + (hasCylindricalPower ? 2 : 0);
+    }
+
+    return 0;
+  })();
+
+  const headerOffset = 40;
+  const rowOffset = rowsBeforeCurrentField * 52;
+  const progressiveOffset = isProgressiveBifocal && field === 'add' ? 6 : 0;
+
+  return headerOffset + rowOffset + progressiveOffset;
 }
 
 function buildPowerOptions() {
@@ -867,6 +1010,32 @@ function buildPowerOptions() {
   return values;
 }
 
+function buildAdditionOptions() {
+  const values = [];
+
+  for (let step = 0.75; step <= 4; step += 0.25) {
+    values.push(`+${step.toFixed(2)}`);
+  }
+
+  return values;
+}
+
+function isProgressivePowerType(value?: string) {
+  const normalizedValue = String(value ?? '').trim().toLowerCase();
+  return normalizedValue === 'progressive/bifocals' || normalizedValue === 'progressive bifocals';
+}
+
+function sanitizePdValue(value: string) {
+  const sanitizedValue = value.replace(/[^0-9.]/g, '');
+  const parts = sanitizedValue.split('.');
+
+  if (parts.length === 1) {
+    return parts[0];
+  }
+
+  return `${parts[0]}.${parts.slice(1).join('').slice(0, 2)}`;
+}
+
 function groupOptions(options: string[], size: number) {
   const rows: string[][] = [];
 
@@ -875,6 +1044,14 @@ function groupOptions(options: string[], size: number) {
   }
 
   return rows;
+}
+
+function formatNumericValue(value: number | null | undefined) {
+  if (typeof value !== 'number' || Number.isNaN(value)) {
+    return '';
+  }
+
+  return Number.isInteger(value) ? String(value) : value.toFixed(2);
 }
 
 const styles = StyleSheet.create({
@@ -947,7 +1124,8 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1,
     borderColor: '#E7EAF2',
-    overflow: 'hidden',
+    overflow: 'visible',
+    zIndex: 2,
   },
   prescriptionCardTabletSplit: {
     minWidth: 0,
@@ -1021,6 +1199,7 @@ const styles = StyleSheet.create({
   rxSelectionBlock: {
     marginTop: 8,
     marginHorizontal: 16,
+    position: 'relative',
   },
   rxSelectionBlockTablet: {
     maxWidth: 520,
@@ -1129,6 +1308,9 @@ const styles = StyleSheet.create({
     color: '#1F2430',
     ...Shadow.sm,
   },
+  pdInput: {
+    flex: 1,
+  },
   addressInput: {
     marginTop: 12,
   },
@@ -1151,9 +1333,10 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   inlineSelectorWrap: {
-    marginTop: 10,
-    alignSelf: 'flex-end',
+    position: 'absolute',
+    right: 0,
     alignItems: 'flex-end',
+    zIndex: 20,
   },
   inlineSelectorPanel: {
     width: '100%',
@@ -1251,6 +1434,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E7EAF2',
     padding: 14,
+    zIndex: 1,
   },
   savedPowersCardTablet: {
     width: 320,

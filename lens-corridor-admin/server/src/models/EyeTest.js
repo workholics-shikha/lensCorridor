@@ -23,6 +23,14 @@ const eyeTestSchema = new mongoose.Schema(
       right: { type: Number, default: null },
       left:  { type: Number, default: null },
     },
+    addition: {
+      right: { type: Number, default: null },
+      left:  { type: Number, default: null },
+    },
+    pupillaryDistance: {
+      type: Number,
+      default: null,
+    },
 
     // Customer Details
     name:         { type: String, required: true, trim: true },

@@ -167,14 +167,24 @@ export default function OrderDetailsScreen() {
         sph: leftEye?.sph || '-',
         cyl: leftEye?.cyl || '-',
         axis: leftEye?.axis || '-',
+        add: leftEye?.add || '-',
       },
       {
         label: 'RIGHT',
         sph: rightEye?.sph || '-',
         cyl: rightEye?.cyl || '-',
         axis: rightEye?.axis || '-',
+        add: rightEye?.add || '-',
       },
     ];
+  }, [order]);
+
+  const pupillaryDistance = useMemo(() => {
+    if (!order) {
+      return '';
+    }
+
+    return order.lensDetails.find((item) => item.pd)?.pd || '';
   }, [order]);
 
   const paymentEntries = useMemo(() => {
@@ -407,6 +417,7 @@ export default function OrderDetailsScreen() {
               <Text style={[styles.rxHeaderText, isTablet && styles.rxHeaderTextTablet]}>Spherical (SPH)</Text>
               <Text style={[styles.rxHeaderText, isTablet && styles.rxHeaderTextTablet]}>Cylindrical (CYL)</Text>
               <Text style={[styles.rxHeaderText, isTablet && styles.rxHeaderTextTablet]}>Axis (0-180)</Text>
+              <Text style={[styles.rxHeaderText, isTablet && styles.rxHeaderTextTablet]}>ADD</Text>
             </View>
 
             {lensRows.map((row) => (
@@ -415,8 +426,19 @@ export default function OrderDetailsScreen() {
                 <Text style={[styles.rxValue, isTablet && styles.rxValueTablet]}>{row.sph}</Text>
                 <Text style={[styles.rxValue, isTablet && styles.rxValueTablet]}>{row.cyl}</Text>
                 <Text style={[styles.rxValue, isTablet && styles.rxValueTablet]}>{row.axis}</Text>
+                <Text style={[styles.rxValue, isTablet && styles.rxValueTablet]}>{row.add}</Text>
               </View>
             ))}
+
+            {pupillaryDistance ? (
+              <View style={[styles.rxRow, isTablet && styles.rxRowTablet]}>
+                <Text style={[styles.eyeLabel, isTablet && styles.eyeLabelTablet]}>PD</Text>
+                <Text style={[styles.rxValue, isTablet && styles.rxValueTablet]}>{pupillaryDistance}</Text>
+                <Text style={[styles.rxValue, isTablet && styles.rxValueTablet]} />
+                <Text style={[styles.rxValue, isTablet && styles.rxValueTablet]} />
+                <Text style={[styles.rxValue, isTablet && styles.rxValueTablet]} />
+              </View>
+            ) : null}
           </View>
 
           {paymentEntries.length > 0 ? (

@@ -15,7 +15,7 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
-import { ArrowLeft, ChevronRight, FileText, X } from 'lucide-react-native';
+import { ArrowLeft, ChevronLeft, ChevronRight, FileText, X } from 'lucide-react-native';
 import { type LensDetail, useOrderFlow } from '@/context/OrderFlowContext';
 import { createEyeTestRecord, createOrderPlacement } from '@/lib/api';
 import { getOrderAmounts } from '@/lib/orderPricing';
@@ -58,6 +58,11 @@ const parseAxisValue = (value?: string) => {
   return Number.isNaN(parsed) ? null : parsed;
 };
 
+const isProgressivePowerType = (value?: string) => {
+  const normalizedValue = String(value ?? '').trim().toLowerCase();
+  return normalizedValue === 'progressive/bifocals' || normalizedValue === 'progressive bifocals';
+};
+
 const buildEyeTestPayloadFromOrder = ({
   lensDetails,
   customerName,
@@ -78,6 +83,10 @@ const buildEyeTestPayloadFromOrder = ({
   const cylindricalLeft = parseDecimalValue(leftEye?.cyl);
   const axisRight = parseAxisValue(rightEye?.axis);
   const axisLeft = parseAxisValue(leftEye?.axis);
+  const additionRight = parseDecimalValue(rightEye?.add);
+  const additionLeft = parseDecimalValue(leftEye?.add);
+  const pupillaryDistance = parseDecimalValue(rightEye?.pd || leftEye?.pd);
+  const progressivePowerType = isProgressivePowerType(rightEye?.label || leftEye?.label);
   const hasAnyPower = [
     sphericalRight,
     sphericalLeft,
@@ -85,6 +94,9 @@ const buildEyeTestPayloadFromOrder = ({
     cylindricalLeft,
     axisRight,
     axisLeft,
+    additionRight,
+    additionLeft,
+    pupillaryDistance,
   ].some((value) => value !== null);
 
   if (!customerName.trim() || normalizedMobileNumber.length < 10 || !hasAnyPower) {
@@ -95,6 +107,7 @@ const buildEyeTestPayloadFromOrder = ({
     (rightEye?.sph || '') === (leftEye?.sph || '')
     && (rightEye?.cyl || '') === (leftEye?.cyl || '')
     && (rightEye?.axis || '') === (leftEye?.axis || '')
+    && (rightEye?.add || '') === (leftEye?.add || '')
   );
   const hasCylindricalPower = cylindricalRight !== null
     || cylindricalLeft !== null
@@ -116,6 +129,11 @@ const buildEyeTestPayloadFromOrder = ({
       right: axisRight,
       left: axisLeft,
     },
+    addition: {
+      right: progressivePowerType ? additionRight : null,
+      left: progressivePowerType ? additionLeft : null,
+    },
+    pupillaryDistance: progressivePowerType ? pupillaryDistance : null,
     name: customerName.trim(),
     mobileNumber: normalizedMobileNumber,
     address: customerAddress.trim(),
@@ -134,6 +152,10 @@ export default function BillingScreen() {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [customerName, setCustomerName] = useState(draft.customerName);
   const [customerPhone, setCustomerPhone] = useState(draft.phone);
+  const [customerDateOfBirth, setCustomerDateOfBirth] = useState(draft.customerDateOfBirth);
+  const [dobPickerOpen, setDobPickerOpen] = useState(false);
+  const [dobPickerMonth, setDobPickerMonth] = useState(() => getInitialCalendarMonth(draft.customerDateOfBirth));
+  const [dobPickerView, setDobPickerView] = useState<'days' | 'month' | 'year'>('days');
   const [customerAddress, setCustomerAddress] = useState(draft.billingAddress);
   const [detailsErrors, setDetailsErrors] = useState<{
     name?: string;
@@ -507,6 +529,7 @@ export default function BillingScreen() {
             const nextDraftPatch = {
               customerName: formatPersonName(customerName) || draft.customerName,
               phone: customerPhone.trim() || draft.phone,
+              customerDateOfBirth: customerDateOfBirth.trim() || draft.customerDateOfBirth,
               billingAddress: customerAddress.trim() || address,
               billingDiscount: discount || '0',
               partialPaymentEnabled,
@@ -547,6 +570,7 @@ export default function BillingScreen() {
                   name: finalCustomerName,
                   phone: finalCustomerPhone,
                   billingAddress: finalCustomerAddress,
+                  dateOfBirth: customerDateOfBirth.trim() || undefined,
                 },
                 frame: {
                   selectedShape: draft.selectedShape || '',
@@ -709,6 +733,21 @@ export default function BillingScreen() {
                   />
                   {detailsErrors.phone ? <Text style={styles.modalErrorText}>{detailsErrors.phone}</Text> : null}
 
+                  <TouchableOpacity
+                    style={[styles.modalInput, styles.dateInputTrigger]}
+                    activeOpacity={0.86}
+                    onPress={() => {
+                      setDobPickerMonth(getInitialCalendarMonth(customerDateOfBirth));
+                      setDobPickerView('days');
+                      setDobPickerOpen(true);
+                    }}
+                  >
+                    <Text style={[styles.dateInputText, !customerDateOfBirth && styles.dateInputPlaceholder]}>
+                      {customerDateOfBirth || 'Date of Birth'}
+                    </Text>
+                    <ChevronRight size={16} color="#8D9098" />
+                  </TouchableOpacity>
+
                   <TextInput
                     value={customerAddress}
                     onChangeText={(value) => {
@@ -744,6 +783,7 @@ export default function BillingScreen() {
                       updateDraft({
                         customerName: formatPersonName(customerName),
                         phone: customerPhone.trim(),
+                        customerDateOfBirth: customerDateOfBirth.trim(),
                         billingAddress: savedAddress,
                       });
                       setDetailsOpen(false);
@@ -757,9 +797,222 @@ export default function BillingScreen() {
           </KeyboardAvoidingView>
         </View>
       </Modal>
+
+      <Modal
+        visible={dobPickerOpen}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setDobPickerOpen(false)}
+      >
+        <View style={styles.calendarOverlay}>
+          <View style={styles.calendarCard}>
+            <View style={styles.calendarHeader}>
+              <Text style={styles.calendarTitle}>Select Date of Birth</Text>
+              <TouchableOpacity
+                style={styles.modalCloseButton}
+                activeOpacity={0.86}
+                onPress={() => setDobPickerOpen(false)}
+              >
+                <X size={16} color="#667085" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.calendarMonthRow}>
+              <TouchableOpacity
+                style={styles.calendarNavButton}
+                activeOpacity={0.86}
+                onPress={() => setDobPickerMonth((current) => addCalendarMonths(current, -1))}
+              >
+                <ChevronLeft size={16} color="#1F2430" />
+              </TouchableOpacity>
+              <View style={styles.calendarMonthPickerGroup}>
+                <TouchableOpacity
+                  style={styles.calendarPickerChip}
+                  activeOpacity={0.86}
+                  onPress={() => setDobPickerView((current) => (current === 'month' ? 'days' : 'month'))}
+                >
+                  <Text style={styles.calendarMonthLabel}>{formatCalendarMonthName(dobPickerMonth)}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.calendarPickerChip}
+                  activeOpacity={0.86}
+                  onPress={() => setDobPickerView((current) => (current === 'year' ? 'days' : 'year'))}
+                >
+                  <Text style={styles.calendarMonthLabel}>{dobPickerMonth.getFullYear()}</Text>
+                </TouchableOpacity>
+              </View>
+              <TouchableOpacity
+                style={styles.calendarNavButton}
+                activeOpacity={0.86}
+                onPress={() => setDobPickerMonth((current) => addCalendarMonths(current, 1))}
+              >
+                <ChevronRight size={16} color="#1F2430" />
+              </TouchableOpacity>
+            </View>
+
+            {dobPickerView === 'days' ? (
+              <>
+                <View style={styles.calendarWeekRow}>
+                  {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map((label) => (
+                    <Text key={label} style={styles.calendarWeekLabel}>{label}</Text>
+                  ))}
+                </View>
+
+                {buildCalendarWeeks(dobPickerMonth).map((week, weekIndex) => (
+                  <View key={`week-${weekIndex}`} style={styles.calendarWeekRow}>
+                    {week.map((date, dayIndex) => {
+                      const selected = date ? formatDateInputValue(date) === customerDateOfBirth : false;
+                      const muted = date ? date.getMonth() !== dobPickerMonth.getMonth() : false;
+
+                      return (
+                        <TouchableOpacity
+                          key={`day-${weekIndex}-${dayIndex}`}
+                          style={[
+                            styles.calendarDayButton,
+                            !date && styles.calendarDayButtonEmpty,
+                            selected && styles.calendarDayButtonSelected,
+                          ]}
+                          disabled={!date}
+                          activeOpacity={0.86}
+                          onPress={() => {
+                            if (!date) {
+                              return;
+                            }
+
+                            setCustomerDateOfBirth(formatDateInputValue(date));
+                            setDobPickerOpen(false);
+                          }}
+                        >
+                          <Text
+                            style={[
+                              styles.calendarDayText,
+                              muted && styles.calendarDayTextMuted,
+                              selected && styles.calendarDayTextSelected,
+                            ]}
+                          >
+                            {date ? String(date.getDate()) : ''}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                ))}
+              </>
+            ) : null}
+
+            {dobPickerView === 'month' ? (
+              <View style={styles.calendarMonthGrid}>
+                {MONTH_OPTIONS.map((monthLabel, monthIndex) => (
+                  <TouchableOpacity
+                    key={monthLabel}
+                    style={[
+                      styles.calendarOptionChip,
+                      monthIndex === dobPickerMonth.getMonth() && styles.calendarOptionChipSelected,
+                    ]}
+                    activeOpacity={0.86}
+                    onPress={() => {
+                      setDobPickerMonth(new Date(dobPickerMonth.getFullYear(), monthIndex, 1));
+                      setDobPickerView('days');
+                    }}
+                  >
+                    <Text
+                      style={[
+                        styles.calendarOptionText,
+                        monthIndex === dobPickerMonth.getMonth() && styles.calendarOptionTextSelected,
+                      ]}
+                    >
+                      {monthLabel}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            ) : null}
+
+            {dobPickerView === 'year' ? (
+              <ScrollView style={styles.calendarYearList} showsVerticalScrollIndicator={false}>
+                <View style={styles.calendarYearGrid}>
+                  {YEAR_OPTIONS.map((year) => (
+                    <TouchableOpacity
+                      key={year}
+                      style={[
+                        styles.calendarOptionChip,
+                        year === dobPickerMonth.getFullYear() && styles.calendarOptionChipSelected,
+                      ]}
+                      activeOpacity={0.86}
+                      onPress={() => {
+                        setDobPickerMonth(new Date(year, dobPickerMonth.getMonth(), 1));
+                        setDobPickerView('days');
+                      }}
+                    >
+                      <Text
+                        style={[
+                          styles.calendarOptionText,
+                          year === dobPickerMonth.getFullYear() && styles.calendarOptionTextSelected,
+                        ]}
+                      >
+                        {year}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </ScrollView>
+            ) : null}
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
+
+function getInitialCalendarMonth(value?: string) {
+  const parsedDate = parseDateInputValue(value);
+  return parsedDate ?? new Date();
+}
+
+function parseDateInputValue(value?: string) {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return null;
+  }
+
+  const parsedDate = new Date(`${value}T00:00:00`);
+  return Number.isNaN(parsedDate.getTime()) ? null : parsedDate;
+}
+
+function formatDateInputValue(value: Date) {
+  const year = value.getFullYear();
+  const month = `${value.getMonth() + 1}`.padStart(2, '0');
+  const day = `${value.getDate()}`.padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function addCalendarMonths(value: Date, amount: number) {
+  return new Date(value.getFullYear(), value.getMonth() + amount, 1);
+}
+
+function formatCalendarMonthName(value: Date) {
+  return value.toLocaleDateString('en-GB', {
+    month: 'long',
+  });
+}
+
+function buildCalendarWeeks(monthDate: Date) {
+  const firstOfMonth = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
+  const calendarStart = new Date(firstOfMonth);
+  calendarStart.setDate(firstOfMonth.getDate() - firstOfMonth.getDay());
+
+  return Array.from({ length: 6 }, (_, weekIndex) => (
+    Array.from({ length: 7 }, (_, dayIndex) => {
+      const nextDate = new Date(calendarStart);
+      nextDate.setDate(calendarStart.getDate() + (weekIndex * 7) + dayIndex);
+      return nextDate;
+    })
+  ));
+}
+
+const MONTH_OPTIONS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const CURRENT_YEAR = new Date().getFullYear();
+const YEAR_OPTIONS = Array.from({ length: 100 }, (_, index) => CURRENT_YEAR - index);
 
 function BillRow({
   label,
@@ -1302,6 +1555,18 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     marginBottom: 10,
   },
+  dateInputTrigger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  dateInputText: {
+    fontSize: 12.5,
+    color: '#1F2430',
+  },
+  dateInputPlaceholder: {
+    color: '#9095A0',
+  },
   modalTextarea: {
     minHeight: 120,
     paddingTop: 10,
@@ -1331,6 +1596,138 @@ const styles = StyleSheet.create({
   modalSaveText: {
     fontSize: 14,
     fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  calendarOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.28)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+  },
+  calendarCard: {
+    width: '100%',
+    maxWidth: 344,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 14,
+    ...Shadow.sm,
+  },
+  calendarHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  calendarTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1F2430',
+  },
+  calendarMonthRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  calendarMonthPickerGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  calendarNavButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F3F6FB',
+  },
+  calendarPickerChip: {
+    minHeight: 34,
+    borderRadius: 17,
+    paddingHorizontal: 12,
+    backgroundColor: '#F3F6FB',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  calendarMonthLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#1F2430',
+  },
+  calendarWeekRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  calendarWeekLabel: {
+    width: 36,
+    textAlign: 'center',
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#7A7F88',
+  },
+  calendarDayButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  calendarDayButtonEmpty: {
+    opacity: 0,
+  },
+  calendarDayButtonSelected: {
+    backgroundColor: '#1C71D8',
+  },
+  calendarDayText: {
+    fontSize: 12.5,
+    color: '#1F2430',
+    fontWeight: '600',
+  },
+  calendarDayTextMuted: {
+    color: '#B2B8C4',
+  },
+  calendarDayTextSelected: {
+    color: '#FFFFFF',
+  },
+  calendarMonthGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    marginTop: 4,
+  },
+  calendarYearList: {
+    maxHeight: 260,
+  },
+  calendarYearGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    paddingTop: 4,
+  },
+  calendarOptionChip: {
+    width: '31%',
+    minHeight: 38,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+    backgroundColor: '#FFFFFF',
+  },
+  calendarOptionChipSelected: {
+    backgroundColor: '#1C71D8',
+    borderColor: '#1C71D8',
+  },
+  calendarOptionText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#1F2430',
+  },
+  calendarOptionTextSelected: {
     color: '#FFFFFF',
   },
   frameArtWrap: {

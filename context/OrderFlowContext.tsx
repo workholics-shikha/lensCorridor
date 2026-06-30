@@ -19,6 +19,7 @@ export type LensDetail = {
   cyl: string;
   axis: string;
   add: string;
+  pd: string;
 };
 
 export type FrameImage = {
@@ -42,6 +43,7 @@ export type SelectedSalesperson = {
 export type OrderDraft = {
   phone: string;
   customerName: string;
+  customerDateOfBirth: string;
   price: string;
   billingAddress: string;
   billingDiscount: string;
@@ -65,13 +67,14 @@ type OrderFlowContextType = {
 };
 
 const defaultLensDetails: LensDetail[] = [
-  { id: 'lens-right', label: 'Distance Vision', eye: 'right', sph: '', cyl: '', axis: '', add: '' },
-  { id: 'lens-left', label: 'Distance Vision', eye: 'left', sph: '', cyl: '', axis: '', add: '' },
+  { id: 'lens-right', label: 'Distance Vision', eye: 'right', sph: '', cyl: '', axis: '', add: '', pd: '' },
+  { id: 'lens-left', label: 'Distance Vision', eye: 'left', sph: '', cyl: '', axis: '', add: '', pd: '' },
 ];
 
 const defaultDraft: OrderDraft = {
   phone: '',
   customerName: '',
+  customerDateOfBirth: '',
   price: '',
   billingAddress: '',
   billingDiscount: '0',

@@ -63,7 +63,11 @@ export default function LensDetailsScreen() {
       lensPrice: getLensPriceFromBand(item.linkedPricingBand),
     });
 
-    if (normalizedPowerType === 'with power') {
+    if (
+      normalizedPowerType === 'with power'
+      || normalizedPowerType === 'progressive/bifocals'
+      || normalizedPowerType === 'progressive bifocals'
+    ) {
       router.push({
         pathname: '/prescription',
         params: { mode: 'order-flow', nextPath: '/billing' },
