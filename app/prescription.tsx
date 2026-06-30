@@ -142,6 +142,7 @@ export default function PrescriptionScreen() {
     hasCylindricalPower,
     isProgressiveBifocal,
   });
+  const selectorReservedSpace = selector.open ? 324 : 0;
 
   const openEyeTestHistory = () => {
     if (normalizedParentPhone) {
@@ -521,7 +522,13 @@ export default function PrescriptionScreen() {
                 onPress={toggleCylindricalPower}
               />
 
-              <View style={[styles.rxSelectionBlock, isTablet && styles.rxSelectionBlockTablet]}>
+              <View
+                style={[
+                  styles.rxSelectionBlock,
+                  isTablet && styles.rxSelectionBlockTablet,
+                  selectorReservedSpace > 0 && { paddingBottom: selectorReservedSpace },
+                ]}
+              >
                 <View style={styles.rxHeaderRow}>
                   <Text style={styles.rxHeaderLabel}>Rx</Text>
                   <View style={[styles.rxEyeHeadings, { width: selectorControlsWidth }]}>
