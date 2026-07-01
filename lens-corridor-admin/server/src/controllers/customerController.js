@@ -1,5 +1,6 @@
 const Customer = require('../models/Customer');
 const AppOrderPlacement = require('../models/AppOrderPlacement');
+const { getAssignedStoreId, isManagerUser, resolveObjectId } = require('../utils/accessScope');
 
 const normalizePhone = (value = '') => String(value).replace(/\D/g, '').slice(-10);
 
@@ -43,12 +44,37 @@ const listCustomers = async (req, res) => {
     const search = String(req.query.search ?? '').trim();
     const normalizedSearchPhone = normalizePhone(search);
     const customerFilter = {};
+    const assignedStoreId = getAssignedStoreId(req.user);
+    const isManager = isManagerUser(req.user);
+    const assignedStoreObjectId = resolveObjectId(assignedStoreId);
 
     if (search) {
       customerFilter.$or = [
         { name: { $regex: search, $options: 'i' } },
         { phone: { $regex: normalizedSearchPhone || search, $options: 'i' } },
         { email: { $regex: search, $options: 'i' } },
+      ];
+    }
+
+    if (isManager) {
+      const orderFilter = assignedStoreObjectId
+        ? { store_id: assignedStoreObjectId }
+        : { 'meta.store.id': assignedStoreId || '__unassigned__' };
+      const scopedOrders = await AppOrderPlacement.find(orderFilter, 'customer.phone').lean();
+      const scopedPhones = [...new Set(
+        scopedOrders
+          .map((order) => normalizePhone(order?.customer?.phone))
+          .filter(Boolean)
+      )];
+
+      customerFilter.$and = [
+        ...(Array.isArray(customerFilter.$and) ? customerFilter.$and : []),
+        {
+          $or: [
+            assignedStoreObjectId ? { store: assignedStoreObjectId } : { _id: null },
+            scopedPhones.length ? { phone: { $in: scopedPhones } } : { _id: null },
+          ],
+        },
       ];
     }
 
@@ -62,9 +88,20 @@ const listCustomers = async (req, res) => {
 
     let relatedOrders = [];
     if (phoneSet.size > 0) {
-      relatedOrders = await AppOrderPlacement.find({
+      const relatedOrdersFilter = {
         'customer.phone': { $in: [...phoneSet] },
-      }).sort({ createdAt: -1 });
+      };
+
+      if (isManager) {
+        Object.assign(
+          relatedOrdersFilter,
+          assignedStoreObjectId
+            ? { store_id: assignedStoreObjectId }
+            : { 'meta.store.id': assignedStoreId || '__unassigned__' }
+        );
+      }
+
+      relatedOrders = await AppOrderPlacement.find(relatedOrdersFilter).sort({ createdAt: -1 });
     }
 
     const ordersByPhone = relatedOrders.reduce((map, order) => {

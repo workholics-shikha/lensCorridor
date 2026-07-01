@@ -2,6 +2,7 @@ const AppOrderPlacement = require('../models/AppOrderPlacement');
 const Customer = require('../models/Customer');
 const { normalizePhone } = require('./customerController');
 const mongoose = require('mongoose');
+const { getAssignedStoreId, isManagerUser } = require('../utils/accessScope');
 
 const formatInvoiceDate = (date) => date.toLocaleDateString('en-GB', {
   day: '2-digit',
@@ -91,6 +92,22 @@ const resolveStoreId = (value) => {
   }
 
   return new mongoose.Types.ObjectId(value);
+};
+
+const appendManagerStoreFilter = (filter, user) => {
+  if (!isManagerUser(user)) {
+    return;
+  }
+
+  const assignedStoreId = getAssignedStoreId(user);
+  const resolvedStoreId = resolveStoreId(assignedStoreId);
+
+  if (resolvedStoreId) {
+    filter.store_id = resolvedStoreId;
+    return;
+  }
+
+  filter['meta.store.id'] = assignedStoreId || '__unassigned__';
 };
 
 const syncCustomerFromOrder = async (payload) => {
@@ -282,12 +299,21 @@ const updateOrderPlacementStatus = async (req, res) => {
       });
     }
 
-    const document = await AppOrderPlacement.findById(req.params.id);
+    const filter = { _id: req.params.id };
+    appendManagerStoreFilter(filter, req.user);
+    const document = await AppOrderPlacement.findOne(filter);
 
     if (!document) {
       return res.status(404).json({
         success: false,
         message: 'Order placement not found',
+      });
+    }
+
+    if (nextStatus.toLowerCase() === 'completed' && Number(document.billing?.remainingAmount ?? 0) > 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Order cannot be completed while purchase payment is pending.',
       });
     }
 
@@ -423,6 +449,8 @@ const listOrderPlacements = async (req, res) => {
       }
     }
 
+    appendManagerStoreFilter(filter, req.user);
+
     let query = AppOrderPlacement.find(filter)
       .sort({ createdAt: -1 });
 
@@ -447,7 +475,9 @@ const listOrderPlacements = async (req, res) => {
 
 const getOrderPlacementById = async (req, res) => {
   try {
-    const document = await AppOrderPlacement.findById(req.params.id);
+    const filter = { _id: req.params.id };
+    appendManagerStoreFilter(filter, req.user);
+    const document = await AppOrderPlacement.findOne(filter);
 
     if (!document) {
       return res.status(404).json({

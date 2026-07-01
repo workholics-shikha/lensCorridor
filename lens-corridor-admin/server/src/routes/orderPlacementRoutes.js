@@ -1,4 +1,7 @@
 const express = require('express');
+const auth = require('../middleware/auth');
+const optionalAuth = require('../middleware/optionalAuth');
+const requireWriteAccess = require('../middleware/requireWriteAccess');
 const {
   createOrderPlacement,
   listOrderPlacements,
@@ -9,10 +12,10 @@ const {
 
 const router = express.Router();
 
-router.get('/', listOrderPlacements);
-router.get('/:id', getOrderPlacementById);
+router.get('/', optionalAuth, listOrderPlacements);
+router.get('/:id', optionalAuth, getOrderPlacementById);
 router.post('/', createOrderPlacement);
-router.patch('/:id/status', updateOrderPlacementStatus);
-router.patch('/:id/billing', updateOrderPlacementBilling);
+router.patch('/:id/status', auth, updateOrderPlacementStatus);
+router.patch('/:id/billing', auth, requireWriteAccess, updateOrderPlacementBilling);
 
 module.exports = router;

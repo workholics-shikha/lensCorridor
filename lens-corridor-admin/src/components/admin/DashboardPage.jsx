@@ -16,6 +16,7 @@ const DashboardPage = ({
   storePerformance,
   operationalQueue,
   productInsights,
+  isStoreFilterLocked = false,
 }) => (
   <>
     <div className="hero-panel dashboard-hero-panel">
@@ -33,6 +34,7 @@ const DashboardPage = ({
             <div className="dashboard-filter-select-wrap">
               <select
                 className="input filled dashboard-filter-select"
+                disabled={isStoreFilterLocked}
                 id="dashboard-store-filter"
                 onChange={(event) => setDashboardStoreFilter(event.target.value)}
                 value={dashboardStoreFilter}

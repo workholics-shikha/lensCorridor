@@ -4,6 +4,7 @@ const AppOrderPlacement = require('../models/AppOrderPlacement');
 const Customer = require('../models/Customer');
 const RepairRequest = require('../models/Repair');
 const { normalizePhone } = require('./customerController');
+const { getAssignedStoreId, isManagerUser } = require('../utils/accessScope');
 
 const padNumber = (value, size) => String(value).padStart(size, '0');
 
@@ -25,6 +26,18 @@ const toObjectId = (value) => {
   }
 
   return new mongoose.Types.ObjectId(value);
+};
+
+const buildScopedStoreFilter = (user) => {
+  if (!isManagerUser(user)) {
+    return {};
+  }
+
+  const assignedStoreId = getAssignedStoreId(user);
+  const storeObjectId = toObjectId(assignedStoreId);
+  return {
+    store: storeObjectId || null,
+  };
 };
 
 const clonePlain = (value) => {
@@ -290,7 +303,7 @@ const createRepair = async (req, res) => {
 
 const listRepairs = async (req, res) => {
   try {
-    const documents = await RepairRequest.find({})
+    const documents = await RepairRequest.find(buildScopedStoreFilter(req.user))
       .populate('order')
       .populate('customer')
       .populate('store')

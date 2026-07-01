@@ -91,7 +91,7 @@ const AppRoutes = () => {
         }
 
         setIsLoggedIn(true)
-        setAdminUser((current) => current || data || null)
+        setAdminUser(data || null)
         if (data) {
           localStorage.setItem('adminUser', JSON.stringify(data))
         }

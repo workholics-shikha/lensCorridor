@@ -244,6 +244,21 @@ const navConfig = [
   { key: 'reports', label: 'Reports', icon: 'RP' },
 ]
 
+const managerVisibleNavKeys = ['dashboard', 'employees', 'customers', 'orders', 'cash', 'returns', 'reports']
+const managerAllowedScreens = new Set([
+  'dashboard',
+  'stores',
+  'edit-store',
+  'employees',
+  'create-employee',
+  'customers',
+  'orders',
+  'order-details',
+  'cash',
+  'returns',
+  'reports',
+])
+
 const Screen = ({ active, id, children }) => (
   <section className={`screen ${active ? 'active' : ''}`} id={id}>
     {children}
@@ -345,6 +360,11 @@ const getPaymentStatusTone = (order) => (
 )
 
 const getCollectableAmount = (order) => Math.max(0, Number(order?.billing?.remainingAmount ?? 0))
+const canCompleteOrder = (order) => (
+  Boolean(order?.id)
+  && String(order?.status || '').toLowerCase() !== 'completed'
+  && getCollectableAmount(order) <= 0
+)
 
 const formatCurrency = (value = 0) => `Rs. ${Number(value || 0).toLocaleString('en-IN')}`
 
@@ -749,8 +769,17 @@ const AdminPanel = ({ user, onLogout }) => {
   const isMastersActive = activeScreen === 'masters'
   const normalizedUserRole = String(user?.role || '').trim().toLowerCase()
   const isReadOnlyUser = normalizedUserRole === 'manager'
+  const managerStoreId = user?.store?.id || user?.storeId || ''
+  const managerStoreName = user?.store?.name || ''
   const adminName = user?.name || 'Super Admin'
-  const profileMeta = user?.role ? `${user.role} access` : 'Multi-store access'
+  const profileMeta = isReadOnlyUser
+    ? `${user.role || 'Manager'}${managerStoreName ? ` • ${managerStoreName}` : ''}`
+    : (user?.role ? `${user.role} access` : 'Multi-store access')
+  const visibleNavItems = useMemo(() => (
+    isReadOnlyUser
+      ? navConfig.filter((item) => managerVisibleNavKeys.includes(item.key))
+      : navConfig
+  ), [isReadOnlyUser])
   const initials = useMemo(() => {
     const source = adminName.trim() || 'Admin'
     return source
@@ -885,13 +914,18 @@ const AdminPanel = ({ user, onLogout }) => {
   const dashboardOrders = useMemo(() => (
     appOrders.filter((order) => Boolean(parseDateValue(order.createdAt)))
   ), [appOrders])
-  const dashboardStoreOptions = useMemo(() => [
-    { id: '', name: 'All Stores' },
-    ...stores.map((store) => ({
+  const dashboardStoreOptions = useMemo(() => {
+    const scopedStores = stores.map((store) => ({
       id: store.id,
       name: store.code ? `${store.name} (${store.code})` : store.name,
-    })),
-  ], [stores])
+    }))
+
+    if (isReadOnlyUser) {
+      return scopedStores
+    }
+
+    return [{ id: '', name: 'All Stores' }, ...scopedStores]
+  }, [isReadOnlyUser, stores])
   const selectedDashboardStore = useMemo(
     () => stores.find((store) => store.id === dashboardStoreFilter) || null,
     [dashboardStoreFilter, stores]
@@ -1351,6 +1385,25 @@ const AdminPanel = ({ user, onLogout }) => {
   }, [appOrders, routeState])
 
   useEffect(() => {
+    if (!isReadOnlyUser || !managerStoreId) {
+      return
+    }
+
+    setDashboardStoreFilter(managerStoreId)
+    setOrderStoreFilter(managerStoreId)
+  }, [isReadOnlyUser, managerStoreId])
+
+  useEffect(() => {
+    if (!isReadOnlyUser || !routeState?.screen) {
+      return
+    }
+
+    if (!managerAllowedScreens.has(routeState.screen)) {
+      navigate('/dashboard', { replace: true })
+    }
+  }, [isReadOnlyUser, navigate, routeState?.screen])
+
+  useEffect(() => {
     if (!isLensCategoryEditorOpen || !normalizedMasterItems.length) {
       return
     }
@@ -1529,6 +1582,7 @@ const AdminPanel = ({ user, onLogout }) => {
             signal: controller.signal,
           }),
           fetch(`${adminBaseUrl}/api/stores`, {
+            headers: { Authorization: `Bearer ${token}` },
             signal: controller.signal,
           }),
         ])
@@ -1565,6 +1619,11 @@ const AdminPanel = ({ user, onLogout }) => {
 
   useEffect(() => {
     const controller = new AbortController()
+    const token = localStorage.getItem('adminToken')
+
+    if (!token) {
+      return () => controller.abort()
+    }
 
     const fetchRepairs = async () => {
       setRepairRequestsLoading(true)
@@ -1572,6 +1631,7 @@ const AdminPanel = ({ user, onLogout }) => {
 
       try {
         const response = await fetch(`${adminBaseUrl}/api/repairs`, {
+          headers: { Authorization: `Bearer ${token}` },
           signal: controller.signal,
         })
 
@@ -1655,8 +1715,13 @@ const AdminPanel = ({ user, onLogout }) => {
 
   useEffect(() => {
     const controller = new AbortController()
+    const token = localStorage.getItem('adminToken')
 
     if (!shouldLoadAdminOrders) {
+      return () => controller.abort()
+    }
+
+    if (!token) {
       return () => controller.abort()
     }
 
@@ -1682,6 +1747,7 @@ const AdminPanel = ({ user, onLogout }) => {
 
       try {
         const response = await fetch(`${adminBaseUrl}/api/order-placement`, {
+          headers: { Authorization: `Bearer ${token}` },
           signal: controller.signal,
         })
 
@@ -1722,6 +1788,11 @@ const AdminPanel = ({ user, onLogout }) => {
 
   useEffect(() => {
     const controller = new AbortController()
+    const token = localStorage.getItem('adminToken')
+
+    if (!token) {
+      return () => controller.abort()
+    }
 
     const fetchReturns = async () => {
       setReturnRequestsLoading(true)
@@ -1729,6 +1800,7 @@ const AdminPanel = ({ user, onLogout }) => {
 
       try {
         const response = await fetch(`${adminBaseUrl}/api/returns`, {
+          headers: { Authorization: `Bearer ${token}` },
           signal: controller.signal,
         })
 
@@ -1846,12 +1918,19 @@ const AdminPanel = ({ user, onLogout }) => {
   }
 
   const handleOrderStatusUpdate = async (order, status) => {
-    if (isReadOnlyUser) {
-      setAppOrdersError('Managers have view-only access.')
+    if (!order?.id || !status || order.status === status) {
       return
     }
 
-    if (!order?.id || !status || order.status === status) {
+    if (String(status).toLowerCase() === 'completed' && getCollectableAmount(order) > 0) {
+      setAppOrdersError('Order cannot be completed while purchase payment is pending.')
+      return
+    }
+
+    const token = localStorage.getItem('adminToken')
+
+    if (!token) {
+      handleUnauthorizedSession()
       return
     }
 
@@ -1859,6 +1938,7 @@ const AdminPanel = ({ user, onLogout }) => {
       const response = await fetch(`${adminBaseUrl}/api/order-placement/${order.id}/status`, {
         method: 'PATCH',
         headers: {
+          Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ status }),
@@ -2151,7 +2231,9 @@ const AdminPanel = ({ user, onLogout }) => {
   }
 
   const refreshStores = async () => {
+    const token = localStorage.getItem('adminToken')
     const response = await fetch(`${adminBaseUrl}/api/stores`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
     })
     const data = await response.json().catch(() => [])
 
@@ -2318,7 +2400,7 @@ const AdminPanel = ({ user, onLogout }) => {
         </div>
 
         <nav className="nav-list">
-          {navConfig.map((item) => (
+          {visibleNavItems.map((item) => (
             item.children ? (
               <div className="nav-group masters-group" key={item.key}>
                 <button
@@ -2408,7 +2490,7 @@ const AdminPanel = ({ user, onLogout }) => {
                   <span className="avatar">{initials}</span>
                   <div>
                     <strong>{adminName}</strong>
-                    <small>{isReadOnlyUser ? 'Manager view only' : profileMeta}</small>
+                    <small>{isReadOnlyUser ? '-Manager' : profileMeta}</small>
                   </div>
                 </div>
               </div>
@@ -2417,7 +2499,11 @@ const AdminPanel = ({ user, onLogout }) => {
             {isReadOnlyUser ? (
               <div className="task-item" style={{ margin: '0 20px 14px' }}>
                 <strong>Manager access</strong>
-                <small>You can view dashboard data, orders, customers, employees, and stores, but editing is disabled.</small>
+                <small>
+                  {managerStoreName
+                    ? `You are viewing ${managerStoreName} only. Orders, revenue, customers, employees, and store records are restricted to your allotted store.`
+                    : 'Your account is in manager mode. Store data is restricted to your allotted store, and editing is disabled.'}
+                </small>
               </div>
             ) : null}
 
@@ -2435,6 +2521,7 @@ const AdminPanel = ({ user, onLogout }) => {
                 salesData={salesData}
                 salesRange={salesRange}
                 salesRanges={['weekly', 'monthly']}
+                isStoreFilterLocked={isReadOnlyUser}
                 setDashboardStoreFilter={setDashboardStoreFilter}
                 storePerformance={storePerformance}
                 setSalesRange={setSalesRange}
@@ -2492,9 +2579,11 @@ const AdminPanel = ({ user, onLogout }) => {
                     </div>
                     <div className="filter-pills">
                       <button className="ghost-btn" onClick={() => activateScreen('stores')} type="button">Back To Stores</button>
-                      <button className="primary-btn soft-btn" disabled={isReadOnlyUser || storeSaving} onClick={handleStoreSubmit} type="button">
-                        {isReadOnlyUser ? 'View Only' : storeSaving ? 'Saving...' : 'Save Store'}
-                      </button>
+                      {!isReadOnlyUser ? (
+                        <button className="primary-btn soft-btn" disabled={storeSaving} onClick={handleStoreSubmit} type="button">
+                          {storeSaving ? 'Saving...' : 'Save Store'}
+                        </button>
+                      ) : null}
                     </div>
                   </div>
 
@@ -2576,21 +2665,18 @@ const AdminPanel = ({ user, onLogout }) => {
                       <p className="eyebrow">Employee management</p>
                       <h4>List, edit, delete, salesman login, and store mapping</h4>
                     </div>
-                    <button
-                      className="ghost-btn link-btn"
-                      disabled={isReadOnlyUser}
-                      onClick={() => {
-                        if (isReadOnlyUser) {
-                          setEmployeeMessage('Managers have view-only access.')
-                          return
-                        }
-                        resetEmployeeForm()
-                        activateScreen('create-employee')
-                      }}
-                      type="button"
-                    >
-                      {isReadOnlyUser ? 'View Only' : 'Add Employee'}
-                    </button>
+                    {!isReadOnlyUser ? (
+                      <button
+                        className="ghost-btn link-btn"
+                        onClick={() => {
+                          resetEmployeeForm()
+                          activateScreen('create-employee')
+                        }}
+                        type="button"
+                      >
+                        Add Employee
+                      </button>
+                    ) : null}
                   </div>
                   <div className="mini-grid" style={{ marginBottom: '14px' }}>
                     <MiniCard label="Employees" value={employeeLoading ? 'Loading...' : employeeCountLabel} />
@@ -2653,8 +2739,12 @@ const AdminPanel = ({ user, onLogout }) => {
                             </td>
                             <td>
                               <div className="filter-pills">
-                                <button className="ghost-btn" disabled={isReadOnlyUser} onClick={() => selectEmployee(employee)} type="button">{isReadOnlyUser ? 'View' : 'Edit'}</button>
-                                <button className="ghost-btn" disabled={isReadOnlyUser} onClick={() => handleEmployeeDelete(employee)} type="button">Delete</button>
+                                {!isReadOnlyUser ? (
+                                  <button className="ghost-btn" onClick={() => selectEmployee(employee)} type="button">Edit</button>
+                                ) : null}
+                                {!isReadOnlyUser ? (
+                                  <button className="ghost-btn" onClick={() => handleEmployeeDelete(employee)} type="button">Delete</button>
+                                ) : null}
                                 <StatusBadge tone={getStatusTone(employee.status)}>{employee.status}</StatusBadge>
                               </div>
                             </td>
@@ -2678,9 +2768,11 @@ const AdminPanel = ({ user, onLogout }) => {
                     </div>
                     <div className="filter-pills">
                       <button className="ghost-btn" onClick={() => activateScreen('employees')} type="button">Back To Employees</button>
-                      <button className="primary-btn soft-btn" disabled={isReadOnlyUser || employeeSaving} onClick={handleEmployeeSubmit} type="button">
-                        {isReadOnlyUser ? 'View Only' : employeeSaving ? 'Saving...' : employeeMode === 'edit' ? 'Update Employee' : 'Save Employee'}
-                      </button>
+                      {!isReadOnlyUser ? (
+                        <button className="primary-btn soft-btn" disabled={employeeSaving} onClick={handleEmployeeSubmit} type="button">
+                          {employeeSaving ? 'Saving...' : employeeMode === 'edit' ? 'Update Employee' : 'Save Employee'}
+                        </button>
+                      ) : null}
                     </div>
                   </div>
 
@@ -2813,9 +2905,11 @@ const AdminPanel = ({ user, onLogout }) => {
                         </select>
                       </div>
                       <div className="form-actions-inline">
-                        <button className="ghost-btn" disabled={isReadOnlyUser} onClick={resetEmployeeForm} type="button">
-                          Clear Form
-                        </button>
+                        {!isReadOnlyUser ? (
+                          <button className="ghost-btn" onClick={resetEmployeeForm} type="button">
+                            Clear Form
+                          </button>
+                        ) : null}
                       </div>
                     </div>
                   </div>
@@ -3084,10 +3178,9 @@ const AdminPanel = ({ user, onLogout }) => {
                             <td>
                               <div className="table-action-pills">
                                 <span className="table-action-pill">View Details</span>
-                                {order.status !== 'Completed' ? (
+                                {canCompleteOrder(order) ? (
                                   <button
                                     className="table-action-pill"
-                                    disabled={isReadOnlyUser}
                                     onClick={(event) => {
                                       event.stopPropagation()
                                       handleOrderStatusUpdate(order, 'Completed')
@@ -3174,10 +3267,9 @@ const AdminPanel = ({ user, onLogout }) => {
                     </div>
                     <div className="filter-pills">
                       <button className="ghost-btn" onClick={() => activateScreen('orders')} type="button">Back To Orders</button>
-                      {selectedAppOrder?.status !== 'Completed' ? (
+                      {canCompleteOrder(selectedAppOrder) ? (
                         <button
                           className="ghost-btn"
-                          disabled={isReadOnlyUser}
                           onClick={() => handleOrderStatusUpdate(selectedAppOrder, 'Completed')}
                           type="button"
                         >
@@ -3294,34 +3386,38 @@ const AdminPanel = ({ user, onLogout }) => {
                                 </small>
                               </div>
                               {getCollectableAmount(selectedAppOrder) > 0 ? (
-                                <div className="filter-pills" style={{ alignItems: 'center' }}>
-                                  <input
-                                    className="input filled"
-                                    onChange={(event) => setPaymentCollectionAmount(event.target.value.replace(/[^0-9]/g, ''))}
-                                    placeholder="Collect amount"
-                                    style={{ minWidth: 150 }}
-                                    type="text"
-                                    value={paymentCollectionAmount}
-                                  />
-                                  <select
-                                    className="input filled"
-                                    onChange={(event) => setPaymentCollectionMode(event.target.value)}
-                                    style={{ minWidth: 130 }}
-                                    value={paymentCollectionMode}
-                                  >
-                                    <option value="Cash">Cash</option>
-                                    <option value="Card">Card</option>
-                                    <option value="Online">Online</option>
-                                  </select>
-                                  <button
-                                    className="primary-btn soft-btn"
-                                    disabled={paymentCollectionSaving}
-                                    onClick={() => handleOrderPaymentCollection(selectedAppOrder)}
-                                    type="button"
-                                  >
-                                    {paymentCollectionSaving ? 'Saving...' : 'Update Payment'}
-                                  </button>
-                                </div>
+                                !isReadOnlyUser ? (
+                                  <div className="filter-pills" style={{ alignItems: 'center' }}>
+                                    <input
+                                      className="input filled"
+                                      onChange={(event) => setPaymentCollectionAmount(event.target.value.replace(/[^0-9]/g, ''))}
+                                      placeholder="Collect amount"
+                                      style={{ minWidth: 150 }}
+                                      type="text"
+                                      value={paymentCollectionAmount}
+                                    />
+                                    <select
+                                      className="input filled"
+                                      onChange={(event) => setPaymentCollectionMode(event.target.value)}
+                                      style={{ minWidth: 130 }}
+                                      value={paymentCollectionMode}
+                                    >
+                                      <option value="Cash">Cash</option>
+                                      <option value="Card">Card</option>
+                                      <option value="Online">Online</option>
+                                    </select>
+                                    <button
+                                      className="primary-btn soft-btn"
+                                      disabled={paymentCollectionSaving}
+                                      onClick={() => handleOrderPaymentCollection(selectedAppOrder)}
+                                      type="button"
+                                    >
+                                      {paymentCollectionSaving ? 'Saving...' : 'Update Payment'}
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <StatusBadge tone="neutral">Pending Collection</StatusBadge>
+                                )
                               ) : (
                                 <StatusBadge tone="positive">Fully Paid</StatusBadge>
                               )}
@@ -3799,10 +3895,14 @@ const AdminPanel = ({ user, onLogout }) => {
                     </div>
                     <div className="filter-pills">
                       <button className="ghost-btn" onClick={() => activateScreen('stores')} type="button">Back To Stores</button>
-                      <button className="ghost-btn" disabled={isReadOnlyUser} onClick={resetStoreEditForm} type="button">Reset Changes</button>
-                      <button className="primary-btn soft-btn" disabled={isReadOnlyUser || storeSaving || !currentStore} onClick={handleStoreUpdate} type="button">
-                        {isReadOnlyUser ? 'View Only' : storeSaving ? 'Saving...' : 'Save Updates'}
-                      </button>
+                      {!isReadOnlyUser ? (
+                        <button className="ghost-btn" onClick={resetStoreEditForm} type="button">Reset Changes</button>
+                      ) : null}
+                      {!isReadOnlyUser ? (
+                        <button className="primary-btn soft-btn" disabled={storeSaving || !currentStore} onClick={handleStoreUpdate} type="button">
+                          {storeSaving ? 'Saving...' : 'Save Updates'}
+                        </button>
+                      ) : null}
                     </div>
                   </div>
 

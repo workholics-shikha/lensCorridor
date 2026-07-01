@@ -1,4 +1,5 @@
 const Store = require('../models/Store');
+const { getAssignedStoreId, isManagerUser } = require('../utils/accessScope');
 
 const sanitizeStore = (store) => ({
   id: store._id,
@@ -20,7 +21,14 @@ const sanitizeStore = (store) => ({
 
 const listStores = async (req, res) => {
   try {
-    const stores = await Store.find().sort({ storeName: 1 });
+    const filter = {};
+
+    if (isManagerUser(req.user)) {
+      const assignedStoreId = getAssignedStoreId(req.user);
+      filter._id = assignedStoreId || null;
+    }
+
+    const stores = await Store.find(filter).sort({ storeName: 1 });
     res.json(stores.map(sanitizeStore));
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch stores' });

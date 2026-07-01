@@ -1,6 +1,7 @@
 const bcrypt = require('bcryptjs');
 
 const Employee = require('../models/Employee');
+const { buildManagerStoreFilter } = require('../utils/accessScope');
 const normalizePin = (value = '') => String(value).replace(/\D/g, '').slice(0, 6);
 const generateSalesmanId = async () => {
   const existingEmployees = await Employee.find({}, 'salesmanId').lean();
@@ -37,7 +38,7 @@ const sanitizeEmployee = (employee) => ({
 
 const listEmployees = async (req, res) => {
   try {
-    const employees = await Employee.find()
+    const employees = await Employee.find(buildManagerStoreFilter(req.user, 'store'))
       .populate('store', 'storeName storeCode')
       .sort({ createdAt: -1 });
 

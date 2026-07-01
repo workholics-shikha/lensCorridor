@@ -20,20 +20,18 @@ const StoresPage = ({
             <p className="eyebrow">Store management</p>
             <h4>Store listing and profile updates</h4>
           </div>
-          <button
-            className="ghost-btn link-btn"
-            disabled={isReadOnlyUser}
-            onClick={() => {
-              if (isReadOnlyUser) {
-                return
-              }
-              resetStoreForm()
-              activateScreen('add-store')
-            }}
-            type="button"
-          >
-            {isReadOnlyUser ? 'View Only' : 'Add Store'}
-          </button>
+          {!isReadOnlyUser ? (
+            <button
+              className="ghost-btn link-btn"
+              onClick={() => {
+                resetStoreForm()
+                activateScreen('add-store')
+              }}
+              type="button"
+            >
+              Add Store
+            </button>
+          ) : null}
         </div>
         <div className="mini-grid" style={{ marginBottom: '14px' }}>
           <MiniCard label="Listing" value="Stores" />
@@ -94,20 +92,18 @@ const StoresPage = ({
                     <StatusBadge tone={store.status === 'Active' ? 'positive' : 'neutral'}>{store.status}</StatusBadge>
                   </td>
                   <td>
-                    <button
-                      className="ghost-btn"
-                      disabled={isReadOnlyUser}
-                      onClick={(event) => {
-                        event.stopPropagation()
-                        if (isReadOnlyUser) {
-                          return
-                        }
-                        openStoreEditor(store.id)
-                      }}
-                      type="button"
-                    >
-                      {isReadOnlyUser ? 'View' : 'Update'}
-                    </button>
+                    {!isReadOnlyUser ? (
+                      <button
+                        className="ghost-btn"
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          openStoreEditor(store.id)
+                        }}
+                        type="button"
+                      >
+                        Update
+                      </button>
+                    ) : null}
                   </td>
                 </tr>
               ))}

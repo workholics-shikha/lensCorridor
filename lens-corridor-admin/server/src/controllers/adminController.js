@@ -4,6 +4,21 @@ const Admin = require('../models/Admin');
 const Employee = require('../models/Employee');
 const { normalizeAdminEmail } = require('../utils/ensureDefaultAdmin');
 
+const buildManagerPayload = (manager) => ({
+    id: manager._id,
+    email: manager.email,
+    name: manager.name,
+    role: 'manager',
+    source: 'employee',
+    employeeId: manager.salesmanId,
+    storeId: manager.store?._id ? manager.store._id.toString() : '',
+    store: manager.store ? {
+        id: manager.store._id.toString(),
+        name: manager.store.storeName,
+        code: manager.store.storeCode,
+    } : null,
+});
+
 const login = async (req, res) => {
     const email = normalizeAdminEmail(req.body?.email);
     const { password } = req.body;
@@ -39,7 +54,7 @@ const login = async (req, res) => {
             { email: email.toLowerCase() },
             { salesmanId: String(req.body?.email ?? '').trim().toUpperCase() },
         ],
-    });
+    }).populate('store', 'storeName storeCode');
 
     if (!manager) {
         return res.status(400).json({ error: 'Invalid credentials' });
@@ -50,29 +65,17 @@ const login = async (req, res) => {
         return res.status(400).json({ error: 'Invalid credentials' });
     }
 
+    const managerPayload = buildManagerPayload(manager);
+
     const token = jwt.sign(
-        {
-            id: manager._id,
-            email: manager.email,
-            name: manager.name,
-            role: 'manager',
-            source: 'employee',
-            employeeId: manager.salesmanId,
-        },
+        managerPayload,
         process.env.JWT_SECRET || 'your_secret_key',
         { expiresIn: '1h' }
     );
 
     return res.json({
         token,
-        user: {
-            id: manager._id,
-            email: manager.email,
-            name: manager.name,
-            role: 'manager',
-            source: 'employee',
-            employeeId: manager.salesmanId,
-        }
+        user: managerPayload
     });
 };
 
